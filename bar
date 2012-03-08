@@ -1,0 +1,255 @@
+#pipeline_utilites.pm
+#
+# utilities for pipelines including matlab calls from perl 
+#
+# created 09/10/15  Sally Gewalt CIVM
+#                   based on t2w pipeline  
+# 08/01/16 slg 
+
+# be sure to change version:
+my $VERSION = "09/10/15";
+
+my $log_open = 0;
+my $pipeline_info_log_path = "UNSET";
+
+my @outheadfile_comments = ();  # this added to by log_pipeline_info so define early
+my $BADEXIT = 1;
+
+use File::Path;
+use strict;
+use English;
+
+# -------------
+sub open_log {
+# -------------
+   my ($result_dir) = @_;
+   if (! -d $result_dir) {
+       print ("no such dir for log: $result_dir");
+       exit $BADEXIT;
+   }
+   if (! -w $result_dir) {  
+       ("dir for log: $result_dir not writeable");
+       exit $BADEXIT;
+   }
+
+   $pipeline_info_log_path = "$result_dir/pipeline_info_$PID.txt";
+   open PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file";
+   my $time = scalar localtime;
+   print "Logfile is: $pipeline_info_log_path\n";
+   $log_open = 1;
+
+   log_info("Log opened at $time.");
+}
+
+# -------------
+sub close_log {
+# -------------
+  my ($Hf) = @_;
+  my $time = scalar localtime;
+  if ($log_open) { 
+    log_info("close at $time");
+    close(PIPELINE_INFO);
+  }
+  else {
+    print ("Close at $time");
+  }
+  $log_open = 0;
+  foreach my $comment (@outheadfile_comments) {
+       $Hf->set_comment($comment);
+  }
+  print "result logfile is: $pipeline_info_log_path\n";
+}
+
+# -------------
+sub log_info {
+# -------------
+   my ($log_me) = @_;
+
+   if ($log_open) {
+     # also write this info to headfile later, so save it up
+     my $to_headfile = "# PIPELINE: " . $log_me;
+     push @outheadfile_comments, "$to_headfile";  
+
+     # show to user:
+     print "LOG: $log_me\n";
+
+     # send to pipeline file:
+     print PIPELINE_INFO "$log_me\n";
+   }
+   else {
+    print "LOG NOT OPEN!\n";
+    print "  You tried to send this info to the log file, but the log file is not available:\n";
+    print "  attempted log msg: $log_me\n";
+   }
+}
+
+# -------------
+sub close_log_on_error  {
+# -------------
+  my ($err_msg) = @_;
+  # possible you may call this before the log is open
+  if ($log_open) {
+      my $exit_time = scalar localtime;
+      log_info("Error cause: $err_msg");
+      log_info("Log close at $exit_time.");
+
+      # emergency close log (w/o log dumping to headfile)
+      close(PIPELINE_INFO);
+      $log_open = 0;
+      print "  Log is: $pipeline_info_log_path\n";
+  }
+  else {
+      print "  NOTE: log file was not open at time of error.\n";
+  }
+}
+
+# -------------
+sub make_matlab_m_file {
+# -------------
+   my ($mfile_path, $function_call) = @_;
+   open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path";
+   log_info("Matlab function call mfile created: $mfile_path");
+   log_info("  mfile contains: $function_call");
+   print MATLAB_M "$function_call";
+   close MATLAB_M;
+}
+
+# -------------
+sub make_matlab_command {
+# -------------
+   my ($function_m_name, $args, $short_unique_purpose, $Hf) = @_;
+# short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
+   my $work_dir   = $Hf->get_value('dir_work');
+   my $matlab_app = $Hf->get_value('engine_app_matlab');
+
+   my $mfile_path = "$work_dir/$short_unique_purpose$function_m_name";
+   my $function_call = "$function_m_name ( $args )";
+   make_matlab_m_file ($mfile_path, $function_call);
+   my $cmd_to_execute = "$matlab_app < $mfile_path > /tmp/matlab_pipe_stuff";
+   return ($cmd_to_execute);
+}
+
+# -------------
+sub execute {
+# -------------
+# returns 0 if error
+
+  my ($do_it, $annotation, @commands) = @_;
+  my $rc;
+  my $i = 0;
+  foreach my $c (@commands) {
+    $i++;
+
+    # -- log the info and the specific command: on separate lines
+    my $msg;
+    #print "Logfile is: $pipeline_info_log_path\n";
+    my $skip = $do_it ? "" : "Skipped ";
+    my $info = $annotation eq '' ? ": " : " $annotation: "; 
+      #$msg = join '', $skip, "EXECUTING",$info, $c, " -------------------------" ;
+      #log_info($msg);
+    my $time = scalar localtime;
+    $msg = join '', $skip, "EXECUTING",$info, " ------- ", $time , " --------";
+    my $cmsg = "   $c";
+    log_info($msg);
+    log_info($cmsg);
+
+    if ($do_it) {
+      $rc = system ($c);
+    }
+    else {
+      $rc = 0; # fake ok
+    }
+
+    if ($rc != 0) {
+      print STDERR "  Problem:\n";
+      print STDERR "  * Command was: $c\n";
+      print STDERR "  * Execution of command failed.\n";
+      return 0;
+    }
+  }
+  return 1;
+}
+
+# -------------
+sub make_list_of_files {
+# -------------
+  my ($directory, $file_template) = @_;
+  # make a list of all files in directory fitting template
+  # don't use unix ls for checks, since it can't bring back list of 512
+  # this can handle 512, probably any
+  # I hope pc "dir" can handle 512
+
+  #print "make_list: $directory, $file_template\n";
+  my @flist = ();
+  my ($ok, @allfiles) = my_ls($directory);
+  if (! $ok) {
+    print ("  make_list_of_files: Error unable to list dir=$directory\n");
+    my $msg = pop @allfiles;
+    print ("      list error msg: $msg\n");
+    @flist = ();
+    return (@flist);
+  }
+  my $file = "";
+  foreach my $f (@allfiles) {
+    $file = $f;
+    my $thing;
+    $thing = $f =~ /$file_template/;
+    #print ("  Checking $f against $file_template, yes/no=$thing\n");
+    if ($thing) { push (@flist, $file) }
+  }
+  #print "  found LIST= @flist\n";
+  return (@flist);
+}
+
+# -------------
+sub my_ls {
+# -------------
+  # returns (code, @filelist)
+  my ($unixy_dir) = @_;
+  my @allfiles =  ("error");
+  my $result = 0;
+  opendir THISDIR, $unixy_dir;
+  @allfiles = readdir THISDIR;
+  closedir THISDIR;
+  $result = 1;
+  return ($result, @allfiles);
+}
+
+# -------------
+sub writeTextFile {
+# -------------
+  # returns 1 or 0
+  my ($filepath, @msg) = @_;
+  # assumes containing directory exists
+    if (open SESAME, ">$filepath") {
+      foreach my $line (@msg) {
+        print SESAME $line;
+      }
+      close SESAME;
+      print STDERR "  Wrote or re-wrote $filepath.\n";
+    }
+    else {
+      print STDERR  "ERROR: Cannot open file $filepath, can\'t writeTextFile\n";
+      return 0;
+    }
+  if (! -e $filepath) { return 0; }
+  else { return 1; }  # OK
+}
+
+# -------------
+sub remove_dot_suffix {
+# -------------
+  my ($path) = @_;
+
+  my @dotless = split /\./, $path;
+  my $suffix = pop @dotless;
+  my $suffix_less = join /\./, @dotless;
+  if ($suffix_less eq '') {
+    print "couldnt get suffix off $path: $suffix_less dot $suffix\n";
+    error_out( "couldnt get suffix off $path: $suffix_less dot $suffix");
+  } 
+  return ($suffix_less);
+}
+
+
+

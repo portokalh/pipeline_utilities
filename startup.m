@@ -1,0 +1,3 @@
+addpath /Volumes/pipe_home/script/matlab_functions_local
+addpath /Volumes/pipe_home/matlab_library/NIFTI_20110921
+addpath /Volumes/pipe_home/script/matlab_functions_local/T2WsuseptibilityReg/
