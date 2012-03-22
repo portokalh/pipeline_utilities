@@ -84,6 +84,25 @@ sub log_info {
    }
 }
 
+
+# -------------
+sub error_out
+# -------------
+{
+  my ($msg) = @_;
+  print STDERR "\n<~Pipeline failed.\n";
+  print STDERR "  Failure cause: ", $msg,"\n";
+  print STDERR "  Please note the cause.\n";
+
+  close_log_on_error($msg);
+  if ($HfResult ne "unset") {
+    my $hf_path = $HfResult->get_value('headfile_dest_path');
+    $HfResult->write_headfile($hf_path);
+    $HfResult = "unset";
+  }
+  exit $BADEXIT;
+}
+
 # -------------
 sub close_log_on_error  {
 # -------------
@@ -135,6 +154,7 @@ sub make_matlab_command {
 # -------------
 sub make_matlab_command_V2 {
 # -------------
+# this seems identicle to make_matlab_command, was there some plan to edit this that wasnt implimented?
    my ($function_m_name, $args, $short_unique_purpose, $Hf) = @_;
 # short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
    my $work_dir   = $Hf->get_value('dir-work');
@@ -266,6 +286,8 @@ sub execute_indep_forks {
   }
   my $total_forks = $nforked;
   #print "All $nforked command forks made, parent to assure all childen have finished...\n";
+# if i'm reading this loop right it will wait for each child in turn for it to finish, meaning it wont say anything until the first cihld finishes, and will report closed children in order of opening not in their order of closing, essentially it will hang on waitpid for the first kid to finish, then it will check the second, and so on until its' checked each child exaclty once. 
+# suffice it to say, not the perfect loop for childre checkup, but certainly functional
   foreach (@child) {
         print "  parent checking/waiting on child pid $_ ...";
         my $tmp = waitpid($_, 0);
@@ -479,7 +501,6 @@ sub defile {
   my $defiled = join '/', @l;
   return ($defiled);
 }
-
 
 
 
