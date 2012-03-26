@@ -7,7 +7,7 @@
 # 110308 slg open_log returns log path
 
 # be sure to change version:
-my $VERSION = "11/03/08";
+my $VERSION = "12/03/21";
 
 my $log_open = 0;
 my $pipeline_info_log_path = "UNSET";
@@ -18,7 +18,8 @@ my $BADEXIT = 1;
 use File::Path;
 use strict;
 use English;
-
+#use seg_pipe;
+use vars qw($HfResult);
 # -------------
 sub open_log {
 # -------------
@@ -454,10 +455,11 @@ sub writeTextFile {
 sub remove_dot_suffix {
 # -------------
   my ($path) = @_;
-
-  my @dotless = split /\./, $path;
+  my @dotless = split('\.', "$path");
+  #@dotless = split /\./, $path;  #changed to be easier to read by prevent emacs from breadking code highlighting, 
   my $suffix = pop @dotless;
-  my $suffix_less = join /\./, @dotless;
+  my $suffix_less = join('.', @dotless);
+  #my  $suffix_less = join /\./,@dotless;  #changed to be easier to read by prevent emacs from breadking code highlighting, 
   if ($suffix_less eq '') {
     print "couldnt get suffix off $path: $suffix_less dot $suffix\n";
     error_out( "couldnt get suffix off $path: $suffix_less dot $suffix");
@@ -502,5 +504,38 @@ sub defile {
   return ($defiled);
 }
 
+# ------------------
+sub locate_data {
+# ------------------
+  # Retrieve a source image set from image subproject on atlasdb
+  # Also sets the dest dir for each set in the headfile so
+  # you need to call this even if $pull_images is false.
 
+  my ($pull_images, $set, $Hf)=@_;
+  # $set should be t1, t2 or t2star (current CIVM MR SOP for seg)
 
+# check set against allowed types, T1, T2W, T2star
+  my $dest       = $Hf->get_value('dir_input');
+  my $subproject = $Hf->get_value('subproject_source_runnos');
+
+  my $runno_flavor = "$set\_runno";
+  my $runno = $Hf->get_value($runno_flavor);
+  if ($runno eq "NO_KEY") { error_out ("ouch $runno $runno_flavor\n"); }
+  my $ret_set_dir;
+  my ($image_name, $digits, $suffix);
+  if ( $set =~ m/(T1)|(T2W)|(T2star)/ ) {
+      $ret_set_dir = retrieve_archive_dir($pull_images, $subproject, $runno, $dest);  
+      my $first_image_name = first_image_name($ret_set_dir, $runno);
+      ($image_name, $digits, $suffix) = split '\.', $first_image_name;
+      $Hf->set_value("$set\_image_padded_digits", $digits);
+  } elsif ( $set =~ m/(adc)|(dwi)|(e1)|(fa)/){
+      print STDERR "label channel passed to locate_data not a standard image format, Assuming DTI archive format.\n";
+      ($ret_set_dir,$image_name) = retrieve_DTI_research_image($pull_images, $subproject, $runno, $set, $dest);
+      ($image_name, $suffix) = split '\.', $image_name;
+  } else {
+      print STDERR "Unreconized channel type: $set, sorry i dont support that yet.\n";
+  }
+  $Hf->set_value("$set\_dir", $ret_set_dir);
+  $Hf->set_value("$set\_image_basename"     , $image_name);
+  $Hf->set_value("$set\_image_suffix"       , $suffix);
+}
