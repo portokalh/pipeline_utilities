@@ -98,6 +98,7 @@ sub error_out
   close_log_on_error($msg);
   if ($HfResult ne "unset") {
     my $hf_path = $HfResult->get_value('headfile_dest_path');
+    if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('headfile-dest-path'); }
     $HfResult->write_headfile($hf_path);
     $HfResult = "unset";
   }
@@ -143,8 +144,9 @@ sub make_matlab_command {
    my ($function_m_name, $args, $short_unique_purpose, $Hf) = @_;
 # short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
    my $work_dir   = $Hf->get_value('dir_work');
+   if ( $work_dir eq "NO_KEY" ) { $Hf->get_value('dir-work'); }
    my $matlab_app = $Hf->get_value('engine_app_matlab');
-
+   if ($matlab_app eq "NO_KEY" ) { $matlab_app = $Hf->get_value('engine_app_matlab'); }
    my $mfile_path = "$work_dir/$short_unique_purpose$function_m_name";
    my $function_call = "$function_m_name ( $args )";
    make_matlab_m_file ($mfile_path, $function_call);
@@ -160,7 +162,6 @@ sub make_matlab_command_V2 {
 # short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
    my $work_dir   = $Hf->get_value('dir-work');
    my $matlab_app = $Hf->get_value('engine-app-matlab');
-
    my $mfile_path = "$work_dir/$short_unique_purpose$function_m_name";
    my $function_call = "$function_m_name ( $args )";
    make_matlab_m_file ($mfile_path, $function_call);
@@ -511,31 +512,44 @@ sub locate_data {
   # Also sets the dest dir for each set in the headfile so
   # you need to call this even if $pull_images is false.
 
-  my ($pull_images, $set, $Hf)=@_;
-  # $set should be t1, t2 or t2star (current CIVM MR SOP for seg)
+  my ($pull_images, $ch_id, $Hf)=@_;
+  # $ch_id should be T1, T2, T2star (current CIVM MR SOP for seg), 
+  # or can be  adc, dwi, fa, e1 for DTI derrived data in research archive
 
 # check set against allowed types, T1, T2W, T2star
-  my $dest       = $Hf->get_value('dir_input');
-  my $subproject = $Hf->get_value('subproject_source_runnos');
+  my $dest       = $Hf->get_value('dir-input');
+  my $useunderscore=0;
+  if ($dest eq "NO_KEY" ) { $dest = $Hf->get_value("dir_input"); 
+			  $useunderscore=1;}
+  my $subproject = $Hf->get_value('subproject-source-runnos');
+  if ($subproject eq "NO_KEY" ) { $subproject = $Hf->get_value("subproject_source_runnos"); }
+  my $runno_flavor = "$ch_id\-runno";
 
-  my $runno_flavor = "$set\_runno";
+  
   my $runno = $Hf->get_value($runno_flavor);
+  if ($runno eq "NO_KEY" ) { $runno_flavor="${ch_id}_runno"; $runno = $Hf->get_value("$runno_flavor"); }
   if ($runno eq "NO_KEY") { error_out ("ouch $runno $runno_flavor\n"); }
   my $ret_set_dir;
   my ($image_name, $digits, $suffix);
-  if ( $set =~ m/(T1)|(T2W)|(T2star)/ ) {
-      $ret_set_dir = retrieve_archive_dir($pull_images, $subproject, $runno, $dest);  
-      my $first_image_name = first_image_name($ret_set_dir, $runno);
-      ($image_name, $digits, $suffix) = split '\.', $first_image_name;
-      $Hf->set_value("$set\_image_padded_digits", $digits);
-  } elsif ( $set =~ m/(adc)|(dwi)|(e1)|(fa)/){
-      print STDERR "label channel passed to locate_data not a standard image format, Assuming DTI archive format.\n";
-      ($ret_set_dir,$image_name) = retrieve_DTI_research_image($pull_images, $subproject, $runno, $set, $dest);
-      ($image_name, $suffix) = split '\.', $image_name;
+  if ( $ch_id =~ m/(T1)|(T2W)|(T2star)/ ) {
+    $ret_set_dir = retrieve_archive_dir($pull_images, $subproject, $runno, $dest);  
+    my $first_image_name = first_image_name($ret_set_dir, $runno);
+    ($image_name, $digits, $suffix) = split ('\.', "$first_image_name");
+    $Hf->set_value("$ch_id\-image-padded-digits", $digits);
+  } elsif ( $ch_id =~ m/(adc)|(dwi)|(e1)|(fa)/){
+    print STDERR "label channel passed to locate_data not a standard image format, Assuming DTI archive format.\n";
+    ($ret_set_dir,$image_name) = retrieve_DTI_research_image($pull_images, $subproject, $runno, $ch_id, $dest);
+    ($image_name, $suffix) = split ('\.', "$image_name");
   } else {
-      print STDERR "Unreconized channel type: $set, sorry i dont support that yet.\n";
+    print STDERR "Unreconized channel type: $ch_id, sorry i dont support that yet.\n";
   }
-  $Hf->set_value("$set\_dir", $ret_set_dir);
-  $Hf->set_value("$set\_image_basename"     , $image_name);
-  $Hf->set_value("$set\_image_suffix"       , $suffix);
+  if($useunderscore==0) {
+    $Hf->set_value("$ch_id\-path", $ret_set_dir);
+    $Hf->set_value("$ch_id\-image-basename"     , $image_name);
+    $Hf->set_value("$ch_id\-image-suffix"       , $suffix);
+  }elsif($useunderscore==1){
+    $Hf->set_value("$ch_id\_path", $ret_set_dir);
+    $Hf->set_value("$ch_id\_image_basename"     , $image_name);
+    $Hf->set_value("$ch_id\_image_suffix"       , $suffix);
+  }
 }
