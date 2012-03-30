@@ -14,7 +14,7 @@ my $pipeline_info_log_path = "UNSET";
 
 my @outheadfile_comments = ();  # this added to by log_pipeline_info so define early
 my $BADEXIT = 1;
-
+my $debug_val=30;
 use File::Path;
 use strict;
 use English;
@@ -130,6 +130,7 @@ sub close_log_on_error  {
 # -------------
 sub make_matlab_m_file {
 # -------------
+#simple utility to save an mfile with a contents of function_call at mfile_path
    my ($mfile_path, $function_call) = @_;
    open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path";
    log_info("Matlab function call mfile created: $mfile_path");
@@ -144,18 +145,29 @@ sub make_matlab_command {
    my ($function_m_name, $args, $short_unique_purpose, $Hf) = @_;
 # short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
    my $work_dir   = $Hf->get_value('dir_work');
-   if ( $work_dir eq "NO_KEY" ) { $Hf->get_value('dir-work'); }
+   if ( $work_dir eq "NO_KEY" ) { $work_dir=$Hf->get_value('dir-work'); }
    my $matlab_app = $Hf->get_value('engine_app_matlab');
-   if ($matlab_app eq "NO_KEY" ) { $matlab_app = $Hf->get_value('engine_app_matlab'); }
-   my $mfile_path = "$work_dir/$short_unique_purpose$function_m_name";
+   if ($matlab_app eq "NO_KEY" ) { $matlab_app = $Hf->get_value('engine-app-matlab'); }
+   print("make_matlab_command:\n\tengine_matlab_path:${matlab_app}\n\twork_dir:$work_dir\n") if($debug_val>=25);
+   
+   my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}";
    my $function_call = "$function_m_name ( $args )";
    make_matlab_m_file ($mfile_path, $function_call);
    my $cmd_to_execute = "$matlab_app < $mfile_path > /tmp/matlab_pipe_stuff";
    return ($cmd_to_execute);
 }
+# -------------
+sub make_matlab_command_v2 { 
+# -------------
+# small wrapper for make_matlab_command, the v2 functionality has been integrated into the original. 
+# This is just to contain cases where we called the v2 version and they havnt been found yet.
+    $cmd_to_execute = make_matlab_command(@_);
+    return ($cmd_to_execute);
+}
+
 
 # -------------
-sub make_matlab_command_V2 {
+sub make_matlab_command_V2_OBSOLETE {
 # -------------
 # this seems identicle to make_matlab_command, was there some plan to edit this that wasnt implimented?
    my ($function_m_name, $args, $short_unique_purpose, $Hf) = @_;

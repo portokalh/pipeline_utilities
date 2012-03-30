@@ -14,7 +14,7 @@ my  $NIFTI_MFUNCTION = 'civm_to_nii_may';  # an mfile function in matlab directo
   # note: nii conversion function requires big endian input image data at this time
   # note: function handles up to 999 images in each set now
 my $ggo = 1;
-my $debug_val=15;
+my $debug_val=35;
 
 # ------------------
 sub convert_to_nifti_util {
@@ -69,7 +69,7 @@ sub convert_to_nifti_util {
 
   my $iso_vox_mm = $xfov_mm/$xdim;
   $iso_vox_mm = sprintf("%.4f", $iso_vox_mm);#  
-  print ("convert to nifti util \n\txdim:$xdim\txfov:$xfov_mm\n\tydim:$ydim\tzfov:$zfov_mm\n\tzdim:$zdim\tyfov:$yfov_mm\n") if ($debug_val>20);
+  print ("convert to nifti util \n\txdim:$xdim\txfov:$xfov_mm\n\tydim:$ydim\tzfov:$zfov_mm\n\tzdim:$zdim\tyfov:$yfov_mm\n") if ($debug_val>=25);
   print ("ISO_VOX_MM: $iso_vox_mm\n");
 
 #  my $nii_raw_data_type_code = 4; # civm .raw  (short - big endian)
@@ -90,19 +90,27 @@ sub nifti_ize_util
 {
 
   my ( $setid, $xdim, $ydim, $zdim, $nii_datatype_code, $voxel_size, $flip_y, $flip_z, $Hf) = @_;
+  my $usedash=1; # switches between - or _ in headfile key names
   my $runno          = $Hf->get_value("$setid\-runno");  # runno of civmraw format scan 
+  if ($runno eq 'NO_KEY') {  $runno          = $Hf->get_value("${setid}_runno"); } # runno of civmraw format scan 
   my $src_image_path = $Hf->get_value("$setid\-path");
+  if ($src_image_path eq 'NO_KEY') { $usedash=0; $src_image_path = $Hf->get_value("${setid}_path"); }
+  if ($src_image_path eq 'NO_KEY') { error_out("could not get src image path, there'ss some bad code floatin about"); }
   my $dest_dir       = $Hf->get_value("dir-work");
-  my $image_base     = $Hf->get_value("$setid\-image-basename");
-  my $padded_digits  = $Hf->get_value("$setid\-image-padded-digits");
-  my $image_suffix   = $Hf->get_value("$setid\-image-suffix");
+  if ($dest_dir eq 'NO_KEY' ) { $dest_dir       = $Hf->get_value("dir_work"); }
+  my $image_base     = $Hf->get_value("${setid}-image-basename");
+  if ($image_base eq 'NO_KEY') { $image_base     = $Hf->get_value("${setid}_image_basename"); }
+  my $padded_digits  = $Hf->get_value("${setid}-image-padded-digits");
+  if ($image_base eq 'NO_KEY') { $padded_digits  = $Hf->get_value("${setid}_image_padded_digits"); }
+  my $image_suffix   = $Hf->get_value("${setid}-image-suffix");
+  if ($image_suffix eq 'NO_KEY') { $image_suffix   = $Hf->get_value("${setid}_image_suffix"); }
   my $sliceselect    = $Hf->get_value_like("slice-selection");  # using get_value like is experimental, should be switched to get_value if this fails.
   if ($image_suffix ne 'raw') { error_out("nifti_ize: image suffix $image_suffix not known to be handled by matlab nifti converter (just \.raw)");}
 #  $Hf->set_value("$setid\_image_suffix", $image_suffix);  # wtf mates? we just read this value out?
   
   my $dest_nii_file = "$runno\.nii";
   my $dest_nii_path = "$dest_dir/$dest_nii_file";
-  print("srcpath:$src_image_path\trunno:$runno\n\tdest:$dest_dir\n\timage_name:$image_base\tdigits:$padded_digits\tsuffix:$image_suffix\n") if ($debug_val >10);
+  print("srcpath:$src_image_path\trunno:$runno\n\tdest:$dest_dir\n\timage_name:$image_base\tdigits:$padded_digits\tsuffix:$image_suffix\n") if ($debug_val >=25);
   # --- handle image filename number padding (.0001, .001).
   # --- figure out the img prefix that the case stmt for the filename will need (inside the nifti.m function)
   #     something like: 'N12345fsimx.0'
@@ -121,7 +129,7 @@ sub nifti_ize_util
       my ($zstart, $zstop) = split('-',$sliceselect);
       $args = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $voxel_size, $flip_y, $flip_z, $zstart, $zstop";
   }
-  my $cmd =  make_matlab_command_V2 ($NIFTI_MFUNCTION, $args, "$setid\_", $Hf); 
+  my $cmd =  make_matlab_command ($NIFTI_MFUNCTION, $args, "$setid\_", $Hf); 
   if (! execute($ggo, "nifti conversion", $cmd) ) {
     error_out("Matlab could not create nifti file from runno $runno:\n  using $cmd\n");
   }
@@ -131,10 +139,17 @@ sub nifti_ize_util
 
   # --- required return and setups -----
 
-  my $nii_setid = "$setid\-nii";
-  $Hf->set_value("$nii_setid\-file" , $dest_nii_file);
-  $Hf->set_value("$nii_setid\-path", $dest_nii_path);
-  print "** nifti-ize created [$nii_setid\-path]=$dest_nii_path\n";
+  my $nii_setid;
+  if($usedash==1) { # the new behavior use - to separate words in keynames added to headfile by pipeline 
+      $nii_setid = "$setid\-nii";
+      $Hf->set_value("$nii_setid\-file" , $dest_nii_file);
+      $Hf->set_value("$nii_setid\-path", $dest_nii_path);
+  } else { # the old behavior use _ to separate words in keynames added to the headfile by the pipeline
+      $nii_setid = "${setid}_nii";
+      $Hf->set_value("$nii_setid\_file" , $dest_nii_file);
+      $Hf->set_value("$nii_setid\_path", $dest_nii_path);
+      print "** nifti-ize created [$nii_setid\-path]=$dest_nii_path\n";
+  }
   return ($nii_setid);
 }
 
