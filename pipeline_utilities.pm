@@ -96,9 +96,12 @@ sub error_out
   print STDERR "  Please note the cause.\n";
 
   close_log_on_error($msg);
+  my $hf_path='';
   if ($HfResult ne "unset") {
-    my $hf_path = $HfResult->get_value('headfile_dest_path');
-    if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('headfile-dest-path'); }
+      $hf_path = $HfResult->get_value('headfile_dest_path');
+      if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('headfile-dest-path'); }
+    
+
     $HfResult->write_headfile($hf_path);
     $HfResult = "unset";
   }
@@ -161,7 +164,7 @@ sub make_matlab_command_v2 {
 # -------------
 # small wrapper for make_matlab_command, the v2 functionality has been integrated into the original. 
 # This is just to contain cases where we called the v2 version and they havnt been found yet.
-    $cmd_to_execute = make_matlab_command(@_);
+    my $cmd_to_execute = make_matlab_command(@_);
     return ($cmd_to_execute);
 }
 
@@ -169,7 +172,7 @@ sub make_matlab_command_v2 {
 # -------------
 sub make_matlab_command_V2_OBSOLETE {
 # -------------
-# this seems identicle to make_matlab_command, was there some plan to edit this that wasnt implimented?
+# this funcion has identicle functionalaity to make_matlab_command,  the only difference is in the HF keys looked up, they use - separators instead of _, updated make_malab_command to look for first one then the other
    my ($function_m_name, $args, $short_unique_purpose, $Hf) = @_;
 # short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
    my $work_dir   = $Hf->get_value('dir-work');

@@ -61,9 +61,16 @@ sub convert_to_nifti_util {
   if ($zfov_mm eq "NO_KEY") {
       $zfov_mm    = $Hf_in->get_value('fovz');
   } 
+  if ($zfov_mm eq "NO_KEY") {
+      my $slthick=$Hf_in->get_value('z_Bruker_PVM_SliceThick'); # this is used instead of slthick, as slthick might be the wrong guy.
+#      my $slicespacing=$Hf_in->get_value('');
+      my $slicespacing=0;
+      $zfov_mm=($slthick+$slicespacing)*$zdim-$slicespacing;
+      
+  }
  
   if ($xdim eq "NO_KEY" || $zdim eq "NO_KEY" || $ydim eq "NO_KEY" || $xfov_mm eq "NO_KEY"|| $yfov_mm eq "NO_KEY"|| $zfov_mm eq "NO_KEY") {
-      error_out("Could not find good value for xyz or xyz fov\n\tx=$xdim, y=$ydim, z=$zdim, xfov=$xfov_mm\n");
+      error_out("Could not find good value for xyz or xyz fov\n\tx=$xdim, y=$ydim, z=$zdim, xfov=$xfov_mm, yfov=$yfov_mm, zfov=$zfov_mm\n");
   }
 
 
