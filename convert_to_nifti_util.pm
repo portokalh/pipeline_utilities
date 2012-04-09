@@ -1,9 +1,7 @@
 #!/usr/local/pipeline-link/perl
-
 # convert_to_nifti_util.pm 
-
+#
 # created 2009/10/28 Sally Gewalt CIVM
-
 # consider this library for nifti? http://nifti.nimh.nih.gov/pub/dist/src/
 # http://afni.nimh.nih.gov/pub/dist/doc/program_help/nifti_tool.html
 

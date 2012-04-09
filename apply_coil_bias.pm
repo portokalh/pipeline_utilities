@@ -1,29 +1,22 @@
 #!/usr/local/pipeline-link/perl
 # apply_coil_bias.pm
-# 2011/09/08 James Cook
+#
 # one main function, apply_coil_bias, see usage notes below
+# 2012/04/02 james cook, added logging of the coil bias command to output headfile, also added other headfile keys, to record the input image, and a true flag for when coil bias is applied, 
+# 2011/09/08 James Cook
+# 
 use strict;
 require headfile;
+require pipeline_utilities; # not sure if i should do this include, might break stuff
+use vars qw($GOODEXIT $test_mode);
 my $ggo = 1;
-
+my $debug_val=15;
 # ------------------
 sub apply_coil_bias {
 # ------------------
-# takes 4 inputs, 
-#  ($go, $data_setid, $Hf_out, $HfInput) 
-# $go          , should this run or not.
-# $data_setid  , prefix for required 2 keys in head file, 
-# $Hf_out    , headfile which we READ and write, (so its kind of a misnomer here)
-# $HfInput     , headfile which we started the pipelien with, probably not used in this function, but unsure 
-# engine-app-ants-dir    - location of N4BiasFieldCorrection binary
-# ${data_setid}-nii-path - full path to nii to apply coil bias.
-# in addition to nii-path will overwrite 2 other keys on completion
-# ${data_setid}-nii-file - the nii filename which will be overwritten in the output headfile
-# ${data_setid}_bias-field-path - output path of the bias field.
-
-  my ($go, $data_setid, $Hf_out, $HfInput) = @_;
+  my ($go, $hf_nii_id, $Hf_out) = @_;
   $ggo=$go;
-### in the future data_setid could be array, which we look through and apply coilbias to any given element.
+### in the future hf_nii_id could be array, which we look through and apply coilbias to any given element.
 ### instad use the apply_coil_bias_to_all script, it looks for the runno_ch_commalist key in the headfile and
 ### runs for each element in there.
 
@@ -32,43 +25,52 @@ sub apply_coil_bias {
   my $coil_bias_program_path = "${ants_app_dir}/${coil_bias_program}";
   my $dimensions = 3;
 
-  my $in_nii = $Hf_out->get_value("${data_setid}-nii-path");
+  my $in_nii = $Hf_out->get_value("${hf_nii_id}-nii-path");
   if($ants_app_dir eq "NO_KEY" || $ants_app_dir eq "EMPTY_VALUE" || $ants_app_dir eq "UNDEFINED_VALUE") {
       error_out("$ants_app_dir, could not find ants path in headfile. KEY:  engine-app-ants-dir");
   }
   if($in_nii eq "NO_KEY" || $in_nii eq "EMPTY_VALUE" || $in_nii eq "UNDEFINED_VALUE") {
-      error_out("$in_nii, could not find input nii in headfile. KEY:  ${data_setid}-nii-path");
+      error_out("$in_nii, could not find input nii in headfile. KEY:  ${hf_nii_id}-nii-path");
   }
-  my @parts = split '\.', $in_nii;
-  my $found_suffix = pop @parts;
-  my $front = join '.', @parts;
-  @parts = split '/', $front; 
-  my $file = pop @parts;  
-  my $suffix="bias";
-  $file = $file . "_${suffix}.nii";
-  my $out_nii = $front . "_${suffix}" . ".nii";
-  my $out_field = $front . "_${suffix}_field" . ".nii";
-## need to set ${data_setid}-nii-file and ${data-setid}-nii-path
-  $Hf_out->set_value("${data_setid}-nii-file",$file);
-  $Hf_out->set_value("${data_setid}-nii-path",$out_nii);
-  $Hf_out->set_value("${data_setid}-${suffix}-field-path",$out_field);
- 
+
+  my $iterations="1000x1000x1000";
+  if ( defined($test_mode)) {
+      if ($test_mode==1) {
+	  $iterations="1x0x0";
+	  print STDERR "  TESTMODE enabled, will do very fast (incomplete) coil bias calc! (-t)\n" if ($debug_val>=5);
+      }
+  }  
+  my ($name,$path,$extension)=fileparts($in_nii);
+  print("File parts returned path:$path  $name  $extension\n") if( $debug_val>=35);
+  my $suffix="bias"; 
+  my $out_nii = $path . $name . "_${suffix}${extension}";
+  my $out_field = $path . $name . "_${suffix}_field${extension}";
+## need to set ${hf_nii_id}-nii-file and ${hf_nii_id}-nii-path
 #./N4BiasFieldCorrection 3 -i /Volumes/xtrinity/orig.nii -s 2 -c [ 1000x1000x1000,0.0002] -o [ /Volumes/xtrinity/orig_bias.nii,/Volumes/xtrinity/orig_field.nii]
-  my $params = "$dimensions -i $in_nii -o [ $out_nii,$out_field ] -s 2 -c [ 1000x1000x1000,0.0002] ";
+  my $params = "$dimensions -i $in_nii -o [ $out_nii,$out_field ] -s 2 -c [ ${iterations},0.0002] ";
   my $cmd = "$coil_bias_program_path " . "$params";
 #./ImageMath ImageDimension  OutputImage.ext   Operator   Image1.ext   Image2.extOrFloat
-  if(!execute($ggo,"$data_setid Coil Bias correction", $cmd)) {
-      error_out("  $data_setid Coil Bias failed.");
-  }
-  else { 
-      $Hf_out->set_value("${data_setid}-coil-bias-input-nii-path",$in_nii);
-      $Hf_out->set_value("${data_setid}-coil-bias-applied","true");
+  log_info("Useing coil bias comand: $cmd\n");
+  if(!execute($ggo,"$hf_nii_id Coil Bias correction", $cmd)) {
+      error_out("  $hf_nii_id Coil Bias failed.");
+  } else {  # only set values on sucess, not sure i like this syntax.
+      print( "Setting HF Keys\n") if ( $debug_val>=10);
+      $Hf_out->set_value("${hf_nii_id}-coil-bias-input-nii-path",$in_nii);
+      $Hf_out->set_value("${hf_nii_id}-coil-bias-applied","true");
+      $Hf_out->set_value("${hf_nii_id}-nii-file",$name);
+      $Hf_out->set_value("${hf_nii_id}-nii-path",$out_nii);
+      $Hf_out->set_value("${hf_nii_id}-${suffix}-field-path",$out_field);
   }
   
-  if(! $ggo){
+  
+
+
+
+
+  if(! $ggo) {
       log_info("Coil Bias function run but not applied");
   }
-  return ;
+  return $GOODEXIT;
   
 }
 

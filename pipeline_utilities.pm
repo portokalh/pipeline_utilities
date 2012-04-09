@@ -13,26 +13,26 @@ my $log_open = 0;
 my $pipeline_info_log_path = "UNSET";
 
 my @outheadfile_comments = ();  # this added to by log_pipeline_info so define early
-my $BADEXIT = 1;
-my $debug_val=30;
+#my $BADEXIT = 1;
+my $debug_val = 5;
 use File::Path;
 use strict;
 use English;
 #use seg_pipe;
-use vars qw($HfResult);
+use vars qw($HfResult $BADEXIT $GOODEXIT);
 # -------------
 sub open_log {
 # -------------
    my ($result_dir) = @_;
+   print("open_log: $result_dir\n") if ($debug_val>=35);
    if (! -d $result_dir) {
        print ("no such dir for log: $result_dir");
        exit $BADEXIT;
    }
    if (! -w $result_dir) {  
-       ("dir for log: $result_dir not writeable");
+       print("\n\ndir for log: $result_dir not writeable\n\n\n");
        exit $BADEXIT;
    }
-
    $pipeline_info_log_path = "$result_dir/pipeline_info_$PID.txt";
    open PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file";
    my $time = scalar localtime;
@@ -100,8 +100,7 @@ sub error_out
   if ($HfResult ne "unset") {
       $hf_path = $HfResult->get_value('headfile_dest_path');
       if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('headfile-dest-path'); }
-    
-
+      if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('result-headfile-path'); }
     $HfResult->write_headfile($hf_path);
     $HfResult = "unset";
   }
@@ -521,6 +520,16 @@ sub defile {
 }
 
 # ------------------
+sub fileparts { 
+# ------------------
+# ala matlab file parts, take filepath, return path name ext
+    my ($fullname) = @_;
+    use File::Basename;
+#    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
+    my ($name,$path,$suffix) = fileparse($fullname,qr/.[^.]*$/);
+    return($name,$path,$suffix);
+}
+
 sub locate_data {
 # ------------------
   # Retrieve a source image set from image subproject on atlasdb
