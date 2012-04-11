@@ -7,12 +7,12 @@
 
 use strict;
 
-my  $NIFTI_MFUNCTION = 'civm_to_nii_may';  # an mfile function in matlab directory, but no .m here 
+my  $NIFTI_MFUNCTION = 'civm_to_nii';  # an mfile function in matlab directory, but no .m here 
 # _may version includes flip_z (_feb does not)
   # note: nii conversion function requires big endian input image data at this time
   # note: function handles up to 999 images in each set now
 my $ggo = 1;
-my $debug_val=35;
+my $debug_val=5;
 
 # ------------------
 sub convert_to_nifti_util {
@@ -72,16 +72,20 @@ sub convert_to_nifti_util {
   }
 
 
-  my $iso_vox_mm = $xfov_mm/$xdim;
-  $iso_vox_mm = sprintf("%.4f", $iso_vox_mm);#  
+#  my $iso_vox_mm = $xfov_mm/$xdim;
+#  $iso_vox_mm = sprintf("%.4f", $iso_vox_mm);#  
+#  print ("ISO_VOX_MM: $iso_vox_mm\n");
+
+  my @voxelsize=($xfov_mm/$xdim,$yfov_mm/$ydim,$zfov_mm/$zdim);
   print ("convert to nifti util \n\txdim:$xdim\txfov:$xfov_mm\n\tydim:$ydim\tzfov:$zfov_mm\n\tzdim:$zdim\tyfov:$yfov_mm\n") if ($debug_val>=25);
-  print ("ISO_VOX_MM: $iso_vox_mm\n");
+  print ("FOV_MM: $xfov_mm $yfov_mm $zfov_mm\n");
+  print ("VOX_MM: @voxelsize\n");
 
 #  my $nii_raw_data_type_code = 4; # civm .raw  (short - big endian)
 #  my $nii_i32_data_type_code = 8; # .i32 output of t2w image set creator 
 
   my $nii_setid = 
-      nifti_ize_util ($data_setid, $xdim, $ydim, $zdim, $nii_raw_data_type_code, $iso_vox_mm, $flip_y, $flip_z, $Hf);
+      nifti_ize_util ($data_setid, $xdim, $ydim, $zdim, $nii_raw_data_type_code,$xfov_mm/$xdim,$yfov_mm/$ydim,$zfov_mm/$zdim , $flip_y, $flip_z, $Hf);
 
   ## dimensions are for the SOP acquisition. 
   ##nifti_ize ("input", 512, 256, 256, $nii_raw_data_type_code, 2, $flip_y, $flip_z, $Hf);
@@ -94,7 +98,7 @@ sub nifti_ize_util
 # ------------------
 {
 
-  my ( $setid, $xdim, $ydim, $zdim, $nii_datatype_code, $voxel_size, $flip_y, $flip_z, $Hf) = @_;
+  my ( $setid, $xdim, $ydim, $zdim, $nii_datatype_code, $xvox, $yvox, $zvox, $flip_y, $flip_z, $Hf) = @_;
   my $usedash=1; # switches between - or _ in headfile key names
   my $runno          = $Hf->get_value("$setid\-runno");  # runno of civmraw format scan 
   if ($runno eq 'NO_KEY') {  $runno          = $Hf->get_value("${setid}_runno"); } # runno of civmraw format scan 
@@ -129,10 +133,10 @@ sub nifti_ize_util
 
   my $image_prefix = $image_base . '.' . $padder;
   my $args;
-  if ( $sliceselect eq "all" || $sliceselect eq "NO_KEY" || $sliceselect eq "UNDEFINED_VALUE" || $sliceselect eq "EMPTY_VALUE" ) {        $args =   "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $voxel_size, $flip_y, $flip_z";
+  if ( $sliceselect eq "all" || $sliceselect eq "NO_KEY" || $sliceselect eq "UNDEFINED_VALUE" || $sliceselect eq "EMPTY_VALUE" ) {        $args =   "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z";
   } else {
       my ($zstart, $zstop) = split('-',$sliceselect);
-      $args = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $voxel_size, $flip_y, $flip_z, $zstart, $zstop";
+      $args = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z, $zstart, $zstop";
   }
   my $cmd =  make_matlab_command ($NIFTI_MFUNCTION, $args, "$setid\_", $Hf); 
   if (! execute($ggo, "nifti conversion", $cmd) ) {
