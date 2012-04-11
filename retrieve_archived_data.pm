@@ -9,7 +9,7 @@
 use strict;
 use Env qw(PIPELINE_SCRIPT_DIR);
 #require Headfile;
-use lib "$PIPELINE_SCRIPT_DIR/utility_pms";
+use lib "$PIPELINE_SCRIPT_DIR/pipeline_utilities";
 require pipeline_utilities;
 
 # ------------------
