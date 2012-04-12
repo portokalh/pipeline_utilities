@@ -19,7 +19,10 @@ use File::Path;
 use strict;
 use English;
 #use seg_pipe;
+
 use vars qw($HfResult $BADEXIT $GOODEXIT);
+my $PM="pipeline_utilities";
+
 # -------------
 sub open_log {
 # -------------
@@ -555,17 +558,17 @@ sub locate_data {
   if ($runno eq "NO_KEY") { error_out ("ouch $runno $runno_flavor\n"); }
   my $ret_set_dir;
   my ($image_name, $digits, $suffix);
-  if ( $ch_id =~ m/(T1)|(T2W)|(T2star)/ ) {
+  if ( $ch_id =~ m/(T1)|(T2W)|(T2star)/ ) { # should move this to global options, as archivechannels
     $ret_set_dir = retrieve_archive_dir($pull_images, $subproject, $runno, $dest);  
     my $first_image_name = first_image_name($ret_set_dir, $runno);
     ($image_name, $digits, $suffix) = split ('\.', "$first_image_name");
     $Hf->set_value("$ch_id\-image-padded-digits", $digits);
-  } elsif ( $ch_id =~ m/(adc)|(dwi)|(e1)|(fa)/){
+  } elsif ( $ch_id =~ m/(adc)|(dwi)|(e1)|(fa)/){ # should move this to global options, dtiresearchchannels
     print STDERR "label channel passed to locate_data not a standard image format, Assuming DTI archive format.\n";
     ($ret_set_dir,$image_name) = retrieve_DTI_research_image($pull_images, $subproject, $runno, $ch_id, $dest);
     ($image_name, $suffix) = split ('\.', "$image_name");
   } else {
-    print STDERR "Unreconized channel type: $ch_id, sorry i dont support that yet.\n";
+    error_out("$PM->locate_data: Unreconized channel type: $ch_id, sorry i dont support that yet.\n\tOnly support T1,T2W,T2star,adc,dwi,e1,fa.");
   }
   if($useunderscore==0) {
     $Hf->set_value("$ch_id\-path", $ret_set_dir);
