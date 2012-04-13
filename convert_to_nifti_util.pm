@@ -72,6 +72,7 @@ sub convert_to_nifti_util {
       error_out("Could not find good value for xyz or xyz fov\n\tx=$xdim, y=$ydim, z=$zdim, xfov=$xfov_mm, yfov=$yfov_mm, zfov=$zfov_mm\n") unless($ggo==0);
       @voxelsize=(1,1,1);
       ($xfov_mm,$yfov_mm,$zfov_mm)=(1,1,1);
+      ($xdim,$ydim,$zdim)=(1,1,1);
   } else  {
       @voxelsize=($xfov_mm/$xdim,$yfov_mm/$ydim,$zfov_mm/$zdim);
 #  my $iso_vox_mm = $xfov_mm/$xdim;
