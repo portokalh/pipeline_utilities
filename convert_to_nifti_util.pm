@@ -67,19 +67,22 @@ sub convert_to_nifti_util {
       
   }
  
-  if ($xdim eq "NO_KEY" || $zdim eq "NO_KEY" || $ydim eq "NO_KEY" || $xfov_mm eq "NO_KEY"|| $yfov_mm eq "NO_KEY"|| $zfov_mm eq "NO_KEY") {9
+  my @voxelsize=();
+  if ($xdim eq "NO_KEY" || $zdim eq "NO_KEY" || $ydim eq "NO_KEY" || $xfov_mm eq "NO_KEY"|| $yfov_mm eq "NO_KEY"|| $zfov_mm eq "NO_KEY") {
       error_out("Could not find good value for xyz or xyz fov\n\tx=$xdim, y=$ydim, z=$zdim, xfov=$xfov_mm, yfov=$yfov_mm, zfov=$zfov_mm\n") unless($ggo==0);
-  }
-
-
+      @voxelsize=(1,1,1);
+  } else  {
+      @voxelsize=($xfov_mm/$xdim,$yfov_mm/$ydim,$zfov_mm/$zdim);
 #  my $iso_vox_mm = $xfov_mm/$xdim;
 #  $iso_vox_mm = sprintf("%.4f", $iso_vox_mm);#  
 #  print ("ISO_VOX_MM: $iso_vox_mm\n");
+      print ("convert to nifti util \n\txdim:$xdim\txfov:$xfov_mm\n\tydim:$ydim\tzfov:$zfov_mm\n\tzdim:$zdim\tyfov:$yfov_mm\n") if ($debug_val>=25);
+      print ("FOV_MM: $xfov_mm $yfov_mm $zfov_mm\n");
+      print ("VOX_MM: @voxelsize\n");
+  }
 
-  my @voxelsize=($xfov_mm/$xdim,$yfov_mm/$ydim,$zfov_mm/$zdim)||@voxelsize=(1,1,1);
-  print ("convert to nifti util \n\txdim:$xdim\txfov:$xfov_mm\n\tydim:$ydim\tzfov:$zfov_mm\n\tzdim:$zdim\tyfov:$yfov_mm\n") if ($debug_val>=25);
-  print ("FOV_MM: $xfov_mm $yfov_mm $zfov_mm\n");
-  print ("VOX_MM: @voxelsize\n");
+
+
 
 #  my $nii_raw_data_type_code = 4; # civm .raw  (short - big endian)
 #  my $nii_i32_data_type_code = 8; # .i32 output of t2w image set creator 
