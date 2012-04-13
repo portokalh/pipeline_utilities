@@ -68,7 +68,7 @@ sub convert_to_nifti_util {
   }
  
   if ($xdim eq "NO_KEY" || $zdim eq "NO_KEY" || $ydim eq "NO_KEY" || $xfov_mm eq "NO_KEY"|| $yfov_mm eq "NO_KEY"|| $zfov_mm eq "NO_KEY") {
-      error_out("Could not find good value for xyz or xyz fov\n\tx=$xdim, y=$ydim, z=$zdim, xfov=$xfov_mm, yfov=$yfov_mm, zfov=$zfov_mm\n");
+      error_out("Could not find good value for xyz or xyz fov\n\tx=$xdim, y=$ydim, z=$zdim, xfov=$xfov_mm, yfov=$yfov_mm, zfov=$zfov_mm\n") unless($ggo==0);
   }
 
 
