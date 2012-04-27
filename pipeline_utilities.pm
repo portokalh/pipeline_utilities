@@ -162,10 +162,11 @@ sub make_matlab_command {
    return ($cmd_to_execute);
 }
 # -------------
-sub make_matlab_command_v2 { 
+sub make_matlab_command_V2 { 
 # -------------
 # small wrapper for make_matlab_command, the v2 functionality has been integrated into the original. 
 # This is just to contain cases where we called the v2 version and they havnt been found yet.
+    funct_obsolete("make_matlab_command_V2","make_matlab_command");
     my $cmd_to_execute = make_matlab_command(@_);
     return ($cmd_to_execute);
 }
@@ -533,50 +534,17 @@ sub fileparts {
     return($name,$path,$suffix);
 }
 
-sub locate_data {
 # ------------------
-  # Retrieve a source image set from image subproject on atlasdb
-  # Also sets the dest dir for each set in the headfile so
-  # you need to call this even if $pull_images is false.
+sub funct_obsolete {
+# ------------------
+# simple function to print that we've called an obsolete function
+    my ($funct_name,$new_funct_name)=@_;
+    print("\n\nWARNING: obsolete function called, <${funct_name}>, should change call to <${new_funct_name}>\n\n\n");
+    sleep(1);
+}
 
-  my ($pull_images, $ch_id, $Hf)=@_;
-  # $ch_id should be T1, T2, T2star (current CIVM MR SOP for seg), 
-  # or can be  adc, dwi, fa, e1 for DTI derrived data in research archive
+# ------------------
+sub get_ssh_auth {
+# ------------------
 
-# check set against allowed types, T1, T2W, T2star
-  my $dest       = $Hf->get_value('dir-input');
-  my $useunderscore=0;
-  if ($dest eq "NO_KEY" ) { $dest = $Hf->get_value("dir_input"); 
-			  $useunderscore=1;}
-  my $subproject = $Hf->get_value('subproject-source-runnos');
-  if ($subproject eq "NO_KEY" ) { $subproject = $Hf->get_value("subproject_source_runnos"); }
-  my $runno_flavor = "$ch_id\-runno";
-
-  
-  my $runno = $Hf->get_value($runno_flavor);
-  if ($runno eq "NO_KEY" ) { $runno_flavor="${ch_id}_runno"; $runno = $Hf->get_value("$runno_flavor"); }
-  if ($runno eq "NO_KEY") { error_out ("ouch $runno $runno_flavor\n"); }
-  my $ret_set_dir;
-  my ($image_name, $digits, $suffix);
-  if ( $ch_id =~ m/(T1)|(T2W)|(T2star)/ ) { # should move this to global options, as archivechannels
-    $ret_set_dir = retrieve_archive_dir($pull_images, $subproject, $runno, $dest);  
-    my $first_image_name = first_image_name($ret_set_dir, $runno);
-    ($image_name, $digits, $suffix) = split ('\.', "$first_image_name");
-    $Hf->set_value("$ch_id\-image-padded-digits", $digits);
-  } elsif ( $ch_id =~ m/(adc)|(dwi)|(e1)|(fa)/){ # should move this to global options, dtiresearchchannels
-    print STDERR "label channel passed to locate_data not a standard image format, Assuming DTI archive format.\n";
-    ($ret_set_dir,$image_name) = retrieve_DTI_research_image($pull_images, $subproject, $runno, $ch_id, $dest);
-    ($image_name, $suffix) = split ('\.', "$image_name");
-  } else {
-    error_out("$PM->locate_data: Unreconized channel type: $ch_id, sorry i dont support that yet.\n\tOnly support T1,T2W,T2star,adc,dwi,e1,fa.");
-  }
-  if($useunderscore==0) {
-    $Hf->set_value("$ch_id\-path", $ret_set_dir);
-    $Hf->set_value("$ch_id\-image-basename"     , $image_name);
-    $Hf->set_value("$ch_id\-image-suffix"       , $suffix);
-  }elsif($useunderscore==1){
-    $Hf->set_value("$ch_id\_path", $ret_set_dir);
-    $Hf->set_value("$ch_id\_image_basename"     , $image_name);
-    $Hf->set_value("$ch_id\_image_suffix"       , $suffix);
-  }
 }

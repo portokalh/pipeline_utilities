@@ -1,7 +1,8 @@
 #!/usr/local/pipeline-link/perl
 
 # retrieve_archived_data.pm 
-
+# 2012/04/26  james cook, modified tring to accomidate any archived data we know about. 
+#             Uses data type id to guess the right kinda of data.
 # created 2009/10/28 Sally Gewalt CIVM
 # assumes ssh identity is all set up
 # base use is for user omega to run this and connect to atlasdb:/atlas1 as omega
@@ -11,20 +12,90 @@ use Env qw(PIPELINE_SCRIPT_DIR);
 #require Headfile;
 use lib "$PIPELINE_SCRIPT_DIR/pipeline_utilities";
 require pipeline_utilities;
+my $PM="retrieve_archived_data";
+
 
 # ------------------
-sub retrieve_archive_dir {
+sub locate_data { # compatbility stub to call locate_data_util
+# ------------------
+    funct_obsolete("locate_data","locate_data_util");
+    locate_data(@_);
+}
+
+# ------------------
+sub locate_data_util {
+# ------------------
+  # Retrieve a source image set from image subproject on atlasdb
+  # Also sets the dest dir for each set in the headfile so
+  # you need to call this even if $pull_images is false.
+
+  my ($pull_images, $ch_id, $Hf)=@_;
+  # $ch_id should be T1, T2, T2star (current CIVM MR SOP for seg),
+  # or can be  adc, dwi, fa, e1 for DTI derrived data in research archive
+  # for Tensor pipe will be DW0...DW(n-1)
+
+# check set against allowed types, T1, T2W, T2star
+  my $dest       = $Hf->get_value('dir-input');
+  my $useunderscore=0;
+  if ($dest eq "NO_KEY" ) { $dest = $Hf->get_value("dir_input"); 
+			  $useunderscore=1;}
+  my $subproject = $Hf->get_value('subproject-source');
+  if ($subproject eq "NO_KEY" ) { $subproject = $Hf->get_value("subproject_source"); }
+  if ($subproject eq "NO_KEY" ) { error_out("cannot see subproject something bad happened"); }
+  my $runno_flavor = "$ch_id\-runno";
+ 
+  my $runno = $Hf->get_value($runno_flavor);
+  if ($runno eq "NO_KEY" ) { $runno_flavor="${ch_id}_runno"; $runno = $Hf->get_value("$runno_flavor"); } 
+  if ($runno eq "NO_KEY" ) { error_out ("couldnt find Id tag for runno:$runno only got <${runno_flavor}>\n"); } 
+  my $ret_set_dir;
+  my ($image_name, $digits, $suffix);
+  if ( $ch_id =~ m/(T1)|(T2W)|(T2star)|(DW[0-9]+)/ ) { # should move this to global options, as archivechannels
+#elsif ( $ch_id =~ m/DW[0-9]+/) {
+    $ret_set_dir = retrieve_archive_dir_util($pull_images, $subproject, $runno, $dest);  
+    my $first_image_name = first_image_name($ret_set_dir, $runno);
+    ($image_name, $digits, $suffix) = split ('\.', "$first_image_name");
+    $Hf->set_value("$ch_id\-image-padded-digits", $digits);
+  } elsif ( $ch_id =~ m/(adc)|(dwi)|(e1)|(fa)/){ # should move this to global options, dtiresearchchannels
+    print STDERR "label channel passed to locate_data not a standard image format, Assuming DTI archive format.\n";
+    ($ret_set_dir,$image_name) = retrieve_DTI_research_image($pull_images, $subproject, $runno, $ch_id, $dest);
+    ($image_name, $suffix) = split ('\.', "$image_name");
+  } else {
+    error_out("$PM->locate_data: Unreconized channel type: $ch_id, sorry i dont support that yet.\n\tOnly support T1,T2W,T2star,adc,dwi,e1,fa.");
+  }
+  if($useunderscore==0) {
+    $Hf->set_value("$ch_id\-path", $ret_set_dir);
+    $Hf->set_value("$ch_id\-image-basename"     , $image_name);
+    $Hf->set_value("$ch_id\-image-suffix"       , $suffix);
+  }elsif($useunderscore==1){
+    $Hf->set_value("$ch_id\_path", $ret_set_dir);
+    $Hf->set_value("$ch_id\_image_basename"     , $image_name);
+    $Hf->set_value("$ch_id\_image_suffix"       , $suffix);
+  }
+}
+
+
+
+# ------------------
+sub retrieve_archive_dir { # stub to call new version
+# ------------------
+    funct_obsolete("retrieve_archive_dir","retriveve_archive_dir_util");
+    my $final_dir=retrieve_archive_dir_util(@_);
+    return($final_dir);
+}
+
+# ------------------
+sub retrieve_archive_dir_util {
 # ------------------
 # Retrieve runno (image) directory from archive.
-# assumes data is archived in subproject/runno dir ()
+# assumes data is archived in subproject/runno dir
 # gets entire directory
-# returns name of local directory of result set
+# returns name of local directory of result set 
 
-# e.g. project naming convention 11.alex.01
-# e.g. filename: N38848t9imx.0109.raw
-# e.g. location /Volumes/cretespace/N38848Labels-inputs/N38848/N38848t9imx.0109.raw 
-# e.g. location /Volumes/cretespace/N38848Labels-inputs/N38849FIC/N38849FIC.054.raw
-# e.g. location /Volumes/cretespace/N38848Labels-inputs/N38850/N38850t9imx.0109.raw
+
+
+
+
+
 
   my ($do_pull, $subproject, $runno, $local_dest_dir) = @_;
   if (! -d $local_dest_dir) {
@@ -32,8 +103,8 @@ sub retrieve_archive_dir {
   }
   # add -q for quiet
   my $final_dir = "$local_dest_dir/$runno";
-  my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno/ $local_dest_dir";
-  
+  my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno  $local_dest_dir/$runno";
+
   #print ("DO_PULL = $do_pull\n");
   my $ok = execute($do_pull, "archive retrieve", $cmd);
   if (! $ok) {
@@ -41,7 +112,6 @@ sub retrieve_archive_dir {
   }
   return ($final_dir);
 }
-
 # ------------------
 sub retrieve_DTI_research_image {
 # ------------------
@@ -79,6 +149,7 @@ sub retrieve_DTI_research_image {
   }
   return ($final_dir,$filename);
 }
+
 
 # ------------------
 sub first_image_name {

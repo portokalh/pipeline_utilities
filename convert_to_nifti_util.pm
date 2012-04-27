@@ -23,7 +23,6 @@ sub convert_to_nifti_util {
   my ($go, $data_setid, $nii_raw_data_type_code, $flip_y, $flip_z, $Hf, $Hf_in) = @_;
   $ggo=$go;
 
-
   # the input headfile has image description
   # the second value is a more generic version, this was specifically added to support the brukerextract code and bruker images.
   my $xdim    = $Hf_in->get_value('S_xres_img');
