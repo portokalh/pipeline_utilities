@@ -104,9 +104,9 @@ sub nifti_ize_util
 
   my ( $setid, $xdim, $ydim, $zdim, $nii_datatype_code, $xvox, $yvox, $zvox, $flip_y, $flip_z, $Hf) = @_;
   my $usedash=1; # switches between - or _ in headfile key names
-  my $runno          = $Hf->get_value("$setid\-runno");  # runno of civmraw format scan 
+  my $runno          = $Hf->get_value("${setid}-runno");  # runno of civmraw format scan 
   if ($runno eq 'NO_KEY') {  $runno          = $Hf->get_value("${setid}_runno"); } # runno of civmraw format scan 
-  my $src_image_path = $Hf->get_value("$setid\-path");
+  my $src_image_path = $Hf->get_value("${setid}-path");
   if ($src_image_path eq 'NO_KEY') { $usedash=0; $src_image_path = $Hf->get_value("${setid}_path"); }
   if ($src_image_path eq 'NO_KEY') { error_out("could not get src image path, there'ss some bad code floatin about"); }
   my $dest_dir       = $Hf->get_value("dir-work");
@@ -154,14 +154,14 @@ sub nifti_ize_util
 
   my $nii_setid;
   if($usedash==1) { # the new behavior use - to separate words in keynames added to headfile by pipeline 
-      $nii_setid = "$setid\-nii";
-      $Hf->set_value("$nii_setid\-file" , $dest_nii_file);
-      $Hf->set_value("$nii_setid\-path", $dest_nii_path);
+      $nii_setid = "${setid}-nii";
+      $Hf->set_value("${nii_setid}-file" , $dest_nii_file);
+      $Hf->set_value("${nii_setid}-path", $dest_nii_path);
   } else { # the old behavior use _ to separate words in keynames added to the headfile by the pipeline
       $nii_setid = "${setid}_nii";
-      $Hf->set_value("$nii_setid\_file" , $dest_nii_file);
-      $Hf->set_value("$nii_setid\_path", $dest_nii_path);
-      print "** nifti-ize created [$nii_setid\-path]=$dest_nii_path\n";
+      $Hf->set_value("${nii_setid}_file" , $dest_nii_file);
+      $Hf->set_value("${nii_setid}_path", $dest_nii_path);
+      print "** nifti-ize created [${nii_setid}-path]=$dest_nii_path\n";
   }
   return ($nii_setid);
 }

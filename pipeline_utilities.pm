@@ -1,6 +1,9 @@
 #pipeline_utilites.pm
 #
 # utilities for pipelines including matlab calls from perl 
+# should probably split up into separate library functions to make 
+# the distinctions easier. 
+# propose, a log_utilities, maybe a matlab_utilities, maybe an external call utilities
 #
 # created 09/10/15  Sally Gewalt CIVM
 #                   based on t2w pipeline  
@@ -95,7 +98,10 @@ sub error_out
 {
   my ($msg) = @_;
   print STDERR "\n<~Pipeline failed.\n";
-  print STDERR "  Failure cause: ", $msg,"\n";
+  my @callstack=(caller(1));
+  my $pm=$callstack[1]||die "caller failure in error_out";
+  my $sn=$callstack[3]||die "caller failure in error_out";
+  print STDERR "  Failure cause: ".$pm.'|'.$sn, $msg,"\n";
   print STDERR "  Please note the cause.\n";
 
   close_log_on_error($msg);

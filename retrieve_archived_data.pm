@@ -103,7 +103,7 @@ sub retrieve_archive_dir_util {
   }
   # add -q for quiet
   my $final_dir = "$local_dest_dir/$runno";
-  my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno  $local_dest_dir/$runno";
+  my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno/  $local_dest_dir/$runno";
 
   #print ("DO_PULL = $do_pull\n");
   my $ok = execute($do_pull, "archive retrieve", $cmd);

@@ -16,7 +16,7 @@ my $debug_val=5;
 # ------------------
 sub apply_noise_reduction {
 # ------------------
-  my ($go, $hf_nii_id, $Hf_out, $HfInput) = @_;
+  my ($go, $hf_nii_id, $Hf_out )= @_; #, $HfInput)
   $ggo=$go;
 ### in the future hf_nii_id could be array, which we look through and apply noise reduction  to any given element.
 ### instad use the apply_coil_bias_to_all script, it looks for the runno_ch_commalist key in the headfile and
@@ -42,12 +42,20 @@ sub apply_noise_reduction {
   } elsif ( $noise_reduction_type eq 'ANTS'){
       @cmd=ants_noise_reduction($in_nii, $hf_nii_id, $Hf_out);
   } else {
-      error_out("got noise correction, but dont reconizse <$noise_reduction_type>");
+      error_out("noise correction atempted, but dont recognise noise reduction type <$noise_reduction_type>");
   }
-  log_info("Useing noise reduction command: @cmd\n");
+  log_info("Using noise reduction command: @cmd\n");
   if(!execute($ggo,"$hf_nii_id Noise reduction correction", @cmd)) {
       error_out("  $hf_nii_id noise reduction failed.");
   } else { # only set values on sucess, not sure i like this syntax.
+#      print("Noise reduction success\n");
+      my ($name,$path,$extension)=fileparts($in_nii);
+      $name = $name . "_${noise_reduction_type}${extension}";
+      my $out_nii = $path . $name ;
+      $Hf_out->set_value("${hf_nii_id}-noise-reduction-input-nii-path",$in_nii);
+      $Hf_out->set_value("${hf_nii_id}-noise-reduction-applied","true");
+      $Hf_out->set_value("${hf_nii_id}-nii-file",$name);
+      $Hf_out->set_value("${hf_nii_id}-nii-path",$out_nii);   
   }
   if(! $ggo) {
       log_info("Noise redduction function run but not applied");
@@ -72,11 +80,6 @@ sub matlab_noise_reduction {
     my $params = "\'$in_nii\', \'\', \'$out_nii\'";
     my $cmd =  make_matlab_command ($BILATERAL_MFUNCTION, $params, "$hf_nii_id\_", $Hf_out); 
     push @cmdlist, $cmd;
-
-    $Hf_out->set_value("${hf_nii_id}-noise-reduction-input-nii-path",$in_nii);
-    $Hf_out->set_value("${hf_nii_id}-noise-reduction-applied","true");
-    $Hf_out->set_value("${hf_nii_id}-nii-file",$name);
-    $Hf_out->set_value("${hf_nii_id}-nii-path",$out_nii);    
     return @cmdlist
 }
 
@@ -105,10 +108,6 @@ sub fsl_noise_reduction {
 	push @cmdlist, $cmd ;
 	push @cmdlist, $gzcmd ;
 	# dump the output info anticipating success
-	$Hf_out->set_value("${hf_nii_id}-noise-reduction-input-nii-path",$in_nii);
-	$Hf_out->set_value("${hf_nii_id}-noise-reduction-applied","true");
-	$Hf_out->set_value("${hf_nii_id}-nii-file",$name);
-	$Hf_out->set_value("${hf_nii_id}-nii-path",$out_nii);
     } else {
 	error_out("FSL noise reduction program unrecognized, Currently only SUSAN is supported");
     }
@@ -121,7 +120,7 @@ sub ants_noise_reduction {
 # ------------------
     my ( $in_nii, $hf_nii_id, $Hf_out) = @_;
     my @cmdlist=();
-    
+    error_out("no ants noise reduction yet");
     return @cmdlist
 }
 
