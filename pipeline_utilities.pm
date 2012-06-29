@@ -99,10 +99,15 @@ sub error_out
   my ($msg) = @_;
   print STDERR "\n<~Pipeline failed.\n";
   my @callstack=(caller(1));
-  my $pm=$callstack[1]||die "caller failure in error_out";
-  my $sn=$callstack[3]||die "caller failure in error_out";
+  my $pm;
+#  $pm=$callstack[1] || $pm="UNDEFINED"; #||die "caller failure in error_out for message $msg";
+  $pm=$callstack[1] || die "caller failure in error_out for message $msg";
+  my $sn;
+#  $sn=$callstack[3] || $sn="UNDEFINED";#||die "caller failure in error_out for message $msg";
+  $sn=$callstack[3] || die "caller failure in error_out for message $msg";
   print STDERR "  Failure cause: ".$pm.'|'.$sn, $msg,"\n";
   print STDERR "  Please note the cause.\n";
+  
 
   close_log_on_error($msg);
   my $hf_path='';
