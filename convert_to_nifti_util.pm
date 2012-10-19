@@ -7,10 +7,6 @@
 
 use strict;
 
-my  $NIFTI_MFUNCTION = 'civm_to_nii';  # an mfile function in matlab directory, but no .m here 
-# _may version includes flip_z (_feb does not)
-  # note: nii conversion function requires big endian input image data at this time
-  # note: function handles up to 999 images in each set now
 my $ggo = 1;
 my $debug_val=5;
 
@@ -114,12 +110,14 @@ sub nifti_ize_util
   my $image_base     = $Hf->get_value("${setid}-image-basename");
   if ($image_base eq 'NO_KEY') { $image_base     = $Hf->get_value("${setid}_image_basename"); }
   my $padded_digits  = $Hf->get_value("${setid}-image-padded-digits");
-  if ($image_base eq 'NO_KEY') { $padded_digits  = $Hf->get_value("${setid}_image_padded_digits"); }
+  if ($padded_digits eq 'NO_KEY') { $padded_digits  = $Hf->get_value("${setid}_image_padded_digits"); }
   my $image_suffix   = $Hf->get_value("${setid}-image-suffix");
   if ($image_suffix eq 'NO_KEY') { $image_suffix   = $Hf->get_value("${setid}_image_suffix"); }
   my $sliceselect    = $Hf->get_value_like("slice-selection");  # using get_value like is experimental, should be switched to get_value if this fails.
   if ($image_suffix ne 'raw') { error_out("nifti_ize: image suffix $image_suffix not known to be handled by matlab nifti converter (just \.raw)");}
 #  $Hf->set_value("$setid\_image_suffix", $image_suffix);  # wtf mates? we just read this value out?
+  my  $NIFTI_MFUNCTION = $Hf->get_value("nifti_matlab_converter");
+
   
   my $dest_nii_file = "$runno\.nii";
   my $dest_nii_path = "$dest_dir/$dest_nii_file";
@@ -139,9 +137,10 @@ sub nifti_ize_util
   my $args;
   if ( $sliceselect eq "all" || $sliceselect eq "NO_KEY" || $sliceselect eq "UNDEFINED_VALUE" || $sliceselect eq "EMPTY_VALUE" ) {        $args =   "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z";
   } else {
-      my ($zstart, $zstop) = split('-',$sliceselect);
-      $args = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z, $zstart, $zstop";
+    my ($zstart, $zstop) = split('-',$sliceselect);
+    $args = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z, $zstart, $zstop";
   }
+
   my $cmd =  make_matlab_command ($NIFTI_MFUNCTION, $args, "$setid\_", $Hf); 
   if (! execute($ggo, "nifti conversion", $cmd) ) {
     error_out("Matlab could not create nifti file from runno $runno:\n  using $cmd\n");
