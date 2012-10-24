@@ -172,6 +172,25 @@ sub make_matlab_command {
    my $cmd_to_execute = "$matlab_app < $mfile_path > /tmp/matlab_pipe_stuff";
    return ($cmd_to_execute);
 }
+
+# -------------
+sub make_matlab_command_nohf {
+# -------------
+#  my $matlab_cmd=make_matlab_command_nohf($mfilename, $mat_args, $purpose, $local_dest_dir, $Engine_matlab_path);
+   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app) = @_;
+# short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
+#   my $work_dir   = $Hf->get_value('dir_work');
+#   if ( $work_dir eq "NO_KEY" ) { $work_dir=$Hf->get_value('dir-work'); }
+#   my $matlab_app = $Hf->get_value('engine_app_matlab');
+#   if ($matlab_app eq "NO_KEY" ) { $matlab_app = $Hf->get_value('engine-app-matlab'); }
+   print("make_matlab_command:\n\tengine_matlab_path:${matlab_app}\n\twork_dir:$work_dir\n") if($debug_val>=25);
+   
+   my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}";
+   my $function_call = "$function_m_name ( $args )";
+   make_matlab_m_file ($mfile_path, $function_call);
+   my $cmd_to_execute = "$matlab_app < $mfile_path > /tmp/matlab_pipe_stuff";
+   return ($cmd_to_execute);
+}
 # -------------
 sub make_matlab_command_V2 { 
 # -------------
@@ -182,6 +201,32 @@ sub make_matlab_command_V2 {
     return ($cmd_to_execute);
 }
 
+# -------------
+sub rp_key_insert { 
+# -------------
+# takes key pfile and inserts it into keyhole pfile using matlab script evan made
+# my $rp_insert_status=rp_key_insert($keyhole_pfile_path,  $final_output_pfile_path, $Engine_matlab_path);	
+#    my ($keyhole_runno,$result_pfile_basename,$final_output_pfile_path, $result_pfile_extension_dot,$keyhole_pfile_path,$local_dest_dir,$Engine_matlab_path,@other)=@_;
+    my ($keyhole_rpfile_path, $key_rpfile_path,$local_dest_dir,$Engine_matlab_path)=@_;
+    my $mfilename="cartesian_keyhole";
+    my $mat_args="'$keyhole_rpfile_path','$key_rpfile_path'"; # will insert final into keyhole, and save to final.
+    my $purpose='insert_key';
+    my $matlab_cmd=make_matlab_command_nohf($mfilename, $mat_args, $purpose, $local_dest_dir, $Engine_matlab_path);
+    my $result_status=1;
+    if ( ! -e "${key_rpfile_path}.bak" ) {
+	use File::Copy "cp";
+	cp("${key_rpfile_path}","${key_rpfile_path}.bak");
+	print ("<~ executing matlab command to insert keyhole $matlab_cmd\n");
+	$result_status=qx/$matlab_cmd/;    # do matlab call
+    } else { 
+	print("RP file already inserted into keyhole\n"); 
+    }
+#	my $w
+#engine_app_matlab=/usr/bin/matlab
+    sleep 30;
+
+    return $result_status;
+}
 
 # -------------
 sub make_matlab_command_V2_OBSOLETE {
