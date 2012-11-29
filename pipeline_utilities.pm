@@ -42,10 +42,10 @@ sub open_log {
    $pipeline_info_log_path = "$result_dir/pipeline_info_$PID.txt";
    open PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file";
    my $time = scalar localtime;
-   print("Logfile is: $pipeline_info_log_path\n");
+   print("# Logfile is: $pipeline_info_log_path\n");
    $log_open = 1;
 
-   log_info("Log opened at $time.");
+   log_info(" Log opened at $time.");
    return($pipeline_info_log_path);
 }
 
@@ -79,7 +79,7 @@ sub log_info {
      push @outheadfile_comments, "$to_headfile";  
 
      # show to user:
-     print( "LOG: $log_me\n");
+     print( "#LOG: $log_me\n");
 
      # send to pipeline file:
      print( PIPELINE_INFO "$log_me\n");
@@ -150,7 +150,7 @@ sub make_matlab_m_file {
    my ($mfile_path, $function_call) = @_;
    log_info("Matlab function call mfile created: $mfile_path");
    log_info("  mfile contains: $function_call");
-   make_maltab_m_file_quiet($mfile_path,$function_call);
+   make_matlab_m_file_quiet($mfile_path,$function_call);
 }
 
 # -------------
