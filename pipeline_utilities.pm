@@ -42,7 +42,7 @@ sub open_log {
    $pipeline_info_log_path = "$result_dir/pipeline_info_$PID.txt";
    open PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file";
    my $time = scalar localtime;
-   print "Logfile is: $pipeline_info_log_path\n";
+   print("Logfile is: $pipeline_info_log_path\n");
    $log_open = 1;
 
    log_info("Log opened at $time.");
@@ -79,18 +79,39 @@ sub log_info {
      push @outheadfile_comments, "$to_headfile";  
 
      # show to user:
-     print "LOG: $log_me\n";
+     print( "LOG: $log_me\n");
 
      # send to pipeline file:
-     print PIPELINE_INFO "$log_me\n";
+     print( PIPELINE_INFO "$log_me\n");
    }
    else {
-    print "LOG NOT OPEN!\n";
-    print "  You tried to send this info to the log file, but the log file is not available:\n";
-    print "  attempted log msg: $log_me\n";
+    print(STDERR "LOG NOT OPEN!\n");
+    print(STDERR  "  You tried to send this info to the log file, but the log file is not available:\n");
+    print(STDERR  "  attempted log msg: $log_me\n");
    }
 }
 
+
+# -------------
+sub close_log_on_error  {
+# -------------
+  my ($err_msg) = @_;
+  # possible you may call this before the log is open
+  if ($log_open) {
+      my $exit_time = scalar localtime;
+      log_info("Error cause: $err_msg");
+      log_info("Log close at $exit_time.");
+
+      # emergency close log (w/o log dumping to headfile)
+      close(PIPELINE_INFO);
+      $log_open = 0;
+      print(STDERR "  Log is: $pipeline_info_log_path\n");
+      return (1);
+  } else {
+      print(STDERR "NOTE: log file was not open at time of error.\n");
+      return (0);     
+  }
+}
 
 # -------------
 sub error_out
@@ -122,35 +143,22 @@ sub error_out
 }
 
 # -------------
-sub close_log_on_error  {
+sub make_matlab_m_file {
 # -------------
-  my ($err_msg) = @_;
-  # possible you may call this before the log is open
-  if ($log_open) {
-      my $exit_time = scalar localtime;
-      log_info("Error cause: $err_msg");
-      log_info("Log close at $exit_time.");
-
-      # emergency close log (w/o log dumping to headfile)
-      close(PIPELINE_INFO);
-      $log_open = 0;
-      print "  Log is: $pipeline_info_log_path\n";
-      return (1);
-  }
-  else {
-      print "  NOTE: log file was not open at time of error.\n";
-      return (0);     
-  }
+#simple utility to save an mfile with a contents of function_call at mfile_path
+# logs the information to the log file, and calls make_matalb_m_file_quiet to do work
+   my ($mfile_path, $function_call) = @_;
+   log_info("Matlab function call mfile created: $mfile_path");
+   log_info("  mfile contains: $function_call");
+   make_maltab_m_file_quiet($mfile_path,$function_call);
 }
 
 # -------------
-sub make_matlab_m_file {
+sub make_matlab_m_file_quiet {
 # -------------
 #simple utility to save an mfile with a contents of function_call at mfile_path
    my ($mfile_path, $function_call) = @_;
    open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path";
-   log_info("Matlab function call mfile created: $mfile_path");
-   log_info("  mfile contains: $function_call");
    print MATLAB_M "$function_call";
    close MATLAB_M;
 }
@@ -177,20 +185,19 @@ sub make_matlab_command {
 sub make_matlab_command_nohf {
 # -------------
 #  my $matlab_cmd=make_matlab_command_nohf($mfilename, $mat_args, $purpose, $local_dest_dir, $Engine_matlab_path);
-   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app) = @_;
-# short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
-#   my $work_dir   = $Hf->get_value('dir_work');
-#   if ( $work_dir eq "NO_KEY" ) { $work_dir=$Hf->get_value('dir-work'); }
-#   my $matlab_app = $Hf->get_value('engine_app_matlab');
-#   if ($matlab_app eq "NO_KEY" ) { $matlab_app = $Hf->get_value('engine-app-matlab'); }
+   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,$destination) = @_;
    print("make_matlab_command:\n\tengine_matlab_path:${matlab_app}\n\twork_dir:$work_dir\n") if($debug_val>=25);
-   
    my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}";
    my $function_call = "$function_m_name ( $args )";
-   make_matlab_m_file ($mfile_path, $function_call);
-   my $cmd_to_execute = "$matlab_app < $mfile_path > /tmp/matlab_pipe_stuff";
+   if (! defined $destination) { 
+       $destination = '> /tmp/matlab_pipe_stuff';
+   } 
+
+   make_matlab_m_file_quiet ($mfile_path, $function_call);
+   my $cmd_to_execute = "$matlab_app < $mfile_path $destination"; 
    return ($cmd_to_execute);
 }
+
 # -------------
 sub make_matlab_command_V2 { 
 # -------------
@@ -275,8 +282,7 @@ sub execute {
 
 	    if ($do_it) {
 		$rc = system ($c);
-	    }
-	    else {
+	    } else {
 		$rc = 0; # fake ok
 	    }
 

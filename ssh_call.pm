@@ -9,6 +9,7 @@ package ssh_call;
 #            a regular file
 # Sally Gewalt civm 2/15/2007
 use strict;
+use warnings;
 my $DEBUG = 1;
 
 sub works {
@@ -18,7 +19,7 @@ sub works {
   my ($remote_system) = @_;
 
     #print STDERR "trying ssh_call::works(): ssh $remote_system date\n" if $DEBUG; 
-    my $date = `ssh $remote_system date`;
+    my $date = `ssh -Y $remote_system date`;
 
     if ($date eq "") {
        print STDERR "  Problem:\n";
@@ -36,16 +37,16 @@ sub works {
 sub get_file {
   my ($system, $source_dir, $file, $local_dest_dir)  =@_;
 
-    my $date = `ssh $system date`;
+    my $date = `ssh -Y $system date`;
     chop ($date);
     my $src = "$system:$source_dir/$file";
-    print STDERR "   Beginning scp of $src at $date...";
-    my $dest = "$local_dest_dir/$file";
-    my @args = ("scp -r", $src, $dest);
+    print STDERR "Beginning scp of $src at $date...";
+    my $dest  = "$local_dest_dir/$file/";
+    my @args  = ("scp", $src, $dest);
     my $start = time;
-    my $rc = system (@args);
-    my $msg = $?;
-    my $end = time;
+    my $rc    = system (@args);
+    my $msg   = $?;
+    my $end   = time;
     my $xfer_time = $end - $start;
 
     if ($rc != 0) {
@@ -61,25 +62,26 @@ sub get_file {
 sub get_dir {
     my ($system, $source_dir, $dir, $local_dest_dir)  =@_;
 
-    my $date = `ssh $system date`;
+    my $date  = `ssh -Y $system date`;
     chop ($date);
-    my $src = "$system:$source_dir/$dir";
-    print STDERR "   Beginning scp of $src at $date...";
-    my $dest = "$local_dest_dir/$dir";
-    my @args = ("scp -r", $src, $dest);
+    my $src   = "$system:$source_dir/$dir/";
+    my $cdir=$dir;
+    $cdir    =~ s|/|_|g;
+    my $dest  = "$local_dest_dir/$cdir";
+    my @args  = ("scp", "-r", $src, $dest);
     my $start = time;
-    my $rc = system (@args);
-    my $msg = $?;
-    my $end = time;
+    print STDERR "   Beginning scp of $src at $date...\n";
+    !system (@args) or 
+ 	( print STDERR 
+	  "  * Remote copy failed: ".join(" ",@args)."\n",
+	  "  * Couldn't copy dir $src\n",
+	  "  * to $dest.\n" and return 0); # old way, not functional now for some reason
+    
+#    my $rc=qx/$cmd/;
+    my $msg   = $?;
+    my $end   = time;
     my $xfer_time = $end - $start;
-
-    if ($rc != 0) {
-       print STDERR "\n  * Remote copy failed: @args\n";
-       print STDERR "  * Couldn't copy dir $src\n";
-       print STDERR "  * to $dest.\n";
-       return 0;
-    }
-    print STDERR "Successful scp took $xfer_time second(s).\n";
+    print(STDERR "Successful scp took $xfer_time second(s).\n");
     return 1;
 }
 sub most_recent_pfile {
@@ -90,7 +92,7 @@ sub most_recent_pfile {
       ### not yet so specific ## my $lscmd = "unalias ls; ls -rt $Pdirectory/P*\.7 | tail -1";
       my $lscmd = "unalias ls; ls -rt $Pdirectory/P* | tail -1";
 
-      my $cmd = "ssh $system \"$lscmd\" ";
+      my $cmd = "ssh -Y $system \"$lscmd\" ";
       my $last_Pno_withDir = `$cmd`;
       if ($last_Pno_withDir eq "") {
         print STDERR "  Problem:\n";
@@ -111,7 +113,7 @@ sub exists {
   #my $lscmd = "/bin/ls -rt $path | tail -1";
   my $lscmd = "unalias ls; ls -rt $path | tail -1";
 
-  my $cmd = "ssh $system \"$lscmd\" ";
+  my $cmd = "ssh -Y $system \"$lscmd\" ";
   my $result = `$cmd`;
   if ($result eq "") {
         return 0;

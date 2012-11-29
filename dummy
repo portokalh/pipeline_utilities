@@ -1,0 +1,9 @@
+#!/usr/local/radish-link/perl
+# dummy to return true for placeholder until more radish code can be deconstructed
+
+use strict;
+use warnings;
+my $ERROR_EXIT = 1;
+my $GOOD_EXIT  = 0;
+
+exit($GOOD_EXIT);
