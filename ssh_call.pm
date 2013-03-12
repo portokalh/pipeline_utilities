@@ -59,13 +59,44 @@ sub get_file {
     return 1;
 }
 
-sub get_dir {
+###
+# scp's contents of a dir 
+###
+#at source_dir/$dir on system to local_dest_dir/   
+# cleans any separators from dir and returns that 
+sub get_dir_contents {
     my ($system, $source_dir, $dir, $local_dest_dir)  =@_;
 
     my $date  = `ssh -Y $system date`;
     chop ($date);
+    my $src   = "$system:$source_dir/$dir/*";
+    my $dest  = "$local_dest_dir/";
+    my @args  = ("scp", "-r", $src, $dest);
+    my $start = time;
+    print STDERR "   Beginning scp of $src at $date...\n";
+    !system (@args) or 
+ 	( print STDERR 
+	  "  * Remote copy failed: ".join(" ",@args)."\n",
+	  "  * Couldn't copy files at $src\n",
+	  "  * to $dest.\n" and return 0); 
+    my $msg   = $?;
+    my $end   = time;
+    my $xfer_time = $end - $start;
+    print(STDERR "Successful scp took $xfer_time second(s).\n");
+    return 1;
+}
+
+###
+# scp dir 
+###
+#at source_dir/$dir on system to local_dest_dir/dir
+# cleans any separators from dir and returns that 
+sub get_dir {
+    my ($system, $source_dir, $dir, $local_dest_dir)  =@_;
+    my $date  = `ssh -Y $system date`;
+    chop ($date);
     my $src   = "$system:$source_dir/$dir/";
-    my $cdir=$dir;
+    my $cdir=$dir; # clean any path separators from the path.
     $cdir    =~ s|/|_|g;
     my $dest  = "$local_dest_dir/$cdir";
     my @args  = ("scp", "-r", $src, $dest);
@@ -98,6 +129,50 @@ sub most_recent_pfile {
         print STDERR "  Problem:\n";
         print STDERR "  * You specified recon of the newest P file on scanner.\n";
         print STDERR "  * There are no Pfiles on scanner $system.\n";
+        print STDERR "  * cmd was: $cmd\n";
+        return "";
+       }
+       chop ($last_Pno_withDir);
+       my @parts = split ("/",$last_Pno_withDir);
+       my $pfile = pop @parts;
+       return $pfile; 
+} 
+
+sub most_recent_file {
+  #  figure out latest file to transfer
+  my ($system, $directory)  =@_;
+
+      # ls appears to now be in /bin/ls
+      ### not yet so specific ## my $lscmd = "unalias ls; ls -rt $directory/P*\.7 | tail -1";
+      my $lscmd = "unalias ls; ls -rt $directory/* | tail -1";
+
+      my $cmd = "ssh -Y $system \"$lscmd\" ";
+      my $last_Pno_withDir = `$cmd`;
+      if ($last_Pno_withDir eq "") {
+        print STDERR "  Problem:\n";
+        print STDERR "  * You specified recon of the newest file on scanner.\n";
+        print STDERR "  * There are no files to recon on the scanner $system.\n";
+        print STDERR "  * cmd was: $cmd\n";
+        return "";
+       }
+       chop ($last_Pno_withDir);
+       my @parts = split ("/",$last_Pno_withDir);
+       my $pfile = pop @parts;
+       return $pfile; 
+} 
+
+sub most_recent_directory {
+  #  figure out latest file to transfer
+  my ($system, $directory)  =@_;
+
+      my $lscmd = "unalias ls; ls -drt $directory/*/ | tail -1";
+
+      my $cmd = "ssh -Y $system \"$lscmd\" ";
+      my $last_Pno_withDir = `$cmd`;
+      if ($last_Pno_withDir eq "") {
+        print STDERR "  Problem:\n";
+        print STDERR "  * You specified recon of the newest file on scanner.\n";
+        print STDERR "  * There are no files to recon on the scanner $system.\n";
         print STDERR "  * cmd was: $cmd\n";
         return "";
        }
