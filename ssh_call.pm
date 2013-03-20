@@ -64,6 +64,7 @@ sub get_file {
 ###
 #at source_dir/$dir on system to local_dest_dir/   
 # cleans any separators from dir and returns that 
+# can switch out user by adding user@ to system name/ip
 sub get_dir_contents {
     my ($system, $source_dir, $dir, $local_dest_dir)  =@_;
 
@@ -73,7 +74,7 @@ sub get_dir_contents {
     my $dest  = "$local_dest_dir/";
     my @args  = ("scp", "-r", $src, $dest);
     my $start = time;
-    print STDERR "   Beginning scp of $src at $date...\n";
+    print STDERR "   Beginning ".join(" ",@args)." at $date...\n";
     !system (@args) or 
  	( print STDERR 
 	  "  * Remote copy failed: ".join(" ",@args)."\n",

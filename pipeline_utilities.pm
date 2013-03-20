@@ -95,11 +95,11 @@ sub log_info {
 # -------------
 sub close_log_on_error  {
 # -------------
-  my ($err_msg) = @_;
+  my ($msg) = @_;
   # possible you may call this before the log is open
   if ($log_open) {
       my $exit_time = scalar localtime;
-      log_info("Error cause: $err_msg");
+      log_info("Error cause: $msg");
       log_info("Log close at $exit_time.");
 
       # emergency close log (w/o log dumping to headfile)
@@ -126,13 +126,13 @@ sub error_out
   my $sn;
 #  $sn=$callstack[3] || $sn="UNDEFINED";#||die "caller failure in error_out for message $msg";
   $sn=$callstack[3] || die "caller failure in error_out for message $msg";
-  print STDERR "  Failure cause: ".$pm.'|'.$sn, $msg,"\n";
+  print STDERR "  Failure cause: ".$pm.'|'.$sn." ".$msg."\n";
   print STDERR "  Please note the cause.\n";
   
 
   close_log_on_error($msg);
   my $hf_path='';
-  if ($HfResult ne "unset") {
+  if (defined $HfResult && $HfResult ne "unset") {
       $hf_path = $HfResult->get_value('headfile_dest_path');
       if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('headfile-dest-path'); }
       if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('result-headfile-path'); }
