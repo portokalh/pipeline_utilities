@@ -1,0 +1,131 @@
+#! /usr/local/radish-link/perl
+# Simplish perl script to run matlab mri_calculator
+#
+# # comment
+# name=value
+#
+
+
+use strict;
+use warnings;
+my $ERROR_EXIT = 1;
+my $GOOD_EXIT  = 0;
+use Env qw(RADISH_RECON_DIR);
+if (! defined($RADISH_RECON_DIR)) {
+    print STDERR "Environment variable RADISH_RECON_DIR must be set. Are you user omega?\n";
+    print STDERR "   CIVM HINT setenv RADISH_RECON_DIR /recon_home/script/dir_radish\n";
+    print STDERR "Bye.\n";
+    exit $ERROR_EXIT;
+}
+#use lib "$RADISH_RECON_DIR/modules/script";
+use Env qw(RADISH_PERL_LIB);
+if (! defined($RADISH_PERL_LIB)) {
+    print STDERR "Cannot find good perl directories, quiting\n";
+    exit $ERROR_EXIT;
+}
+use lib split(':',$RADISH_PERL_LIB);
+use Env qw(RECON_HOSTNAME);
+if (! defined($RECON_HOSTNAME)) {
+    print STDERR "Environment variable RECON_HOSTNAME must be set.";
+    exit $ERROR_EXIT;
+}
+
+require Headfile;
+#require shared;
+require pipeline_utilities;
+use English;
+use Getopt::Std;
+#use civm_simple_util qw(load_file_to_array);
+my $debug_val=0;
+my $VERSION = "20130401_james";
+my $function_m_name='relaxation_calc_stub';
+
+my $engine_file = join("_","engine","$RECON_HOSTNAME","radish_dependencies");
+my $the_engine_constants_path = join("/",$RADISH_RECON_DIR, $engine_file);
+my $Engine_constants = new Headfile ('ro', $the_engine_constants_path);
+$Engine_constants->check()         or exit("Unable to open engine constants file $the_engine_constants_path\n");
+$Engine_constants->read_headfile() or exit("Unable to read engine constants from file $the_engine_constants_path\n");
+
+my $short_unique_purpose=$function_m_name.$PID; #$Engine_constants->get_value('scanner_pfile_header_app')
+my $matlab_app=$Engine_constants->get_value('engine_app_matlab');
+
+my %options = ();
+
+
+my $ret=getopts('hpa', \%options);
+if ( ! $ret || $#ARGV < 4 || defined $options{h}) {
+    my $c_message='
+Usage: mri_calc <options> civmid project_code runno1 runno2 runnoN
+  
+Required parameters:
+  civmid              : civm person running script
+  calctype            : T1_tr|T1_alpha|T2|T2S
+  project_code        : project code archived under
+  run1...runN         : space separated runnumbers to work on
+Options and their default values:
+  -a                  : commalist of values to be given to script instead of pulling from headfile. 
+                        eg list of TR, TE or Alpha values used.
+                        ex.   1,2,3,4,5,6
+     Result filename is "runno1calctype".out
+     Places documenting text files , in output directory.';
+
+    error_out("Unreconized or not enough options passed to $0, got $#ARGV args $c_message");
+}
+
+
+foreach (sort(keys(%options))){
+    print("key=value:",$_,"=",$options{$_},"\n");
+}
+
+###
+# handle input
+###
+
+###
+# read @ARGV's
+###
+my $civmid=shift @ARGV; 
+my $calctype=shift @ARGV; 
+my $project_code=shift @ARGV; 
+if (defined $options{p} ) {
+    unshift @ARGV,$project_code;
+    $project_code='';
+}
+
+my @runnos=@ARGV;
+# while $#ARGV>=0
+#     push @runnos, shift @ARGV;
+# end
+
+#my $work_dir=shift @ARGV; 
+my $work_dir=$Engine_constants->get_value("engine_work_directory")."/".$runnos[0]."_relax";
+if ( ! -e $work_dir) { 
+    `mkdir $work_dir` ;
+}
+###
+# set up and call matlab
+###
+
+print("Starting, \n".
+      "civmid=$civmid\n".
+      "project_code=$project_code\n".
+      "calctype=$calctype\n".
+      "runnos=@runnos\n");
+
+
+open_log($work_dir);
+my $vararray="[]";
+if ( defined $options{a} ) {
+    $vararray='['.split(',',$options{a}).']';
+}
+
+my $runstring="{\'".join("\',\'", @runnos)."\'}";
+#% relaxation_calc(project,runnos,variable,calctype,person_id)
+#my $args="\'$project_code\',$runstring,$vararray,\'$calctype',\'$civmid\'";
+my $args="\'$project_code\',$runstring,$vararray,\'$calctype',\'$civmid\'";
+
+#passing empty string to nohf at end of args so destination will be cmdline
+my $mat_cmd=make_matlab_command_nohf($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,''); 
+my $rc=execute(1,"",$mat_cmd);
+
+
