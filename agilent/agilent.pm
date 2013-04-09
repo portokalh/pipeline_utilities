@@ -287,7 +287,7 @@ sub determine_volume_type { # ( \%agilent_header_ref )
     my $old_debug=$debug_val;
     $debug_val = shift @input or $debug_val=$old_debug;
     my $vol_type=1; # 2D 3D 4D
-    my $vol_detail="single"; # DTI MOV slab mutlti-vol multi-echo
+    my $vol_detail="single"; # DTI MOV slab mutlti-vol multi-echo, perhaps add multi-echo-non_interleave
     my $vol_num=1; # total number of volumes, 
     my $time_pts=1; # number timepoints, currently only used for dti
     my $x=1;

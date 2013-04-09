@@ -170,10 +170,10 @@ sub copy_relevent_keys  { # ($bruker_header_hash_ref, $hf)
 			       1,
 			       'PVM_SliceThick',          # thickness of each slice, for 2d acquisitions should multiply by the SPackArrNSlices, not relevent, because we check it when we look at the pvm matrix size
 			   ],
-#         "Method"=>[
-#             1,
-#             'Method',                  # acquisition(sequence) type 
-#         ],
+			   "S_PSDname"=>[
+				1,
+			       'Method',                  # acquisition(sequence) type 
+			   ],
 #"dim_X","dim_Y","dim_Z"
 #       'PVM_Matrix',              # frequency, phase, encodes(only for 3d sequences, guessing on name encodes)
 #       'PVM_SPackArrNSlices',     # number of slices per volume if 2dvolume, not relevent, because we check it when we look at the pvm matrix size

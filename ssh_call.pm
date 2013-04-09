@@ -41,7 +41,7 @@ sub get_file {
     chop ($date);
     my $src = "$system:$source_dir/$file";
     print STDERR "Beginning scp of $src at $date...";
-    my $dest  = "$local_dest_dir/$file/";
+    my $dest  = "$local_dest_dir/$file";
     my @args  = ("scp", $src, $dest);
     my $start = time;
     my $rc    = system (@args);

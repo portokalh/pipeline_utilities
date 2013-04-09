@@ -57,6 +57,9 @@ sub agilent_hash_to_headfile {  # ( $agilent_header_ref, $hf , $prefix_for_eleme
     } else {
         foreach my $key (keys %{$agilent_header_ref} ) {
             $value=aoaref_to_printline(${$agilent_header_ref}{$key});
+	    if ( $value eq "BLANK" ) { 
+		$value = '';
+	    }
             $hf->set_value("$prefix$key",$value);
         }
     }
@@ -137,6 +140,10 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 			   "te"=>[
 			       1000,
 			       'first_te',
+			   ],
+			   "S_PSDname"=>[
+			       1,
+			       'seqfil',
 			   ],
 			   "te2"=>[
 			       1000,
