@@ -24,39 +24,40 @@ use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $deb
 use Headfile;
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(agilent_hash_to_headfile copy_relevent_keys);
+our @EXPORT_OK = qw(aoa_hash_to_headfile copy_relevent_keys);
 #my $debug=100;
 
 
-=item agilent_hash_to_headfile
+=item aoa_hash_to_headfile
 
-input: ($agilent_header_hash_ref, $headfile_ref , $prefix_for_elements)
+input: ($aoa_header_hash_ref, $headfile_ref , $prefix_for_elements)
 
- agilent_header_hash_ref - hashreference for the agilent header this module
+ aoa_header_hash_ref - hashreference for the agilent header this module
 creates.
  headfile_ref - ref to civm headfile opend by sally's headfile code 
- preffix_for_elements -prefix to put onto each key from agilent_header
+ preffix_for_elements -prefix to put onto each key from aoa_header
 
 output: status maybe?
 
 =cut
 ###
-sub agilent_hash_to_headfile {  # ( $agilent_header_ref, $hf , $prefix_for_elements)
+sub aoa_hash_to_headfile {  # ( $aoa_header_ref, $hf , $prefix_for_elements)
 ###
-    my ($agilent_header_ref,$hf,$prefix) = @_; debugloc();
+    my ($header_ref,$hf,$prefix) = @_; 
+    debugloc();
     if ( ! defined $prefix ) { 
-        carp "Prefix undefined when converting agilent header hash to CIVM headfile";
+        carp "Prefix undefined when converting header hash to CIVM headfile";
     }
     my @hash_keys=();#qw/a b/;
-    @hash_keys=keys(%{$agilent_header_ref});
+    @hash_keys=keys(%{$header_ref});
     my $value="test";
-    printd(75,"Hashref:<$agilent_header_ref>\n");
+    printd(75,"Hashref:<$header_ref>\n");
     printd(55,"keys @hash_keys\n");
     if ( $#hash_keys == -1 ) { 
         print ("No keys found in hash\n");
     } else {
-        foreach my $key (keys %{$agilent_header_ref} ) {
-            $value=aoaref_to_printline(${$agilent_header_ref}{$key});
+        foreach my $key (keys %{$header_ref} ) {
+            $value=aoaref_to_printline(${$header_ref}{$key});
 	    if ( $value eq "BLANK" ) { 
 		$value = '';
 	    }
@@ -66,7 +67,7 @@ sub agilent_hash_to_headfile {  # ( $agilent_header_ref, $hf , $prefix_for_eleme
     return;
 }
 
-=item copy_relvent_keys
+=item copy_relevent_keys
   
 input:($agilent_header_hash_ref, $headfile_ref)
 
@@ -102,7 +103,13 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     my $report_order=$hf->get_value("B_axis_report_order");
     my $vol_type=$hf->get_value("B_vol_type");
     my $vol_detail=$hf->get_value("B_vol_type_detail");
-    
+    my $binary_header_size=60;
+    my $block_header_size=28;
+    $hf->set_value("binary_header_size",$binary_header_size);
+    $hf->set_value("block_header_size",$block_header_size);
+
+
+
     my %hfkey_baliaslist=( # hfkey=>[multiplier,alias1,alias2,aliasn] 
 			   "unix scan date"=>[
 			       1,
@@ -133,9 +140,9 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 #			       1,
 #			       'UNKNOWN',     			       
 #			   ],
-			   "tr"=>[
+			   "tr"=>[                   # in us
 			       1000000,
-			       'tr',
+			       'tr',                 # in ms
 			   ],
 			   "te"=>[
 			       1000,
@@ -152,6 +159,22 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 			   "ne"=>[
 			       1,
 			       'nechos',
+			   ],
+			   "EchoTimes"=>[
+			       1000,
+			       'TE',
+			   ],
+			   "ray_length"=>[  # number of samples along a ray *2 (real,imaginary)
+			       1,  # might want to divide by two as these are separted real/imaginary points
+			       'np',
+			   ],
+			   "rays_per_block"=>[ 
+			       1, 
+			       'nf',
+			   ],
+			   "ray_blocks_per_volume"=>[
+			       1,
+			       'nblocks',
 			   ],
 #			   "PVM_NEchoImages"=>[
 #			       1,
@@ -244,6 +267,13 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 # 	my $temp=pop(@{$hfkey_baliaslist{"B_NRepetitions"}});
 #     }
     
+    if (defined $agilent_header_hash_ref->{"channels"}->[0] ) { 
+	$hf->set_value('A_channels', aoaref_get_single($agilent_header_hash_ref->{"channels"}));
+    } else {
+	$hf->set_value('A_channels', 1);
+    }
+
+
 ### insert standard keys * multiplier into civm headfile
     for my $hfkey (keys %hfkey_baliaslist) { 
         printd(55,"civmheadfilekey=$hfkey\n");
@@ -265,7 +295,11 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
             
         }
     }
-
+### set kspace bit depth and type    
+    my $bit_depth=32;
+    my $data_type="Real";
+    $hf->set_value('A_kspace_bit_depth',$bit_depth);
+    $hf->set_value('A_kspace_data_type',$data_type);
 ### sort out fov
     my $fov_x; 
     my $fov_y;

@@ -71,7 +71,7 @@ use warnings;
 use Carp;
 use List::MoreUtils qw(uniq);
 #require civm_simple_util;
-use civm_simple_util qw(printd whoami whowasi debugloc $debug_val $debug_locator);
+use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 #my (@ISA,@Export,@EXPORT_OK);
 BEGIN { #require Exporter;
     use Exporter(); #
@@ -91,14 +91,17 @@ array_find_by_length
 single_find_by_value
 display_header_entry
 read_til_next_keyline
+printline_to_aoa
+@knownmethods
 );
 }    
 
 my $Hfile = 0;
 my $NAME = "bruker lib";
-my $VERSION = "2012/08/01";
+my $VERSION = "2013/04/29";
 my $COMMENT = "Bruker meta data functions";
-my @knownmethods= qw( DtiEpi EPI FLASH GEFC MDEFT MGE MSME RARE UTE UTE2D UTE3D ute3d_keyhole ); # tested acquisition methods for bruker extract. might be good to pull this out to configuration variables. 
+use vars qw(@knownmethods);
+@knownmethods= qw( DtiEpi EPI FLASH GEFC MDEFT MGE MSME PRESS RARE UTE UTE2D UTE3D ute3d_keyhole ); # tested acquisition methods for bruker extract. might be good to pull this out to configuration variables. 
 
 ###
 sub parse_header {   #( \@brukerheaderarrayoflines,$debug_valval )
@@ -258,7 +261,8 @@ takes an array reference to the header loaded as one line per element
     return \%brukerhash;
 } # end of parse_head function
 
-=item determine_volume_type($bruker_header_hash_ref)
+
+=item determine_volume_type($bruker_header_hash_ref[,$debug_val])
 
 looks at variables and detmines the volume output type from the
 different posibilities.  2D, or 3D if 2d, multi position or single
@@ -271,7 +275,7 @@ returns info as "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth
 
 =cut
 ###
-sub determine_volume_type { # ( \%bruker_header_ref )
+sub determine_volume_type_old { # ( \%bruker_header_ref[,$debug_val] )
 ###
     my (@input)=@_;
     my $bruker_header_ref = shift @input;
@@ -281,6 +285,8 @@ sub determine_volume_type { # ( \%bruker_header_ref )
     my $vol_detail="single";
     my $vol_num=1; # total number of volumes, 
     my $time_pts=1; # number timepoints, currently only used for dti
+    my $channels=1;
+    my $channel_mode='separate'; # separate or integrate, if integrate use math per channel to add to whole image. 
     my $x=1;
     my $y=1;
     my $z=1; # slices per volume
@@ -289,12 +295,12 @@ sub determine_volume_type { # ( \%bruker_header_ref )
 #    my ($bruker_header_ref)=@_;
 #    my $method = ${$bruker_header_ref}{"ACQ_method"}->[0]->[1]; ### get value of single ...
     my $method;
-    if ( defined $bruker_header_ref->{'ACQ_method'} )  {
+    if ( defined $bruker_header_ref->{'ACQ_method'}->[0] )  {
 	$method = aoaref_get_single($bruker_header_ref->{"ACQ_method"});
     } else { 
 	croak "Required field missing from bruker header:\"ACQ_method\" ";
     }
-    printd(75, "Method:$method\n");
+    printd(45, "Method:$method\n");
     my $method_ex="<(".join("|",@knownmethods).")>";
     if ( $method !~ m/^$method_ex$/x ) { 
         croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); #\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
@@ -346,13 +352,13 @@ sub determine_volume_type { # ( \%bruker_header_ref )
 # n_dwi_exp, only dti, indicates multi volume, should be linked to movie_frames.
 # list_size & list_sie_B indicate multi_volume.
 # n_slice_packs, could mean a few things, either multi volume or, that we much multiply slices*nslicepacks, to get the whole volume's worth of slices.
-    my $n_echos;
+    my $n_echoes;
     if ( defined $bruker_header_ref->{'ACQ_n_echo_images'} )  {
-        $n_echos=aoaref_get_single($bruker_header_ref->{'ACQ_n_echo_images'});
-#         if ($n_echos>1){ 
+        $n_echoes=aoaref_get_single($bruker_header_ref->{'ACQ_n_echo_images'});
+#         if ($n_echoes>1){ 
 #             croak("Never delt with echos, failing now.");           
 #         }
-	printd(75,"NECHOS:$n_echos\n");
+	printd(45,"n_echoes:$n_echoes\n");
 	
     }
     my $movie_frames;
@@ -364,20 +370,21 @@ sub determine_volume_type { # ( \%bruker_header_ref )
         $n_dwi_exp=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
     }
     my $b_slices;
-    if ( defined aoaref_get_single($bruker_header_ref->{"NSLICES"}) ) { 
+#    if ( defined aoaref_get_single($bruker_header_ref->{"NSLICES"}) ) { 
+    if ( defined $bruker_header_ref->{"NSLICES"} ) { 
 	$b_slices=aoaref_get_single($bruker_header_ref->{"NSLICES"});
-	printd(75,"bslices:$b_slices\n");
+	printd(45,"bslices:$b_slices\n");
     }
     my $list_sizeB;
     my $list_size;
     if (defined $bruker_header_ref->{"ACQ_O1B_list_size"} ) {
-        $list_sizeB=aoaref_get_single($bruker_header_ref->{"ACQ_O1B_list_size"}); 
-        $list_size=aoaref_get_single($bruker_header_ref->{"ACQ_O1_list_size"}); 
+        $list_sizeB=aoaref_get_single($bruker_header_ref->{"ACQ_O1B_list_size"});  # appears to be total "volumes" for 2d multi slice acquisitions will be total slices acquired. matches NI, (perhaps ni is number of images and images may be 2d or 3d)
+        $list_size=aoaref_get_single($bruker_header_ref->{"ACQ_O1_list_size"}); # appears to be nvolumes/echos matches NSLICES most of the time, notably does not match on 2d me(without multi slice
 #         if ("$list_size" ne "$list_sizeB") { 
 #             croak "ACQ_O1B_list_size ACQ_O1_list_size missmatch. This has never been seen before and probably should not happen\n";
 #         } else {
-            printd(75,"List_size:$list_size\n"); # is this a multi acquisition of some kind. gives nvolumes for 2d multislice and 3d(i think) 
-            printd(75,"List_sizeB:$list_sizeB\n"); 
+            printd(45,"List_size:$list_size\n"); # is this a multi acquisition of some kind. gives nvolumes for 2d multislice and 3d(i think) 
+            printd(45,"List_sizeB:$list_sizeB\n"); 
 #        }
     }
     my @lists=qw(ACQ_O2_list_size ACQ_O3_list_size ACQ_vd_list_size ACQ_vp_list_size);
@@ -385,68 +392,104 @@ sub determine_volume_type { # ( \%bruker_header_ref )
 	if (aoaref_get_single($bruker_header_ref->{$list_s}) != 1 ) { confess("never saw $list_s value other than 1 Unsure how to fontinue"); }
     }
     my @slice_offsets;
+    my $n_slice_packs=1;
+    my $slice_pack_size=1;
     if (defined $bruker_header_ref->{"ACQ_slice_offset"} ) {
        @slice_offsets=@{$bruker_header_ref->{"ACQ_slice_offset"}->[0]};
        shift @slice_offsets;
     }
-    my $slice_pack_size;
-    if (defined $bruker_header_ref->{"PVM_SPackArrNSlices"} ) {
-       $slice_pack_size=$bruker_header_ref->{"PVM_SPackArrNSlices"}->[0]->[1];
-    }
-    my $n_slice_packs;
-    if (defined $bruker_header_ref->{"PVM_NSPacks"} ) { 
+    
+    
+    if (defined $bruker_header_ref->{"PVM_NSPacks"}->[0] ) { 
         $n_slice_packs=aoaref_get_single($bruker_header_ref->{"PVM_NSPacks"}); 
-        printd(75,"n_spacks:$n_slice_packs;\n");        
-        if ( ! defined $n_slice_packs ) {        
+	if ( ! defined $n_slice_packs ) {        
             croak "Required field missing from bruker header:\"PVM_NSPacks\" ";
         }
     }
+    if (defined $bruker_header_ref->{"PVM_SPackArrNSlices"} ->[0]) {
+#       $slice_pack_size=$bruker_header_ref->{"PVM_SPackArrNSlices"}->[0]->[1];
+       $slice_pack_size=aoaref_get_single($bruker_header_ref->{"PVM_SPackArrNSlices"});
+    } else { 
+    # $list_size == $slice_pack_size
+	$slice_pack_size=aoaref_get_single($bruker_header_ref->{"NI"});
+	carp("No PVM_SPackArrNSlices, using NI instead, could be wrong value ") ;
+	sleep_with_countdown(4);
+    }
+
+    printd(45,"n_spacks:$n_slice_packs\n");        
+    printd(45,"spack_size:$slice_pack_size\n");
 ### get the dimensions 
 # matrix 2 or 3 element vector containing the dimensions, shows wether we're 2d or 3d 
+# ACQ_size=2,400 200 pvm_matrix not defined for acquisition only so we'll go with acq size if pvm_matrix undefined. 
 # spatial_phase_1, either frequency or phase dimension, only defined in 2d or slab data on rare sequence, unsure for others
 # spatial_size_2, 3rd dimension size, should match $matrix[1] if its defined.;
     my @matrix; #get 2/3D matix size
-    if (defined $bruker_header_ref->{"PVM_Matrix"} ) {
-        @matrix=@{$bruker_header_ref->{"PVM_Matrix"}->[0]};
-        shift @matrix;
-	if ($#matrix>2) { croak("PVM_Matrix too big, never had more than 3 entries before, what has happened"); }
-        printd(75,"Matrix=@matrix\n");
-    } else {
-        croak "Required field missing from bruker header:\"PVM_Matrix\" ";
+    my $order= "UNDEFINED";  #report_order for matricies
+    if (defined $bruker_header_ref->{"PVM_Matrix"} || defined $bruker_header_ref->{"ACQ_size"} ) {
+        if ( $#{$bruker_header_ref->{"PVM_Matrix"}} >= 0 ) { 
+	     @matrix=@{$bruker_header_ref->{"PVM_Matrix"}->[0]};
+	}
+# 	if( ! defined $matrix[0] ) {
+# 	    printd(45,"PVM_Matrix undefined, or empty, using ACQ_size\n"); ### ISSUES HERE, f direction of acq_size is doubled. 
+# 	    @matrix=@{$bruker_header_ref->{"ACQ_size"}->[0]};
+# 	} 
+	if (defined $matrix[0]) { 
+	    shift @matrix;
+	    if ($#matrix>2) { croak("PVM_Matrix too big, never had more than 3 entries before, what has happened"); }
+	    printd(45,"Matrix=@matrix\n");
+	}
     }
-    my $order;
+    if (! defined $matrix[0]) {
+        croak "Required field missing from bruker header:\"PVM_Matrix|ACQ_size\" ";
+    }
+    # use absence of pvm variables to set the default to UNDEFINED orientation which is x=acq1, y=acq2.
     if ( defined $bruker_header_ref->{"PVM_SPackArrReadOrient"} ) { 
         $order=aoaref_get_single($bruker_header_ref->{"PVM_SPackArrReadOrient"} );
-        if ( ! defined $order ) { 
+        if ( ! defined $order && defined $bruker_header_ref->{"PVM_matrix"} ) { 
             croak("Required field missing from bruker header:\"PVM_SPackArrReadOrient\"");
-        } 
+        }
+    } else { 
+	
+    } 
+### get channels
+    if (defined $bruker_header_ref->{"PVM_EncActReceivers"}->[0] ) { 
+	$channels=aoaref_get_single($bruker_header_ref->{"PVM_EncNReceivers"});
+	
+#	$channel_mode='integrate';
     }
 ### get bit depth
     my $bit_depth;
     my $data_type;
-    if ( defined $bruker_header_ref->{"RECO_wordtype"} ) {
-	my $input_type=aoaref_get_single($bruker_header_ref->{"RECO_wordtype"});
-	if ( ! defined $input_type ) { 
-	    croak("Required field missing from bruker header:\"RECO_wordtype\"");
+    if ( defined $bruker_header_ref->{"RECO_wordtype"} || defined $bruker_header_ref->{"GO_raw_data_format"}) {
+	my $input_type;
+	if ( defined $bruker_header_ref->{"RECO_wordtype"} ) { 
+	    $input_type=aoaref_get_single($bruker_header_ref->{"RECO_wordtype"});
 	}
-	if    ( $input_type =~ /.*_16BIT_.*/x ) { $bit_depth = 16; }
-	elsif ( $input_type =~ /.*_32BIT_.*/x ) { $bit_depth = 32; }
-	elsif ( $input_type =~ /.*_64BIT_.*/x ) { $bit_depth = 64; }
-	else  { error_out("Unhandled bit depth in $input_type"); }
-	if    ( $input_type =~ /.*_SGN_/x ) { $data_type = "Signed"; }
-	elsif ( $input_type =~ /.*_USGN_.*/x ) { $data_type = "Unsigned"; }
-	elsif (  $input_type =~ /.*_FLOAT_.*/x ) { $data_type = "Real"; }
-	else  { error_out("Unhandled data_type in $input_type"); }
+	if ( ! defined $input_type ) { 
+	    $input_type=aoaref_get_single($bruker_header_ref->{"GO_raw_data_format"});
+	}
+	if ( ! defined $input_type ) { 
+	    warn("Required field missing from bruker header:\"RECO_wordtype\"");
+	} else {
+	    if    ( $input_type =~ /.*_16BIT_.*/x ) { $bit_depth = 16; }
+	    elsif ( $input_type =~ /.*_32BIT_.*/x ) { $bit_depth = 32; }
+	    elsif ( $input_type =~ /.*_64BIT_.*/x ) { $bit_depth = 64; }
+	    else  { warn("Unhandled bit depth in $input_type"); }
+	    if    ( $input_type =~ /.*_SGN_/x ) { $data_type = "Signed"; }
+	    elsif ( $input_type =~ /.*_USGN_.*/x ) { $data_type = "Unsigned"; }
+	    elsif (  $input_type =~ /.*_FLOAT_.*/x ) { $data_type = "Real"; }
+	    else  { warn("Unhandled data_type in $input_type"); }
+	}
     } else { 
-	error_out("cannot find bit depth at RECO_wordtype, bailing.");
-    } 
+	warn("cannot find bit depth at RECO_wordtype");
+    }
     
 ### if both spatial phases, slab data? use spatial_phase_1 as x?y?
 ### for 3d sequences ss2 is n slices, for 2d seqences it is dim2, thats annoying..... unsure of this
     my $ss2;
     if ( defined $bruker_header_ref->{'ACQ_spatial_size_2'}) { # exists in 3d, dti, and slab, seems to be the Nslices per vol,
         $ss2=aoaref_get_single($bruker_header_ref->{'ACQ_spatial_size_2'});  
-        printd(75,"spatial_size2:$ss2\n");
+        printd(45,"spatial_size2:$ss2\n");
     } elsif($#matrix==1 && !defined $bruker_header_ref->{'ACQ_spatial_size_2'}) { #if undefined, there is only one slice. 
         $ss2=1;
 #    } else { 
@@ -458,12 +501,21 @@ sub determine_volume_type { # ( \%bruker_header_ref )
         $order ='yx'; 
         $x=$matrix[1];
         $y=$matrix[0];
+	if ( ! defined $bruker_header_ref->{"PVM_Matrix"}->[0]) {
+	    $y=$y/2;
+	    printd(45, "halving y\n");
+	}
     } else { 
         $order='xy';
         $x=$matrix[0];
         $y=$matrix[1];
+	if ( ! defined $bruker_header_ref->{"PVM_Matrix"}->[0]) {
+	    $x=$x/2;
+	    printd(45, "halving x\n");
+	}
     }
-    printd(75,"order is $order\n");
+    printd(45,"Set X=$x, Y=$y, Z=$z\n");
+    printd(45,"order is $order\n");
     if ( $#matrix ==1 ) {
         $vol_type="2D";
 	$slices=$b_slices;
@@ -484,7 +536,7 @@ sub determine_volume_type { # ( \%bruker_header_ref )
         $time_pts=$movie_frames;
         $vol_type="4D";
         if ( defined $n_dwi_exp ) { 
-            printd(75,"diffusion exp with $n_dwi_exp frames\n");
+            printd(45,"diffusion exp with $n_dwi_exp frames\n");
             if ( $movie_frames!=$n_dwi_exp) { 
                 croak "ACQ_n_movie_frames not equal to PVM_DwNDiffExp we have never seen that before.\nIf this is a new method its fesable that ACQ_spatial_phase1 would be defined.";
             }
@@ -494,7 +546,7 @@ sub determine_volume_type { # ( \%bruker_header_ref )
         }
     }
 ###### set z and volume number
-#    print("LIST:$list_sizeB $slice_pack_size\n");
+    printd(45,"LIST:$list_sizeB $slice_pack_size\n");
 ### if listsize<listsizeb we're multi acquisition we hope. if list_size >1 we might be multi multi 
     if ( $list_sizeB > 1 ) { 
         $vol_detail='multi';
@@ -513,8 +565,8 @@ sub determine_volume_type { # ( \%bruker_header_ref )
             }
         } elsif( $list_size == $slice_pack_size) {
 # should check here the slice_offset, makeing sure that they're all the same incrimenting by uniform size. If they are then we have a 2d multi acq volume, not points in time. 
-# so for each value in ACQ_slice_offset, for 2D acq, get difference between first and second, and so long as they're the same, we have slices ont volumes
-	    printd(75,"slice_offsets:".join(',',@slice_offsets)."\n");
+# so for each value in ACQ_slice_offset, for 2D acq, get difference between first and second, and so long as they're the same, we have slices not volumes
+	    printd(45,"slice_offsets:".join(',',@slice_offsets)."\n");
 	    my $offset_num=1;
 	    my $num_a=sprintf("%.9f",$slice_offsets[($offset_num-1)]);
 	    my $num_b=sprintf("%.9f",$slice_offsets[$offset_num]);
@@ -545,11 +597,10 @@ sub determine_volume_type { # ( \%bruker_header_ref )
 		if ($z > 1 ){
 		    $vol_detail=$vol_detail.'-vol';
 		} 
-		if ($n_echos >1 ) {
+		if ($n_echoes >1 ) {
 		    $vol_detail=$vol_detail.'-echo';		    
 		}
 	    }
-	    
 	} else { 
             $vol_num=$list_sizeB;
         }
@@ -557,10 +608,17 @@ sub determine_volume_type { # ( \%bruker_header_ref )
        
         $z=$slices;
     }
+    if ( $channels>1 ) { 
+	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
+	$vol_num=$vol_num*$channels;
+    }
+
     $vol_num=$time_pts*$vol_num;# not perfect
 
 
 ###### handle xy swapping
+    
+
 
     $debug_val=$old_debug;
     return "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth}:${data_type}:${order}";
@@ -801,6 +859,75 @@ internal function doing the work of aoaref_to_printline
     my $data=$dims.join (' ',@text_array);
     return $data;
 }
+###
+sub printline_to_aoa {  # ( $string )    
+###
+=item printline_to_aoa ( $string )    
+
+internal function doing the work of printline_to_aoa
+
+=cut
+{
+    my ($printline)=@_;
+    debugloc();
+    printd(90,"parsing $printline back to array\n");
+    my @text_array; #array containing the text for each sub array, 
+    my $dims=0;
+    my @dim_array=();
+    my $values=0;
+#    split($printline
+    ($dims, $values)=split(',',$printline);
+    
+    @dim_array=  ( $dims =~ m/([0-9]+)?(:?:([0-9]+)?)*/gx  );
+	
+
+    
+    printd(90," dimensions text->array $dims -> @dim_array\n");
+#    my $nsubarrays=shift@dim_array;
+    my $subarraysize;
+    if ($#dim_array==0 ) { 
+	$subarraysize=$dim_array[0];
+    } elsif( $#dim_array == 1 ) { 
+	if ( $dim_array[0] == 1 ) { 
+	    $subarraysize=$dim_array[1]; 
+	} else { 
+	    $subarraysize=$dim_array[0];
+	}
+    } else { 
+	$subarraysize=$dim_array[1]*$dim_array[2]; 
+    }
+
+    my $num_ex="[-]?[0-9]+(?:[.][0-9]+)?(?:e[-]?[0-9]+)?"; # positive or negative floating point or integer number
+    my $num_sa_ex="((?:$num_ex)(?:[ ]$num_ex){$subarraysize})"; 
+
+    my $data='';
+#     for my $aref ( @dataarray) {
+#         my @subarray=@{$aref}; 
+#         if ($dims eq "0" ) {
+#             $dims=$subarray[0];
+#         } elsif ( $dims ne $subarray[0] ) {
+#             confess "Inconsisitent subarray dims current $dims, next $subarray[0]\n" ;
+#         } elsif ( $dims eq "" ) { 
+#             confess "No dims found \n";
+#         }
+#         @subarray=@subarray[1..$#subarray];
+#         my $subjoin=join(" ",@subarray);
+#         push(@text_array,"$subjoin");
+#         printd(75, "\t ($subjoin) \n");
+#     }
+
+#     if  ( $#text_array>0 ) { 
+#         $dims=($#text_array+1).":$dims,";
+#     } elsif ("$dims" ne "1" ) { 
+#         $dims=$dims.',';
+#     } else { 
+#         $dims="";
+#     }
+#    my $data=$dims.join (' ',@text_array);
+
+    return $data;
+}
+}
 =item aoaref_to_printline ($ref_to_AoA
 
 taking reference to array of arrays builds back a string which is easy
@@ -848,7 +975,7 @@ sub display_header { # ( $brukerhash_ref,$indent,$format,$pathtowrite )
     my $value="test";
     printd(75,"Bruker_Header_Ref:<$bruker_header_ref>\n");
     printd(55,"keys @bfkeys\n");
-    my $text_fid=-1;
+    my $text_fid;
     if ( defined $file ){ 
         open $text_fid, ">", "$file" or croak "could not open $file" ;
     }

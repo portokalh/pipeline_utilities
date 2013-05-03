@@ -290,6 +290,7 @@ sub determine_volume_type { # ( \%agilent_header_ref )
     my $vol_detail="single"; # DTI MOV slab mutlti-vol multi-echo, perhaps add multi-echo-non_interleave
     my $vol_num=1; # total number of volumes, 
     my $time_pts=1; # number timepoints, currently only used for dti
+    my $channels=1;
     my $x=1;
     my $y=1;
     my $z=1; # slices per volume

@@ -50,22 +50,22 @@ my $short_unique_purpose=$function_m_name.$PID; #$Engine_constants->get_value('s
 my $matlab_app=$Engine_constants->get_value('engine_app_matlab');
 
 my %options = ();
-my $ret=getopts('ca', \%options);
-if ( ! $ret || $#ARGV < 4 || defined $options{h}) {
+my $ret=getopts('c:a:', \%options);
+if ( ! $ret || $#ARGV < 3 || defined $options{h}) {
     my $c_message='
 Usage: mri_calc <options> civmid calctype runno1 runno2 runnoN
   
 Required parameters:
   civmid              : civm person running script
   calctype            : T1_tr|T1_alpha|T2|T2S , if you forget to specify tr or alpha for T1 calculations trys to guess.
-  run1...runN         : space separated runnumbers to work on
+  run1...runN         : space separated runnumbers to work on, either all the run numbers or first and last runnumber of a sequence.
 Options and their default values:
-  -a                  : commalist of values to be given to script instead of pulling from headfile. 
+  -a                  : commalist of values to be given to script instead of pulling from headfile. Use this if headfiles are bad, 
                         eg list of TR, TE or Alpha values used.
                         ex.   1,2,3,4,5,6
-  -c  projectcode     : use project code other than the one stored in the first headfile to archive data back to. 
-     Result images will be in runno1calctype
-     Places documenting text files , in output directory.';
+  -c  projectcode     : project code to get data from and store to. Does not have to match headfiles if data is already local. 
+     Result images will be in runno1calctype, if using multit-runno fomated runno that will be cut off. 
+  ';
 
     error_out("Unreconized or not enough options passed to $0, got $#ARGV args $c_message");
 }
@@ -105,18 +105,20 @@ if ( ! -e $work_dir) {
 ###
 # set up and call matlab
 ###
-
+my $vararray="[]";
+my @varlist=split(',',$options{a});
+if ( defined $options{a} ) {
+    $vararray='['.join(@varlist,' ').']';
+}
 print("Starting, \n".
       "civmid=$civmid\n".
       "calctype=$calctype\n".
+      "vararray=@varlist\n".
       $project_line.
       "runnos=@runnos\n");
 
 open_log($work_dir);
-my $vararray="[]";
-if ( defined $options{a} ) {
-    $vararray='['.split(',',$options{a}).']';
-}
+
 
 my $runstring="{\'".join("\',\'", @runnos)."\'}";
 #% relaxation_calc(project,runnos,variable,calctype,person_id)
@@ -125,4 +127,5 @@ my $args="\'$project_code\',$runstring,$vararray,\'$calctype',\'$civmid\'";
 
 #passing empty string to nohf at end of args so destination will be cmdline
 my $mat_cmd=make_matlab_command_nohf($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,''); 
+#print($mat_cmd."\n");
 my $rc=execute(1,"",$mat_cmd);
