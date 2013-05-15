@@ -111,7 +111,7 @@ sub sleep_with_countdown {
     $| ++;
     for(my $t=$sleep_length;$t>0;$t--) {
 	print(" $t"); 
-	sleep 1;
+	sleep 1 unless $debug_val==0;
 	
     }	
     print(" 0.\n");

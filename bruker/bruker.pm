@@ -1,3 +1,4 @@
+#!/usr/bin/perl 
 ################################################################################
 # James Cook.
 # use perldoc bruker to get easily info on functions
@@ -875,14 +876,12 @@ internal function doing the work of printline_to_aoa
     my $dims=0;
     my @dim_array=();
     my $values=0;
+    my @val_array=();
 #    split($printline
     ($dims, $values)=split(',',$printline);
     
-    @dim_array=  ( $dims =~ m/([0-9]+)?(:?:([0-9]+)?)*/gx  );
-	
+    @dim_array=  ( $dims =~ m/([0-9]+[:]?[ ]?)+/gx  );#(:?:([0-9]+)?)*
 
-    
-    printd(90," dimensions text->array $dims -> @dim_array\n");
 #    my $nsubarrays=shift@dim_array;
     my $subarraysize;
     if ($#dim_array==0 ) { 
@@ -896,11 +895,17 @@ internal function doing the work of printline_to_aoa
     } else { 
 	$subarraysize=$dim_array[1]*$dim_array[2]; 
     }
-
+    
+    printd(90," dimensions text->array $dims -> @dim_array\n");
     my $num_ex="[-]?[0-9]+(?:[.][0-9]+)?(?:e[-]?[0-9]+)?"; # positive or negative floating point or integer number
     my $num_sa_ex="((?:$num_ex)(?:[ ]$num_ex){$subarraysize})"; 
+#    my $element_ex="[a-zA-Z0-9.-_]+";
 
     my $data='';
+#    @val_array = ( $values =~ m/$element_ex/gx ) ;
+    @val_array = ( $values =~ m/$num_ex/gx ) ;
+
+    printd(90," nvalues$#val_array,  text->array  $values -> ".join('|',@val_array)."\n");
 #     for my $aref ( @dataarray) {
 #         my @subarray=@{$aref}; 
 #         if ($dims eq "0" ) {
@@ -925,7 +930,7 @@ internal function doing the work of printline_to_aoa
 #     }
 #    my $data=$dims.join (' ',@text_array);
 
-    return $data;
+    return @val_array;
 }
 }
 =item aoaref_to_printline ($ref_to_AoA

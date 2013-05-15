@@ -21,12 +21,15 @@ use List::MoreUtils qw(uniq);
 use bruker qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa @knownmethods);
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 #use vars qw($debug_val $debug_locator);
+#use favorite_regex qw ($num_ex)
 use Headfile;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(aoa_hash_to_headfile set_volume_type copy_relevent_keys);
 #my $debug=100;
 
+our $num_ex="[-]?[0-9]+(?:[.][0-9]+)?(?:e[-]?[0-9]+)?"; # positive or negative floating point or integer number in scientific notation.
+our $plain_num="[-]?[0-9]+(?:[.][0-9]+)?"; # positive or negative number 
 
 =item aoa_hash_to_headfile
 
@@ -104,14 +107,15 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     my $channels=1;
     my $channel_mode='separate'; # separate or integrate, if integrate use math per channel to add to whole image. 
     # this doesnt have much meaning in the reconstruction end of things.
-    my $x=1;
-    my $y=1;
-    my $z=1; # slices per volume
+    my $x=0;
+    my $y=0;
+    my $z=0; # slices per volume
     my $slices=1;#total z dimension 
 
     my $s_tag=$hf->get_value('S_tag');
     my $data_prefix=$hf->get_value('U_prefix');
-
+    my $extraction_mode_bool=$hf->get_value("R_extract_mode");
+    if ( $extraction_mode_bool eq 'NO_KEY') { $extraction_mode_bool=0; }
     my $method;
     $method = $hf->get_value($data_prefix."ACQ_method");
     if ( $method eq 'NO_KEY' ) {
@@ -194,12 +198,12 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 #    if ( defined $hf->get_value("NSLICES") ) { 
     if ( defined $hf->get_value($data_prefix."NSLICES") ) { 
 	$b_slices=$hf->get_value($data_prefix."NSLICES");
-	printd(45,"bslices:$b_slices(2dslices*echos*time)\n");
+	printd(45,"bslices:$b_slices\n");
     }
-    my $list_sizeB;
+    my $list_sizeB;#(2dslices*echos*time)
     my $list_size;
-    $list_sizeB=$hf->get_value($data_prefix."ACQ_O1B_list_size");  # appears to be total "volumes" for 2d multi slice acquisitions will be total slices acquired. matches NI, (perhaps ni is number of images and images may be 2d or 3d)
-    $list_size=$hf->get_value($data_prefix."ACQ_O1_list_size"); # appears to be nvolumes/echos matches NSLICES most of the time, notably does not match on 2d me(without multi slice
+    $list_sizeB=$hf->get_value($data_prefix."ACQ_O1B_list_size");  # appears to be total "volumes" for 2d multi slice acquisitions will be total slices acquired. matches NI, (perhaps ni is number of images and images may be 2d or 3d), doesent appear to accout for channel data.
+    $list_size=$hf->get_value($data_prefix."ACQ_O1_list_size");    # appears to be nvolumes/echos matches NSLICES most of the time, notably does not match on 2d me(without multi slice), looks like its nslices*echos for 2d ms me
     if ( $list_size ne 'NO_KEY' ) {
 	printd(45,"List_size:$list_size\n"); # is this a multi acquisition of some kind. gives nvolumes for 2d multislice and 3d(i think) 
 	printd(45,"List_sizeB:$list_sizeB\n"); 
@@ -209,15 +213,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	if ($hf->get_value($data_prefix.$list_s) != 1 ) { confess("never saw $list_s value other than 1 Unsure how to continue"); }
     }
 
-
     my @slice_offsets;
     my $n_slice_packs=1;
     my $slice_pack_size=1;
    
     my $s_offsets=$hf->get_value($data_prefix."ACQ_slice_offset");
     if ( $s_offsets ne 'NO_KEY') {
-	@slice_offsets=split('test','s'); # MORE WORK TO DO HERE!
-	@slice_offsets=$hf->get_value($data_prefix."ACQ_slice_offset");
+#	@slice_offsets=split('test','s'); # MORE WORK TO DO HERE!
+	@slice_offsets=printline_to_aoa($hf->get_value($data_prefix."ACQ_slice_offset"));
 	shift @slice_offsets;
     }
     
@@ -248,19 +251,22 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     my $order= "UNDEFINED";  #report_order for matricies
     if ( $hf->get_value($data_prefix."PVM_Matrix") ne 'NO_KEY' ||  $hf->get_value($data_prefix."ACQ_size")ne 'NO_KEY' ) {
 
-	my @matrix=printline_to_aoa($hf->get_value($data_prefix."PVM_Matrix"));
-        if ( $#matrix > 0 ) { 
-	     @matrix=@{$hf->{"PVM_Matrix"}->[0]};
+	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."PVM_Matrix"));
+	if ( $#matrix == 0 ) { 
+	    
 	}
+#         if ( $#matrix > 0 ) { 
+# 	     @matrix=@{$hf->{"PVM_Matrix"}->[0]};
+# 	}
 
 # 	if( ! defined $matrix[0] ) {
 # 	    printd(45,"PVM_Matrix undefined, or empty, using ACQ_size\n"); ### ISSUES HERE, f direction of acq_size is doubled. 
 # 	    @matrix=@{$hf->{"ACQ_size"}->[0]};
 # 	} 
 	if (defined $matrix[0]) { 
-	    shift @matrix;
+	    #shift @matrix;
 	    if ($#matrix>2) { croak("PVM_Matrix too big, never had more than 3 entries before, what has happened"); }
-	    printd(45,"Matrix=@matrix\n");
+	    printd(45,"Matrix=".join('|',@matrix)."\n");
 	}
     }
     if (! defined $matrix[0]) {
@@ -269,14 +275,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     # use absence of pvm variables to set the default to UNDEFINED orientation which is x=acq1, y=acq2.
     if ( defined $hf->{"PVM_SPackArrReadOrient"} ) { 
         $order=$hf->get_value($data_prefix."PVM_SPackArrReadOrient" );
-        if ( ! defined $order && defined $hf->{"PVM_matrix"} ) { 
+        if ( $order eq 'NO_KEY' && $matrix[0]) { 
             croak("Required field missing from bruker header:\"PVM_SPackArrReadOrient\"");
         }
     } else { 
 	
     } 
 ### get channels
-    if (defined $hf->{"PVM_EncActReceivers"}->[0] ) { 
+    if ($hf->get_value($data_prefix."PVM_EncActReceivers") ne 'NO_KEY') { 
 	$channels=$hf->get_value($data_prefix."PVM_EncNReceivers");
 	
 #	$channel_mode='integrate';
@@ -284,13 +290,16 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 ### get bit depth
     my $bit_depth;
     my $data_type;
-    if ( defined $hf->{"RECO_wordtype"} || defined $hf->{"GO_raw_data_format"}) {
+    my $recon_type=$hf->get_value($data_prefix."RECO_wordtype");
+    my $raw_type=$hf->get_value($data_prefix."GO_raw_data_format");
+    if ( $recon_type ne 'NO_KEY' || $raw_type ne 'NO_KEY') {
 	my $input_type;
-	if ( defined $hf->{"RECO_wordtype"} ) { 
-	    $input_type=$hf->get_value($data_prefix."RECO_wordtype");
-	}
-	if ( ! defined $input_type ) { 
-	    $input_type=$hf->get_value($data_prefix."GO_raw_data_format");
+	if ( $recon_type ne 'NO_KEY' && $extraction_mode_bool) { 
+	    $input_type=$recon_type;
+	} elsif ( $raw_type ne 'NO_KEY' ) { 
+	    $input_type=$raw_type;
+	} else { 
+	    croak("input_type undefined, did not find either GO_raw_data_format or RECO_wordtype found. ");
 	}
 	if ( ! defined $input_type ) { 
 	    warn("Required field missing from bruker header:\"RECO_wordtype\"");
@@ -310,11 +319,10 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     
 ### if both spatial phases, slab data? use spatial_phase_1 as x?y?
 ### for 3d sequences ss2 is n slices, for 2d seqences it is dim2, thats annoying..... unsure of this
-    my $ss2;
-    if ( defined $hf->{'ACQ_spatial_size_2'}) { # exists in 3d, dti, and slab, seems to be the Nslices per vol,
-        $ss2=$hf->get_value($data_prefix.'ACQ_spatial_size_2');  
-        printd(45,"spatial_size2:$ss2\n");
-    } elsif($#matrix==1 && !defined $hf->{'ACQ_spatial_size_2'}) { #if undefined, there is only one slice. 
+    my $ss2 = $hf->get_value($data_prefix."ACQ_spatial_size_2");
+    if (  $ss2 ne 'NO_KEY' ) { # exists in 3d, dti, and slab, seems to be the Nslices per vol,
+	printd(45,"spatial_size2:$ss2\n");
+    } elsif($#matrix==1 && $ss2 eq 'NO_KEY') { #if undefined, there is only one slice. 
         $ss2=1;
 #    } else { 
 #	$ss2=0;
@@ -325,24 +333,24 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         $order ='yx'; 
         $x=$matrix[1];
         $y=$matrix[0];
-	if ( ! defined $hf->{"PVM_Matrix"}->[0]) {
-	    $y=$y/2;
-	    printd(45, "halving y\n");
-	}
+# 	if ( ! defined $hf->{"PVM_Matrix"}->[0]) {
+# 	    $y=$y/2;
+# 	    printd(45, "halving y\n");
+# 	}
     } else { 
         $order='xy';
         $x=$matrix[0];
         $y=$matrix[1];
-	if ( ! defined $hf->{"PVM_Matrix"}->[0]) {
-	    $x=$x/2;
-	    printd(45, "halving x\n");
-	}
+# 	if ( ! defined $hf->{"PVM_Matrix"}->[0]) {
+# 	    $x=$x/2;
+# 	    printd(45, "halving x\n");
+# 	}
     }
-    printd(45,"Set X=$x, Y=$y, Z=$z\n");
     printd(45,"order is $order\n");
     if ( $#matrix ==1 ) {
         $vol_type="2D";
 	$slices=$b_slices;
+	printd(90,"Setting type 2D, slices are b_slices->slices\n");
 	#should find detail here, not sure how, could be time or could be space, if space want to set slices, if time want to set vols
     } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
         $vol_type="3D";
@@ -387,9 +395,10 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		confess "PVM_NSPacks should equal ACQ_O1_list_size with slab data";
                 ### there is potential for multi-slab type, but we'll assume that wont happen for now and just die.
             }
-        } elsif( $list_size == $slice_pack_size) {
-# should check here the slice_offset, makeing sure that they're all the same incrimenting by uniform size. If they are then we have a 2d multi acq volume, not points in time. 
-# so for each value in ACQ_slice_offset, for 2D acq, get difference between first and second, and so long as they're the same, we have slices not volumes
+        } elsif( $list_sizeB == $slice_pack_size ) {
+# should check the slice_offset, makeing sure that they're all the same incrimenting by uniform size.
+# If they are then we have a 2d multi acq volume, not points in time. so for each value in ACQ_slice_offset,
+# for 2D acq, get difference between first and second, and so long as they're the same, we have slices not volumes
 	    printd(45,"slice_offsets:".join(',',@slice_offsets)."\n");
 	    my $offset_num=1;
 	    my $num_a=sprintf("%.9f",$slice_offsets[($offset_num-1)]);
@@ -426,6 +435,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		}
 	    }
 	} else { 
+	    #$z=1;
             $vol_num=$list_sizeB;
         }
     } else { 
@@ -435,6 +445,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     if ( $channels>1 ) { 
 	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
 	$vol_num=$vol_num*$channels;
+	
     }
 
     $vol_num=$time_pts*$vol_num;# not perfect
@@ -443,7 +454,8 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 ###### handle xy swapping
     
 
-
+    printd(45,"Set X=$x, Y=$y, Z=$z, vols=$vol_num\n");
+    printd(45,"vol_type:$vol_type, $vol_detail\n");
     $debug_val=$old_debug;
     return "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth}:${data_type}:${order}";
 }
@@ -489,8 +501,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #   my ( $bruker_header_ref,$hf,$debug_val) = @input; 
     debugloc();
     my $key_tag=$hf->get_value("S_tag");
-#    my $bruker_prefix=$hf->get_value("${key_tag}prefix"); #z_Bruker_
-    my $report_order=$hf->get_value("${key_tag}axis_report_order");
+    my $s_tag=$hf->get_value('S_tag');
+    my $data_prefix=$hf->get_value('U_prefix');
+#    my $bruker_prefix=$hf->get_value("${s_tag}prefix"); #z_Bruker_
+    my $report_order=$hf->get_value("${s_tag}axis_report_order");
     my $binary_header_size=0;
     my $block_header_size=0;
     $hf->set_value("binary_header_size",$binary_header_size);
@@ -532,7 +546,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			       'traj_swh',
 			       'PVM_BandWidths',          # this only happens in some scan types, not sure the what when of this.
 			   ],
-			   "${key_tag}NRepetitions"=>[
+			   "${s_tag}NRepetitions"=>[
 			       1,
 			       'NR',                      # repetitions, from ACQ
 			       'PVM_NRepetitions',        # repetitions, from method, not always the same thing as acq, notably for dti sets. # might be number of tr's in multi tr set...
@@ -667,10 +681,12 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
         for my $alias (@{$hfkey_baliaslist{$hfkey}}) {
             #$hf->set_value($key,$1);
             my $hfval=$hf->get_value($hfkey);
-            if (defined $bruker_header_ref->{$alias}) {
-                my $bval=aoaref_to_printline($bruker_header_ref->{$alias}); #need to do better job than this of getting value.
-#                printd(25,"\t$alias=$bval\n");
-		if ($multiplier ne "1" ) { $bval=$bval*$multiplier; }
+	    my $bval=$hf->get_value($data_prefix."$alias");
+            if ($bval ne 'NO_KEY') {
+#                my $bval=aoaref_to_printline($bruker_header_ref->{$alias}); #need to do better job than this of getting value.
+                printd(25,"\t$alias=$bval\n");
+		
+		if ($multiplier ne "1" && $bval =~ /^$plain_num$/ ) { $bval=$bval*$multiplier; }
                 if ($hfval =~ m/^UNDEFINED_VALUE|NO_KEY$/x) {
 		    printd(25,"\t$hfkey \t= $bval \t<= $alias");
                     $hf->set_value("$hfkey",$bval);
@@ -686,19 +702,23 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 
 
     my $volinfotext=set_volume_type($hf); # only determines the output volume type, need alternate to determine the kspace data and its orientations and orders.
-    my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type,$reportorder)=split(':',$volinfotext);
-#    my $vol_type=$hf->get_value("${key_tag}vol_type");
-#    my $vol_detail=$hf->get_value("${key_tag}vol_type_detail");
-
+   my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type);
+    ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type,$report_order)=split(':',$volinfotext);
+#    my $vol_type=$hf->get_value("${s_tag}vol_type");
+#    my $vol_detail=$hf->get_value("${s_tag}vol_type_detail");
+    $hf->set_value("dim_X",$x);
+    $hf->set_value("dim_Y",$y);
+    $hf->set_value("dim_Z",$z);
+    $hf->set_value("${s_tag}volumes",$vols);
+    $hf->set_value("${s_tag}echos",$vols);
+    $hf->set_value("${s_tag}vol_type",$vol_type);
+    $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
 
 
 ### set kspace bit depth and type
     if ( defined $bruker_header_ref->{"GO_raw_data_format"}) {
 #    if ( defined $bruker_header_ref->{"RECO_wordtype"} || defined $bruker_header_ref->{"GO_raw_data_format"}) {
 	my $input_type;
-#	if ( defined $bruker_header_ref->{"RECO_wordtype"} ) { 
-#	    $input_type=aoaref_get_single($bruker_header_ref->{"RECO_wordtype"});
-#	}
 	if ( ! defined $input_type ) { 
 	    $input_type=aoaref_get_single($bruker_header_ref->{"GO_raw_data_format"});
 	}
@@ -717,14 +737,14 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     } else { 
 	warn("cannot find bit depth at GO_raw_data_format");
     }
-    $hf->set_value("${key_tag}kspace_bit_depth",$bit_depth);
-    $hf->set_value("${key_tag}kspace_data_type",$data_type);
+    $hf->set_value("${s_tag}kspace_bit_depth",$bit_depth);
+    $hf->set_value("${s_tag}kspace_data_type",$data_type);
 
 ### set volume output dimensions
 # should determine 2d/3d/3d acquisition
 # 4d may be dti, be nice to detect that handily, and add approprate variables. 
 # 
-#    $hf->set_value("${key_tag}");
+#    $hf->set_value("${s_tag}");
 
 ### clean up keys which are inconsistent for some acq types.    
     if($vol_type eq "2D") {
@@ -732,7 +752,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     }
 
      if( $vol_detail eq "DTI" ) {
-	 $hf->set_value("${key_tag}diffusion_scans",$hf->get_value("${key_tag}volumes"));
+	 $hf->set_value("${s_tag}diffusion_scans",$hf->get_value("${s_tag}volumes"));
  	#$multiscan{"diffusion"}=$vols; 
      } #elsif ( $vol_detail =~ /.*?echo.*?/x    ) { 
 # 	$Hfile->set_value("${hf_name_prefix}echos",$vols);
@@ -745,12 +765,13 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #     }
 
     if($vol_type eq "4D" && $vol_detail eq "DTI") { 
-	my $temp=pop(@{$hfkey_baliaslist{"${key_tag}NRepetitions"}});
+	my $temp=pop(@{$hfkey_baliaslist{"${s_tag}NRepetitions"}});
     }
-    if (defined $bruker_header_ref->{"PVM_EncNReceivers"}->[0] ) { 
-	$hf->set_value("${key_tag}channels", aoaref_to_printline($bruker_header_ref->{"PVM_EncNReceivers"}) );
+    my $channels=$hf->get_value($data_prefix."PVM_EncNReceivers");
+    if (  $channels ne 'NO_KEY') { 
+	$hf->set_value("${s_tag}channels",$channels) ;
     } else {
-	$hf->set_value("${key_tag}channels", 1);
+	$hf->set_value("${s_tag}channels", 1);
     }
 
 
@@ -767,33 +788,35 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     my $dp;
     my $dz;
     my ($sublength,$thick_f,$thick_p,$thick_z,$fov_f,$fov_p);
-#     if ($report_order eq "xy" ) { #("${key_tag}axis_report_order")
+#     if ($report_order eq "xy" ) { #("${s_tag}axis_report_order")
 # 	$df=$dx;
 # 	$dp=$dy;
 #     } elsif ($report_order eq "yx" )  {    
 # 	$df=$dy;
 # 	$dp=$dx;
 #     } else { 
-# 	croak("${key_tag}axis_report_order missing!");
+# 	croak("${s_tag}axis_report_order missing!");
 #     }
-    if ( defined $bruker_header_ref->{"PVM_EncMatrix"} ) { 
-	($df, $dp, $dz) = aoaref_get_subarray(1,$bruker_header_ref->{"PVM_EncMatrix"});
-	if ( ! defined $dz ) { 
-	    if ( defined $bruker_header_ref->{"NSLICES"} ) { 
-		$dz = aoaref_get_subarray(1,$bruker_header_ref->{"NSLICES"});
-	    } else { 
-		printd(25,"ERROR: no slices\n" );
-	    }
+    
+    #if ( $hf->get_value("PVM_EncMatrix") ne 'NO_KEY' ) {
 
+    #my @dims=printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
+    ($df, $dp, $dz) = printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
+#    printd(90,"dims are ".join('|',@dims)."\n");
+#    ($df, $dp, $dz)=@dims;
+	if ( ! defined $dz ) { 
+	    $dz = $hf->get_value($data_prefix."NSLICES");
+	    if ( $dz eq 'NO_KEY' ) { 
+	    printd(25,"ERROR: no slices\n" );
+	    }
 	}
-			
-    }
-    if ( defined $bruker_header_ref->{"PVM_SpatResol"} ) {
-	($sublength,$thick_f,$thick_p,$thick_z) = aoaref_get_subarray(1,$bruker_header_ref->{"PVM_SpatResol"});
+    #}        
+    if ( $hf->get_value($data_prefix."PVM_SpatResol") ne 'NO_KEY') {
+	($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
 	$fov_f=$df*$thick_f;
 	$fov_p=$dp*$thick_p;
     } else {
-	($sublength,$fov_f,$fov_p,$fov_z) = aoaref_get_subarray(1,$bruker_header_ref->{"ACQ_fov"});
+	($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov"));
 	$fov_f=$fov_f*10;
 	$fov_p=$fov_p*10;
 	$thick_f=$fov_f/$df;
@@ -803,22 +826,23 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #	    $thick_z=$fov_z/$dz; 
 	}
     }
-
-    if ($report_order eq "xy" ) { #("${key_tag}axis_report_order")
+    
+    print("$report_order\n");
+    if ($report_order eq "xy" ) { #("${s_tag}axis_report_order")
 	$fov_x=$fov_f;
 	$fov_y=$fov_p;
     } elsif ($report_order eq "yx" )  {    
 	$fov_x=$fov_p;
 	$fov_y=$fov_f;
     }
-    if ( ! defined $thick_z) { 
+    if ( ! defined $thick_z && ! defined $fov_z) { 
 	#$thick_z=$hf->get_value("slthick"); 
-	$thick_z=aoaref_get_single($bruker_header_ref->{"ACQ_slice_thick"});
+	$thick_z=$hf->get_value($data_prefix."ACQ_slice_thick");
 	#ACQ_slice_thick
 	#PVM_SliceThick
 	#PVM_SPackArrNSlices
 	if ( defined ($thick_z) ) { 
-#	    $fov_z=$dz*$thick_z; 
+	    $fov_z=$dz*$thick_z; 
 	}	    
 	
     }
@@ -829,21 +853,21 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     if ( $vol_type eq '2D') { 
 	# if interleave we have to load lots of data at a time or fall over to ray by ray loading. 
 	my $ntr=1; # number of tr's 
-#	$hf->set_value("rays_per_block",$dp*$dz*$hf->get_value("${key_tag}channels")*$hf->get_value('ne')*$ntr);
+	$hf->set_value("rays_per_block",$dp*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
 	$hf->set_value("ray_blocks",1);
     } else  {
-#	$hf->set_value("rays_per_block",$dp*$hf->get_value("${key_tag}channels")*$hf->get_value('ne')*$ntr);
-#	$hf->set_value("ray_blocks",$dz);
+	$hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	$hf->set_value("ray_blocks",$dz);
     }
 
-#    print("fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n".
+    print("fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n".'');
 #	  "ray_length:".$hf->get_value('ray_length').", rays_per_block:".$hf->get_value('rays_per_block').", ray_blocks:".$hf->get_value('ray_blocks'));
 #     if (! defined $dx || ! defined $dy ||! defined $dz ||! defined $thick_f ||! defined $thick_p ||! defined $thick_z ){
 # 	croak("Problem resolving FOV!\n");
 #     } else { 
-# 	$hf->set_value("fovx","$fov_x");
-# 	$hf->set_value("fovy","$fov_y");
-# 	$hf->set_value("fovz","$fov_z");
+ 	$hf->set_value("fovx","$fov_x");
+ 	$hf->set_value("fovy","$fov_y");
+ 	$hf->set_value("fovz","$fov_z");
 # #	$hf->set_value("volumes","");
 #     }
  #    my %fov_keys=(
@@ -926,7 +950,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 		my @subarray=aoaref_get_subarray($bval,$bruker_header_ref->{$key});
 		my $text=$subarray[0].','.join(' ',@subarray[1..$#subarray]);
 		my $bnum=$bval-1;
-		my $hfilevar="${key_tag}${key}_${bnum}";
+		my $hfilevar="${s_tag}${key}_${bnum}";
 		printd(20,"  INFO: For Diffusion scan $bval key $hfilevar bmat is $text \n") ; 
 		$hf->set_value("$hfilevar",$text); 
 	    }
@@ -992,14 +1016,14 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	$dim_order='xycpzt';
     }
     $hf->set_value('S_dimension_order',$dim_order);
-#    $hf->set_value("${key_tag}channels",'');
+#    $hf->set_value("${s_tag}channels",'');
     if ( $hf->get_value('ne')>1) {
-	$hf->set_value("${key_tag}varying_parameter",'echos');
+	$hf->set_value("${s_tag}varying_parameter",'echos');
     } elsif ($hf->get_value('ne')>1) {
     } elsif ($hf->get_value('ne')>1) {
     }
 #    $hf->set_value('ne,); PVM_NEchoImages
-    $hf->set_value("${key_tag}",'');
+    $hf->set_value("${s_tag}",'');
 
 ### clean up keys post insert
     
