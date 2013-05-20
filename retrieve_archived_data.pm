@@ -55,12 +55,12 @@ sub locate_data_util {
     my $first_image_name = first_image_name($ret_set_dir, $runno);
     ($image_name, $digits, $suffix) = split ('\.', "$first_image_name");
     $Hf->set_value("$ch_id\-image-padded-digits", $digits);
-  } elsif ( $ch_id =~ m/(adc)|(dwi)|(e1)|(fa)/){ # should move this to global options, dtiresearchchannels
+  } elsif ( $ch_id =~ m/(adc)|(dwi)|(e1)|(e2)|(e3)|(fa)/){ # should move this to global options, dtiresearchchannels
     print STDERR "label channel passed to locate_data not a standard image format, Assuming DTI archive format.\n";
     ($ret_set_dir,$image_name) = retrieve_DTI_research_image($pull_images, $subproject, $runno, $ch_id, $dest);
     ($image_name, $suffix) = split ('\.', "$image_name");
   } else {
-    error_out("$PM->locate_data: Unreconized channel type: $ch_id, sorry i dont support that yet.\n\tOnly support T1,T2W,T2star,adc,dwi,e1,fa.");
+    error_out("$PM->locate_data: Unreconized channel type: $ch_id, sorry i dont support that yet.\n\tOnly support T1,T2W,T2star,adc,dwi,e1,e2,e3,fa.");
   }
   if($useunderscore==0) {
     $Hf->set_value("$ch_id\-path", $ret_set_dir);
