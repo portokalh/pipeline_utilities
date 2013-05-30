@@ -35,6 +35,7 @@ require Headfile;
 require pipeline_utilities;
 use civm_simple_util qw(load_file_to_array printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);
 use agilent;
+use aspect;
 use bruker;
 use English;
 use Getopt::Std;
@@ -133,6 +134,16 @@ our $verbose=0;
 	import agilent qw(parse_header determine_volume_type );
 	require agilent::hf ;
 	import agilent::hf qw(aoa_hash_to_headfile copy_relevent_keys);
+    }elsif( $scanner_vendor eq 'aspect') { 
+	my @files=glob( $directory.'/'."*.DAT");
+	push(@infiles,$files[0]);
+	$hf_prefix='z_aspect_';
+	$hf_short_prefix="A_";
+	$data_filename="fid";
+	require aspect;
+	import aspect qw(parse_header determine_volume_type );
+	require aspect::hf ;
+	import aspect::hf qw(aoa_hash_to_headfile copy_relevent_keys);
     } elsif($scanner_vendor eq 'bruker') {
 	push(@infiles,$directory.'/'."subject");
 	push(@infiles,$directory.'/'."acqp");
@@ -154,7 +165,7 @@ our $verbose=0;
 ###
 # parse files
 ###
-    my $hfhashref = parse_header(\@header_lines,25 ); # loads mr scanner header to a hash.
+    my $hfhashref = parse_header(\@header_lines,$debug_val ); # loads mr scanner header to a hash.
     my %hfhash=%{$hfhashref};
 #    my $volinfotext=determine_volume_type(\%hfhash);
 #    my $volinfotext=determine_volume_type($hfhashref); # only determines the output volume type, need alternate to determine the kspace data and its orientations and orders.
