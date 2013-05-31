@@ -39,11 +39,13 @@ use aspect;
 use bruker;
 use English;
 use Getopt::Std;
+use File::Basename;
 
 ### parse input
 our %opt;
 our $scanner;
 our $directory;
+our @infiles;
 our $hf_path;
 
 
@@ -70,6 +72,13 @@ our $verbose=0;
 # 	$data_exists = 1; # if data has already been copied, we'll work with local data
 # 	$cmdopts="${cmdopts}e";
 #     }
+    ### check if dirctory is the scanner header file instead of the directory from the magnet
+    if ( -f $directory ){ # && ! -d $directory) { 
+	printd(15,"You specifid the scanner header file directly instead of the directory it sits in. This is an unproven method best suited for testing different ways to fool the header parse script \n");
+	push (@infiles,$directory);
+	my $name;
+	($name,$directory)=fileparse( $directory);
+    }
 }
 
 { # main
@@ -121,12 +130,15 @@ our $verbose=0;
 # load files
 ###
     my @header_lines;
-    my @infiles;#=$directory;
     my $hf_prefix;
     my $hf_short_prefix="";
     my $data_filename="";
     if( $scanner_vendor eq 'agilent') { 
-	push(@infiles,$directory.'/'."procpar");
+	if ($#infiles == -1 ) { 
+	    push(@infiles,$directory.'/'."procpar");
+	} else { 
+	    printd(15,"You specifid the scanner header file directly instead of the directory it sits in. This is an unproven method best suited for testing different ways to fool the header parse script \n"); 
+	}
 	$hf_prefix='z_Agilent_';
 	$hf_short_prefix="A_";
 	$data_filename="fid";
@@ -136,18 +148,26 @@ our $verbose=0;
 	import agilent::hf qw(aoa_hash_to_headfile copy_relevent_keys);
     }elsif( $scanner_vendor eq 'aspect') { 
 	my @files=glob( $directory.'/'."*.DAT");
-	push(@infiles,$files[0]);
+	if ($#infiles == -1 ) { 
+	    push(@infiles,$files[0]);
+	} else { 
+	    printd(15,"You specifid the scanner header file directly instead of the directory it sits in. This is an unproven method best suited for testing different ways to fool the header parse script \n"); 
+	}
 	$hf_prefix='z_aspect_';
 	$hf_short_prefix="A_";
-	$data_filename="fid";
+	$data_filename="*tnt";
 	require aspect;
 	import aspect qw(parse_header determine_volume_type );
 	require aspect::hf ;
 	import aspect::hf qw(aoa_hash_to_headfile copy_relevent_keys);
     } elsif($scanner_vendor eq 'bruker') {
-	push(@infiles,$directory.'/'."subject");
-	push(@infiles,$directory.'/'."acqp");
-	push(@infiles,$directory.'/'."method");
+	if ($#infiles == -1 ) { 
+	    push(@infiles,$directory.'/'."subject");
+	    push(@infiles,$directory.'/'."acqp");
+	    push(@infiles,$directory.'/'."method");
+	} else {
+	    printd(15,"the scanner input file was specified directly, bruker headers are normally in three parts, you need to have combined those into one to specify the headfile to use directly.(subject,acqp,method)");
+	}
 	$hf_prefix='z_bruker_';
 	$hf_short_prefix="B_";
 	$data_filename="fid";
@@ -171,44 +191,12 @@ our $verbose=0;
 #    my $volinfotext=determine_volume_type($hfhashref); # only determines the output volume type, need alternate to determine the kspace data and its orientations and orders.
  #   my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type,$reportorder)=split(':',$volinfotext);
 #    printd(45,$volinfotext."\n");
-    $Hfile->set_value("kspace_data_path",$directory.'/'.$data_filename);
+    $Hfile->set_value("kspace_data_path",glob($directory.'/'.$data_filename)); # glob resolves the * in aspectnames  : )
     $Hfile->set_value("S_scanner_tag","${hf_short_prefix}");
-#     $Hfile->set_value("${hf_short_prefix}vol_type",$vol_type);
-#     $Hfile->set_value("${hf_short_prefix}vol_type_detail",$vol_detail);
-#     $Hfile->set_value("${hf_short_prefix}input_bit_depth",$bit_depth);
-#     $Hfile->set_value("${hf_short_prefix}input_data_type",$data_type);
-#     if ( $reportorder ne "" ){ 
-# 	$Hfile->set_value("${hf_short_prefix}axis_report_order",$reportorder);
-#     }
-#    $HFile->set_values("${hf_short_prefix}bytes_per_pix",int($bit_depth/8));# really unnnecessary, can figure that out just fine when we need it from this value
-#    $Hfile->set_value("dim_X",$x);
-#    $Hfile->set_value("dim_Y",$y);
-#    $Hfile->set_value("dim_Z",$z);
-#    $Hfile->set_value("${hf_short_prefix}volumes",$vols);
-#    $Hfile->set_value("${hf_short_prefix}echos",$vols);
 # i feel like this could be improved. better to dive back into the  header and look up what kind of repetitions if that is relevent, then set mutli scan appropriately.
 
-
-#     if( $vol_detail eq "DTI" ) {
-# 	$Hfile->set_value("${hf_short_prefix}diffusion_scans",$vols);
-# 	#$multiscan{"diffusion"}=$vols; 
-#     } elsif ( $vol_detail =~ /.*?echo.*?/x    ) { 
-# 	$Hfile->set_value("${hf_short_prefix}echos",$vols);
-# 	#$multiscan{"echos"}=$vols; 
-#     } elsif ( $vol_detail =~ /.*?channel.*?/x ) {
-# 	$Hfile->set_value("${hf_short_prefix}channels",$vols);
-#     } else {
-# 	$Hfile->set_value("${hf_short_prefix}volumes",$vols);
-# 	#$multiscan{"volumes"}=$vols; 
-#     }
-#    $Hfile->set_value("${hf_short_prefix}volumes",$vols);
     $Hfile->set_value("U_prefix",${hf_prefix});
     $Hfile->set_value("S_tag",$hf_short_prefix);
-#    if( $scanner_vendor eq 'agilent') {     
-#	agilent_hash_to_headfile($hfhashref,$Hfile,$hf_prefix); #puts all variables from scanner to hf as $prefix$name keys
-#    } elsif($scanner_vendor eq 'bruker') {
-#	bruker_hash_to_headfile($hfhashref,$Hfile,$hf_prefix); #puts all variables from scanner to hf $prefix$name keys
-#    }
     aoa_hash_to_headfile($hfhashref,$Hfile,$hf_prefix); #puts all variables from scanner to hf $prefix$name keys
     my $cpkeys_status=copy_relevent_keys(\%hfhash,$Hfile,0);
 ###

@@ -241,10 +241,10 @@ sub set_volume_type { # ( aspect_headfile[,$debug_val] )
 # 	$channels=$hf->get_value($data_prefix."PVM_EncNReceivers");
 #     }
 ### get bit depth
-    my $bit_depth="32-bit"; 
+    my $bit_depth="32"; 
 
     my $data_type="Real";   
-    #my $recon_type="16-bit";
+    #my $recon_type="16";
     #Unsigned
     
 #    my $recon_type=$hf->get_value($data_prefix."RECO_wordtype");
@@ -460,7 +460,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
     my $data_prefix=$hf->get_value('U_prefix');
 #    my $aspect_prefix=$hf->get_value("${s_tag}prefix"); #z_Aspect_
     my $report_order=$hf->get_value("${s_tag}axis_report_order");
-    my $binary_header_size=0;
+    my $binary_header_size=1056;
     my $block_header_size=0;
     $hf->set_value("binary_header_size",$binary_header_size);
     $hf->set_value("block_header_size",$block_header_size);
@@ -798,7 +798,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
     if ( $vol_type eq '2D') { 
 	# if interleave we have to load lots of data at a time or fall over to ray by ray loading. 
 	my $ntr=1; # number of tr's 
-	$hf->set_value("rays_per_block",$dx*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	$hf->set_value("rays_per_block",$dy*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
 	$hf->set_value("ray_blocks",1);
     } else  {
 	$hf->set_value("rays_per_block",$dy*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
