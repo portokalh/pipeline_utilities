@@ -6,6 +6,7 @@ paths={
   '/pipe_home/script/matlab_functions_local/T2WsuseptibilityReg/'
   '/recon_home/script/dir_radish/modules/matlab'
   '/recon_home/script/dir_radish/modules/matlab/agilent'
+  '/recon_home/script/dir_radish/modules/matlab/aspect'
   '/recon_home/script/dir_radish/modules/matlab/civm_matlab_common_utils/'
   '/recon_home/script/dir_radish/modules/matlab/mat_recon_pipe'
   '/recon_home/script/dir_radish/modules/matlab/mr_relaxation_calc/'

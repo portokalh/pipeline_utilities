@@ -105,11 +105,13 @@ my $NAME = "aspect lib";
 my $VERSION = "2013/05/29";
 my $COMMENT = "Aspect meta data functions";
 use vars qw(@knownsequences @TwoDsequences @ThreeDsequences @FourDsequences);
-@knownsequences= qw( GRE_SS_ GRE_EXT_); # tested acquisition sequences for aspect extract. might be good to pull this out to configuration variables. 
 @TwoDsequences=qw();
-@ThreeDsequences=qw(GRE_SS_ gre_sp_ GRE_EXT_);
+@ThreeDsequences=qw(GRE_EXT_  gre_sp_ GRE_SP_ GRE_SS_ );
 @FourDsequences=qw();
-
+push(@knownsequences,@TwoDsequences);
+push(@knownsequences,@ThreeDsequences);
+push(@knownsequences,@FourDsequences);
+ # tested acquisition sequences for aspect extract. might be good to pull this out to configuration variables. 
 ###
 sub parse_header {   #( \@aspectheaderarrayoflines,$debug_valval )
 ###

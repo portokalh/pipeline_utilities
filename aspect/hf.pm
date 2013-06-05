@@ -502,7 +502,11 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 			       1,
 			       'ECCITAZIONI',            # kind of a blind guess
 			   ],
-			   "bw"=>[
+			   "echo_asymetry"=>[            # move from percentage to fraction of 1
+			       (1/100),
+			       'ASIMMETRIA',               # echo assymetry
+			   ],
+			   "bw"=>[ # want value in khz.
 			       (1/1000),
 			       'DWEL_TIME',              # dwell time is 1/bandwidth, so this needs fixing up.
 			   ],
@@ -660,6 +664,19 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
     ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type,$report_order)=split(':',$volinfotext);
 #    my $vol_type=$hf->get_value("${s_tag}vol_type");
 #    my $vol_detail=$hf->get_value("${s_tag}vol_type_detail");
+    #GRE_SP_ has extra z slice for unknown reason? must be freq correct slice.
+    if ( $sname =~ m/^GRE_SP_$/x  )  { 
+	printd(25,"ASPECT GRE_SP fix variables!\n");
+	$hf->set_value('aspect_remove_slice',1);
+	$z=$z+1;
+#	$hf->set_value('te',$hf->get_value('te')/1000);
+
+    } else { 
+#	printd(25,"Aspect do not add once slice for sequence $sname\n");
+    }
+	
+    
+    printd(15,"dim_x:$x dim_y:$y dim_z:$z\n");
     $hf->set_value("dim_X",$x);
     $hf->set_value("dim_Y",$y);
     $hf->set_value("dim_Z",$z);
@@ -802,7 +819,12 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 	$hf->set_value("ray_blocks",1);
     } else  {
 	$hf->set_value("rays_per_block",$dy*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
-	$hf->set_value("ray_blocks",$dz);
+	if ( ! $hf->get_value('aspect_remove_slice') =~ m/^UNDEFINED_VALUE|NO_KEY$/x ) { 
+	    $hf->set_value("ray_blocks",$dz+1);	    
+	} else { 
+	    $hf->set_value("ray_blocks",$dz);
+	}
+
     }
 
     print("fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n".'');

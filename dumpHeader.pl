@@ -153,7 +153,7 @@ our $verbose=0;
 	} else { 
 	    printd(15,"You specifid the scanner header file directly instead of the directory it sits in. This is an unproven method best suited for testing different ways to fool the header parse script \n"); 
 	}
-	$hf_prefix='z_aspect_';
+	$hf_prefix='z_Aspect_';
 	$hf_short_prefix="A_";
 	$data_filename="*tnt";
 	require aspect;
@@ -168,7 +168,7 @@ our $verbose=0;
 	} else {
 	    printd(15,"the scanner input file was specified directly, bruker headers are normally in three parts, you need to have combined those into one to specify the headfile to use directly.(subject,acqp,method)");
 	}
-	$hf_prefix='z_bruker_';
+	$hf_prefix='z_Bruker_';
 	$hf_short_prefix="B_";
 	$data_filename="fid";
 	require bruker ;
