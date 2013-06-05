@@ -673,6 +673,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 
     } else { 
 #	printd(25,"Aspect do not add once slice for sequence $sname\n");
+	$hf->set_value('aspect_remove_slice',0);
     }
 	
     
@@ -765,7 +766,8 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
     my $fov = $hf->get_value($data_prefix."FOV");
     $fov_x=$fov;
     $fov_y=$fov;
-    $fov_z=$hf->get_value($data_prefix."SPESSORE")*$dz;
+    $fov_z=$hf->get_value($data_prefix."SPESSORE")*($dz-$hf->get_value('aspect_remove_slice'));
+;
 # 	if ( ! defined $dz ) { 
 # 	    $dz = $hf->get_value($data_prefix."NSLICES");
 # 	    if ( $dz eq 'NO_KEY' ) { 
@@ -820,6 +822,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
     } else  {
 	$hf->set_value("rays_per_block",$dy*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
 	if ( ! $hf->get_value('aspect_remove_slice') =~ m/^UNDEFINED_VALUE|NO_KEY$/x ) { 
+	    $fov_z=$hf->get_value($data_prefix."SPESSORE")*$dz;
 	    $hf->set_value("ray_blocks",$dz+1);	    
 	} else { 
 	    $hf->set_value("ray_blocks",$dz);
