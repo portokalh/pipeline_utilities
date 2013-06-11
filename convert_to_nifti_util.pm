@@ -117,7 +117,9 @@ sub nifti_ize_util
   if ($image_suffix ne 'raw') { error_out("nifti_ize: image suffix $image_suffix not known to be handled by matlab nifti converter (just \.raw)");}
 #  $Hf->set_value("$setid\_image_suffix", $image_suffix);  # wtf mates? we just read this value out?
   my  $NIFTI_MFUNCTION = $Hf->get_value("nifti_matlab_converter");
-
+  if ( $NIFTI_MFUNCTION eq 'NO_KEY' ){
+      error_out("nifti_matlab_converter not set in hf");
+  }
   
   my $dest_nii_file = "$runno\.nii";
   my $dest_nii_path = "$dest_dir/$dest_nii_file";
