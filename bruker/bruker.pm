@@ -102,7 +102,7 @@ my $NAME = "bruker lib";
 my $VERSION = "2013/04/29";
 my $COMMENT = "Bruker meta data functions";
 use vars qw(@knownmethods);
-@knownmethods= qw( MGE);
+@knownmethods= qw( MGE RARE MDEFT);
 # brukere extract tested methods are qw( DtiEpi EPI FLASH GEFC MDEFT MGE MSME PRESS RARE UTE UTE2D UTE3D ute3d_keyhole ); # tested acquisition methods for bruker extract. might be good to pull this out to configuration variables. 
 
 ###
@@ -354,13 +354,13 @@ sub determine_volume_type_old { # ( \%bruker_header_ref[,$debug_val] )
 # n_dwi_exp, only dti, indicates multi volume, should be linked to movie_frames.
 # list_size & list_sie_B indicate multi_volume.
 # n_slice_packs, could mean a few things, either multi volume or, that we much multiply slices*nslicepacks, to get the whole volume's worth of slices.
-    my $n_echoes;
+    my $n_echos;
     if ( defined $bruker_header_ref->{'ACQ_n_echo_images'} )  {
-        $n_echoes=aoaref_get_single($bruker_header_ref->{'ACQ_n_echo_images'});
-#         if ($n_echoes>1){ 
+        $n_echos=aoaref_get_single($bruker_header_ref->{'ACQ_n_echo_images'});
+#         if ($n_echos>1){ 
 #             croak("Never delt with echos, failing now.");           
 #         }
-	printd(45,"n_echoes:$n_echoes\n");
+	printd(45,"n_echos:$n_echos\n");
 	
     }
     my $movie_frames;
@@ -599,7 +599,7 @@ sub determine_volume_type_old { # ( \%bruker_header_ref[,$debug_val] )
 		if ($z > 1 ){
 		    $vol_detail=$vol_detail.'-vol';
 		} 
-		if ($n_echoes >1 ) {
+		if ($n_echos >1 ) {
 		    $vol_detail=$vol_detail.'-echo';		    
 		}
 	    }

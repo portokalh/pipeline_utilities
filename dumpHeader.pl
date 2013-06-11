@@ -59,6 +59,8 @@ our $verbose=0;
     }
     if ( defined $opt{d} ) { # -d debug mins
 	$debug_val=$debug_val+$opt{d};
+    } else { 
+	$debug_val=5;
     }
     $scanner    = shift(@ARGV) || usage_message("No scanner specified");
     $directory  = shift(@ARGV) || usage_message("No data directory speciified");

@@ -127,6 +127,12 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
 #\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
     }
+    if ( $method =~ m/MDEFT/x ) {
+	printd(5,"WARNING WARNING WARNING MDEFT DETECTED!\n".
+	       "MDEFT PRETENDS TO BE A 2D SEQUENCE WHEN IT IS IN FACT 3D!\n".
+	       "rad_mat will require special options to run!\n\tvol_type_override=3D\n\tU_dimension_order=xcpyzt\n");
+	sleep_with_countdown(8);
+    }
 ### keys which may help
 ### multi2d
 ### -arrays 9
@@ -174,11 +180,11 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 # n_dwi_exp, only dti, indicates multi volume, should be linked to movie_frames.
 # list_size & list_sie_B indicate multi_volume.
 # n_slice_packs, could mean a few things, either multi volume or, that we much multiply slices*nslicepacks, to get the whole volume's worth of slices.
-    my $n_echoes;
-    $n_echoes=$hf->get_value($data_prefix.'ACQ_n_echo_images');
-    if ( $n_echoes eq 'NO_KEY')  {
-	$n_echoes=1;
-	printd(45,"n_echoes:$n_echoes\n");
+    my $n_echos;
+    $n_echos=$hf->get_value($data_prefix.'ACQ_n_echo_images');
+    if ( $n_echos eq 'NO_KEY')  {
+	$n_echos=1;
+	printd(45,"n_echos:$n_echos\n");
     }
     my $movie_frames;
     $movie_frames=$hf->get_value($data_prefix."ACQ_n_movie_frames"); # ntimepoints=length, or 0 if only one time point
@@ -231,13 +237,13 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
             croak "Required field missing from bruker header:\"PVM_NSPacks\" ";
         }
     }
-    $slice_pack_size=$hf->get_value("PVM_SPackArrNSlices");
+    $slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
     if ($slice_pack_size ne 'NO_KEY' ) {
        $slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
     } else { 
     # $list_size == $slice_pack_size
 	$slice_pack_size=$hf->get_value($data_prefix."NI");
-	carp("No PVM_SPackArrNSlices, using NI instead, could be wrong value ") ;
+	carp("No ${data_prefix}PVM_SPackArrNSlices, using NI instead, could be wrong value ") ;
 	sleep_with_countdown(4);
     }
     printd(45,"n_spacks:$n_slice_packs\n");        
@@ -249,28 +255,28 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 # spatial_size_2, 3rd dimension size, should match $matrix[1] if its defined.;
     my @matrix; #get 2/3D matix size
     my $order= "UNDEFINED";  #report_order for matricies
-    if ( $hf->get_value($data_prefix."PVM_Matrix") ne 'NO_KEY' ||  $hf->get_value($data_prefix."ACQ_size")ne 'NO_KEY' ) {
+    if ( $hf->get_value($data_prefix."PVM_EncMatrix") ne 'NO_KEY' ||  $hf->get_value($data_prefix."ACQ_size")ne 'NO_KEY' ) {
 
-	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."PVM_Matrix"));
+	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
 	if ( $#matrix == 0 ) { 
 	    
 	}
 #         if ( $#matrix > 0 ) { 
-# 	     @matrix=@{$hf->{"PVM_Matrix"}->[0]};
+# 	     @matrix=@{$hf->{"PVM_EncMatrix"}->[0]};
 # 	}
 
 # 	if( ! defined $matrix[0] ) {
-# 	    printd(45,"PVM_Matrix undefined, or empty, using ACQ_size\n"); ### ISSUES HERE, f direction of acq_size is doubled. 
+# 	    printd(45,"PVM_EncMatrix undefined, or empty, using ACQ_size\n"); ### ISSUES HERE, f direction of acq_size is doubled. 
 # 	    @matrix=@{$hf->{"ACQ_size"}->[0]};
 # 	} 
 	if (defined $matrix[0]) { 
 	    #shift @matrix;
-	    if ($#matrix>2) { croak("PVM_Matrix too big, never had more than 3 entries before, what has happened"); }
+	    if ($#matrix>2) { croak("PVM_EncMatrix too big, never had more than 3 entries before, what has happened"); }
 	    printd(45,"Matrix=".join('|',@matrix)."\n");
 	}
     }
     if (! defined $matrix[0]) {
-        croak "Required field missing from bruker header:\"PVM_Matrix|ACQ_size\" ";
+        croak "Required field missing from bruker header:\"PVM_EncMatrix|ACQ_size\" ";
     }
     # use absence of pvm variables to set the default to UNDEFINED orientation which is x=acq1, y=acq2.
     if ( defined $hf->{"PVM_SPackArrReadOrient"} ) { 
@@ -333,7 +339,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         $order ='yx'; 
         $x=$matrix[1];
         $y=$matrix[0];
-# 	if ( ! defined $hf->{"PVM_Matrix"}->[0]) {
+# 	if ( ! defined $hf->{"PVM_EncMatrix"}->[0]) {
 # 	    $y=$y/2;
 # 	    printd(45, "halving y\n");
 # 	}
@@ -341,7 +347,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         $order='xy';
         $x=$matrix[0];
         $y=$matrix[1];
-# 	if ( ! defined $hf->{"PVM_Matrix"}->[0]) {
+# 	if ( ! defined $hf->{"PVM_EncMatrix"}->[0]) {
 # 	    $x=$x/2;
 # 	    printd(45, "halving x\n");
 # 	}
@@ -395,7 +401,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		confess "PVM_NSPacks should equal ACQ_O1_list_size with slab data";
                 ### there is potential for multi-slab type, but we'll assume that wont happen for now and just die.
             }
-        } elsif( $list_sizeB == $slice_pack_size ) {
+        } elsif( $list_sizeB <= $slice_pack_size ) {
 # should check the slice_offset, makeing sure that they're all the same incrimenting by uniform size.
 # If they are then we have a 2d multi acq volume, not points in time. so for each value in ACQ_slice_offset,
 # for 2D acq, get difference between first and second, and so long as they're the same, we have slices not volumes
@@ -421,23 +427,42 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		    printd(85,"diff checks out of $current_offset $first_offset\n");
 		}
 	    }
-	    if ($first_offset==-1000) {
+	    if( ($first_offset==-1000) &&  ( $list_sizeB == $slice_pack_size) ){
+		printd(45,"list b and slice_pack size equal and first offset -1000, z using b_slices ");
+#		$z=
+		$z=$slices;
 		$vol_num=$list_sizeB;
-	    } else { 
+	    } elsif ( $list_sizeB == $slice_pack_size) { 
+		printd(45,"list b and slice_pack size equal, z using b_slices ");
 		#list_sizeB seems to be number of slices in total, 
 		$vol_num=$list_sizeB/$list_size;
 		$z=$slices;
-		if ($z > 1 ){
-		    $vol_detail=$vol_detail.'-vol';
-		} 
-		if ($n_echoes >1 ) {
-		    $vol_detail=$vol_detail.'-echo';		    
-		}
+	    }
+	    
+	    if ($z > 1 ){
+		$vol_detail=$vol_detail.'-vol';
+	    } 
+	    if ($n_echos >1 ) {
+		$vol_detail=$vol_detail.'-echo';		    
 	    }
 	} else { 
 	    #$z=1;
             $vol_num=$list_sizeB;
         }
+    } elsif ( $slice_pack_size>1 ) {
+	if ( $list_sizeB == $slice_pack_size) { 
+	    printd(45,"list b and slice_pack size equal, z using b_slices ");
+	    #list_sizeB seems to be number of slices in total, 
+	    $vol_num=$list_sizeB/$list_size;
+	    $z=$slices;
+	} elsif ($list_sizeB < $slice_pack_size )  {
+		printd(45,"z using PVM_SPackArrNSlices");
+		$vol_num=$list_sizeB/$list_size;
+		$z=$slice_pack_size;
+	    }
+	else {
+	    printd(10,"Unknown error in setting $z size");
+	}
     } else { 
        
         $z=$slices;
@@ -551,6 +576,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			       'NR',                      # repetitions, from ACQ
 			       'PVM_NRepetitions',        # repetitions, from method, not always the same thing as acq, notably for dti sets. # might be number of tr's in multi tr set...
 			   ],
+			   "B_rare_factor"=>[
+			       1,
+			       'ACQ_rare_factor',          # rare factor from ACQ, seems to be 1 if no rare factor.
+			   ],
 			   "tr"=>[                        # in us
 			       1000,
 			       'ACQ_repetition_time',     # tr
@@ -575,7 +604,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			   ],
 			   "S_PSDname"=>[
 				1,
-			       'ACQ_method',                  # acquisition(sequence) type 
+			       'Method',                  # acquisition(sequence) type 
 			   ],
 #"dim_X","dim_Y","dim_Z"
 #       'PVM_Matrix',              # frequency, phase, encodes(only for 3d sequences, guessing on name encodes)
@@ -709,12 +738,70 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     $hf->set_value("dim_X",$x);
     $hf->set_value("dim_Y",$y);
     $hf->set_value("dim_Z",$z);
+    printd(75,"".$hf->get_value($s_tag."echos")."\n");
     $hf->set_value("${s_tag}volumes",$vols);
-    $hf->set_value("${s_tag}echos",$vols);
+    $hf->set_value("${s_tag}echos",$hf->get_value('ne'));
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
 
+    # find the encoding order, EncOrder1=CENTRIC_ENC (slices offest by center), so add 1/2 z+1, no, just put value in.
+    #my $decode_list=0;
 
+
+    # can get back to matlab indiceis with +min+1
+#    my $obj_order =$hf->get_value($data_prefix.'PVM_ObjOrderScheme'); # slices generally? perhaps only on 2d acq
+    # Sequential, (ignore), interlaced, (use as slices or volume indicies)
+
+    my $enc1=$hf->get_value($data_prefix.'PVM_EncOrder1');
+    my $enc2=$hf->get_value($data_prefix.'PVM_EncOrder2');
+    my $objo=$hf->get_value($data_prefix.'PVM_ObjOrderList');
+    my $objs=$hf->get_value($data_prefix.'PVM_ObjOrderScheme');
+    if ($enc1 ne 'LINEAR_ENC' &&  $enc1 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
+	printd(35,"dim_Y encoding from PVM_EncSteps1($enc1)\n");
+	$hf->set_value('dim_Y_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps1'));
+    } else { 
+	printd(35,"dim_Y encding not specified with $enc1\n");
+    }
+    if ( $enc2 ne 'LINEAR_ENC' && ! $enc2 =~ m/NO_KEY|UNDEFINED|BLANK/x){ 
+	printd(35,"dim_Z encoding from PVM_EncSteps2($enc2)\n");
+	$hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps2'));
+    } elsif( $objs ne 'Sequential' ) { 
+	if ( $hf->get_value($data_prefix.'PVM_ObjOrderList') ne '0') { 
+	    printd(35,"dim_Z encoding from PVM_ObjOrderList($objs)\n");
+	    $hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_ObjOrderList'));
+	} else { 
+	    carp("PVM_ObjOrderScheme was not Sequential, however PVM_ObjOrderList only contained 0\n");
+	}
+	    
+    } else { 
+	printd(35,"dim_Z encding not specified with $enc2 or $objs\n");
+    }
+   
+#     if( $hf->get_value($data_prefix.'PVM_ObjOrderScheme') ne 'Sequential' ){ 
+# 	if ( $hf->get_value($data_prefix.'PVM_ObjOrderList') ne '0') { 
+# 	    printd(35,'dim_Z encoding from PVM_ObjOrderList');
+# 	    $hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_ObjOrderList'));
+# 	}
+#     } else { 
+	   
+#     }
+#    } elsif ( $vol_type eq '4D' )  { 
+#	confess('4d encoding not handled yet');
+#    } else { 
+#	confess('undfined type, cannot determing encoding');
+#    }
+#     # if 2D and non linear use EncStep1
+#     my $enc_order1=$hf->get_value($data_prefix.'EncOrder1'); # EncSteps1 slices when 2d, y when 3d 
+#     my $enc_order2=$hf->get_value($data_prefix.'EncOrder2'); # EncSteps2 slices when 3d.
+    
+#     my $obj_order_list =$hf->get_value($data_prefix.'PVM_ObjOrderList'); # slices generally? perhaps only on 2d acq
+#     my $obj_order_list =$hf->get_value($data_prefix.'ACQ_obj_order');    # slices generally? perhaps only on 2d acq
+        
+    
+#     $hf->set_value('dim_X_encoding_order',$obj_order_list);#$hf->get_value($data_prefix.'PVM_EncSteps1')
+#     $hf->set_value('dim_Y_encoding_order',$obj_order_list);#$hf->get_value($data_prefix.'PVM_EncSteps1')
+#    $hf->set_value('dim_Z_encoding_order',$obj_order_list);#$hf->get_value($data_prefix.'PVM_EncSteps1')
+    
 ### set kspace bit depth and type
     if ( defined $bruker_header_ref->{"GO_raw_data_format"}) {
 #    if ( defined $bruker_header_ref->{"RECO_wordtype"} || defined $bruker_header_ref->{"GO_raw_data_format"}) {
@@ -802,19 +889,31 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 
     #my @dims=printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
     ($df, $dp, $dz) = printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
+
 #    printd(90,"dims are ".join('|',@dims)."\n");
 #    ($df, $dp, $dz)=@dims;
 	if ( ! defined $dz ) { 
 	    $dz = $hf->get_value($data_prefix."NSLICES");
-	    if ( $dz eq 'NO_KEY' ) { 
-	    printd(25,"ERROR: no slices\n" );
+	    if (  $dz == 1) {
+		$dz=$hf->get_value('dim_Z');
 	    }
+	    if ( $dz ne 'NO_KEY' && $dz !=1) { 
+		printd(45,"Uncertain of dim_Z used value in dim_Z\n");
+	    } elsif ( $dz == 1)  {
+		printd(45,"Using NSLCIES($dz) for dz in fov calcs, will grab dim_Z after \n");		
+	    } else {
+		printd(25,"ERROR: no slices\n" );
+	    } 
 	}
     #}        
     if ( $hf->get_value($data_prefix."PVM_SpatResol") ne 'NO_KEY') {
 	($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
 	$fov_f=$df*$thick_f;
 	$fov_p=$dp*$thick_p;
+	if (defined $thick_z) {
+	    printd(45,"Using ${data_prefix}PVM_SpatResol for fov_z\n");
+	    $fov_z=$dz*$thick_z;
+	}
     } else {
 	($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov"));
 	$fov_f=$fov_f*10;
@@ -822,11 +921,13 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	$thick_f=$fov_f/$df;
 	$thick_p=$fov_p/$dp;
 	if (defined $fov_z) {
+	    printd(45,"Using ${data_prefix}ACQ_fov for fov_z\n");
 	    $fov_z  =$fov_z*10;
 #	    $thick_z=$fov_z/$dz; 
 	}
     }
     
+
     print("$report_order\n");
     if ($report_order eq "xy" ) { #("${s_tag}axis_report_order")
 	$fov_x=$fov_f;
@@ -835,6 +936,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	$fov_x=$fov_p;
 	$fov_y=$fov_f;
     }
+
     if ( ! defined $thick_z && ! defined $fov_z) { 
 	#$thick_z=$hf->get_value("slthick"); 
 	$thick_z=$hf->get_value($data_prefix."ACQ_slice_thick");
@@ -842,14 +944,22 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	#PVM_SliceThick
 	#PVM_SPackArrNSlices
 	if ( defined ($thick_z) ) { 
-	    $fov_z=$dz*$thick_z; 
+	    printd(45,"Using ${data_prefix}ACQ_slice_thick for fov_z\n");
+	    my $spackns=$hf->get_value($data_prefix."SPackArrNSlices\n");
+# 	    printd(45,"\t".$data_prefix."SPackArrNSlices\n");
+# 	    my $nspacks=$hf->get_value($data_prefix."PVM_NSPacks\n");
+# 	    printd(45,"\t".$data_prefix."NSPacks\n");
+	    if ( $hf->get_value($data_prefix."PVM_SPackArrNSlices") > 1 && $hf->get_value($data_prefix."PVM_NSPacks")== 1){ 
+		$fov_z=$thick_z; 
+	    } else { 
+		$fov_z=$dz*$thick_z; 
+	    }
 	}	    
-	
     }
-
     
+	    
     $hf->set_value("ray_length",$df);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing. 
-    my $ntr=1; # number of tr values, just 1 for now, should cause errors on data load for recon if anything but one
+    my $ntr=1; # number of tr values, just 1 for now, should cause errors on data load for recon if it should have been anything but one
     if ( $vol_type eq '2D') { 
 	# if interleave we have to load lots of data at a time or fall over to ray by ray loading. 
 	my $ntr=1; # number of tr's 
@@ -859,9 +969,11 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	$hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
 	$hf->set_value("ray_blocks",$dz);
     }
-
-    print("fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n".'');
-#	  "ray_length:".$hf->get_value('ray_length').", rays_per_block:".$hf->get_value('rays_per_block').", ray_blocks:".$hf->get_value('ray_blocks'));
+    printd(25,"dx=$df: dy=$dp: dz=$dz\n");
+    printd(25,"fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n".
+	  "ray_length:".$hf->get_value('ray_length').
+	  ", rays_per_block:".$hf->get_value('rays_per_block').
+	  ", ray_blocks:".$hf->get_value('ray_blocks')."\n");
 #     if (! defined $dx || ! defined $dy ||! defined $dz ||! defined $thick_f ||! defined $thick_p ||! defined $thick_z ){
 # 	croak("Problem resolving FOV!\n");
 #     } else { 
@@ -967,6 +1079,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 # if 2d, dimorder is xcpzyt permute code is 1 5 4 3 2 6 
 # c is channels, p is parameter, could be te, tr or alpha
 # if 3d, dimorder is xycpzt permute code is 1 2 5 4 3 6 ( this is uncertain and needs testing)
+# RARE dimorder 1 test gives xcyz, p and t unknown
 # PVM_Isotropic,      Isotropic_None|?
 # PVM_SpatResol,      spatial resolution per spatial dimension, 2 for 2d, 3 for 3d, 
 # PVM_Fov,            fov per spatial dimentiosn, 2 for 2d, 3 for 3d
@@ -1011,19 +1124,25 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     my $dim_order;
 #    if ($hf->get_value("${bruker_prefix}PVM_SpatDimEnum") eq '2D' ) { 
     if ($vol_type eq '2D' ) { 
+	# tested true for MGE sequence, and 2D
 	$dim_order='xcpzyt';
     } else {
-	$dim_order='xycpzt';
+# RARE dimorder 1 test gives xcyz, p and t unknown
+	$dim_order='xcpyzt';
     }
-    $hf->set_value('S_dimension_order',$dim_order);
+
+    $hf->set_value("${s_tag}dimension_order",$dim_order);
 #    $hf->set_value("${s_tag}channels",'');
+
     if ( $hf->get_value('ne')>1) {
 	$hf->set_value("${s_tag}varying_parameter",'echos');
     } elsif ($hf->get_value('ne')>1) {
     } elsif ($hf->get_value('ne')>1) {
+    } else {
+	$hf->set_value("${s_tag}echos",$vols/$hf->get_value('ne'));
     }
 #    $hf->set_value('ne,); PVM_NEchoImages
-    $hf->set_value("${s_tag}",'');
+#    $hf->set_value("${s_tag}",'');
 
 ### clean up keys post insert
     

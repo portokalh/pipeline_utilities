@@ -167,7 +167,29 @@ sub resolve_wildcards {
   #  figure out latest file to transfer
   my ($system, $wild_card_path)  =@_;
 
-  my $lscmd = "unalias ls; ls -drt $wild_card_path | tail -1";
+  my $lscmd = "unalias ls; ls -dtr $wild_card_path | tail -1";
+  
+  my $cmd   = "ssh -Y $system \"$lscmd\" ";
+#  print ("$cmd\n");
+  my $plain_path = `$cmd`;
+  if ($plain_path eq "") {
+      print STDERR "  Problem:\n";
+        print STDERR "  * You specified recon with wildcards in the name.\n";
+      print STDERR "  * But couldn't find match.\n";
+      print STDERR "  * cmd was: $cmd\n";
+      return "";
+  }
+#       chop ($last_Pno_withDir);
+#       my @parts = split ("/",$last_Pno_withDir);
+#       my $pfile = pop @parts;
+  return $plain_path; 
+} 
+
+sub resolve_wildcards_multi { 
+  #  figure out file to transfer
+  my ($system, $wild_card_path,$count)  =@_;
+ #  ssh nmrsu@nemo find /opt/PV5.1/data/nmrsu/nmr/ -iname "20120115*" -exec 'grep Rat -H {}/subject  \;' | cut -d ':' -f1
+  my $lscmd = "unalias ls; ls -drt $wild_card_path";
   my $cmd   = "ssh -Y $system \"$lscmd\" ";
 #  print ("$cmd\n");
   my $plain_path = `$cmd`;
