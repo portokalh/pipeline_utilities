@@ -184,8 +184,8 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     $n_echos=$hf->get_value($data_prefix.'ACQ_n_echo_images');
     if ( $n_echos eq 'NO_KEY')  {
 	$n_echos=1;
-	printd(45,"n_echos:$n_echos\n");
     }
+    printd(45,"n_echos:$n_echos\n");
     my $movie_frames;
     $movie_frames=$hf->get_value($data_prefix."ACQ_n_movie_frames"); # ntimepoints=length, or 0 if only one time point
     if ( $movie_frames ne "NO_KEY" && $movie_frames>1 ) {  
@@ -738,11 +738,12 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     $hf->set_value("dim_X",$x);
     $hf->set_value("dim_Y",$y);
     $hf->set_value("dim_Z",$z);
-    printd(75,"".$hf->get_value($s_tag."echos")."\n");
+    printd(75,"echos before set_volume_type".$hf->get_value($s_tag."echos")."\n");
     $hf->set_value("${s_tag}volumes",$vols);
     $hf->set_value("${s_tag}echos",$hf->get_value('ne'));
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
+    printd(75,"echos after set_volume_type = ".$hf->get_value($s_tag."echos").".\n");
 
     # find the encoding order, EncOrder1=CENTRIC_ENC (slices offest by center), so add 1/2 z+1, no, just put value in.
     #my $decode_list=0;
@@ -893,12 +894,14 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #    printd(90,"dims are ".join('|',@dims)."\n");
 #    ($df, $dp, $dz)=@dims;
 	if ( ! defined $dz ) { 
+	    printd(45,$data_prefix."PVM_EncMatrix did not specify 3rd Dimension!\n");
+	    
 	    $dz = $hf->get_value($data_prefix."NSLICES");
 	    if (  $dz == 1) {
 		$dz=$hf->get_value('dim_Z');
 	    }
 	    if ( $dz ne 'NO_KEY' && $dz !=1) { 
-		printd(45,"Uncertain of dim_Z used value in dim_Z\n");
+		printd(45,"Uncertain of dim_Z! used value previously placed in dim_Z. \n");
 	    } elsif ( $dz == 1)  {
 		printd(45,"Using NSLCIES($dz) for dz in fov calcs, will grab dim_Z after \n");		
 	    } else {
@@ -923,7 +926,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	if (defined $fov_z) {
 	    printd(45,"Using ${data_prefix}ACQ_fov for fov_z\n");
 	    $fov_z  =$fov_z*10;
-#	    $thick_z=$fov_z/$dz; 
+   #	    $thick_z=$fov_z/$dz; 
 	}
     }
     
@@ -946,12 +949,16 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	if ( defined ($thick_z) ) { 
 	    printd(45,"Using ${data_prefix}ACQ_slice_thick for fov_z\n");
 	    my $spackns=$hf->get_value($data_prefix."SPackArrNSlices\n");
-# 	    printd(45,"\t".$data_prefix."SPackArrNSlices\n");
-# 	    my $nspacks=$hf->get_value($data_prefix."PVM_NSPacks\n");
-# 	    printd(45,"\t".$data_prefix."NSPacks\n");
+ 	    printd(45,"\t".$data_prefix."SPackArrNSlices\n");
+ 	    my $nspacks=$hf->get_value($data_prefix."PVM_NSPacks\n");
+ 	    printd(45,"\t".$data_prefix."NSPacks\n");
 	    if ( $hf->get_value($data_prefix."PVM_SPackArrNSlices") > 1 && $hf->get_value($data_prefix."PVM_NSPacks")== 1){ 
-		$fov_z=$thick_z; 
+		printd(45,"\t".$data_prefix."fov_z set using dz*thick_z\n");
+		$fov_z=$dz*$thick_z; 
+#		$fov_z=$thick_z; 
 	    } else { 
+		printd(45,"\t".$data_prefix."fov_z set using dz*thick_z\n");
+#		$fov_z=$thick_z; 		printd(45,"\t".$data_prefix."fov_z set using thick_z\n");
 		$fov_z=$dz*$thick_z; 
 	    }
 	}	    
@@ -1139,7 +1146,8 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     } elsif ($hf->get_value('ne')>1) {
     } elsif ($hf->get_value('ne')>1) {
     } else {
-	$hf->set_value("${s_tag}echos",$vols/$hf->get_value('ne'));
+	#printd(35, "Doing default set of echos with $vols/".$hf->get_value('ne')."\n");
+	#$hf->set_value("${s_tag}echos",$vols/$hf->get_value('ne'));
     }
 #    $hf->set_value('ne,); PVM_NEchoImages
 #    $hf->set_value("${s_tag}",'');

@@ -985,7 +985,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
     } else {
 	$dim_order='xycpzt';
     }
-    $hf->set_value('S_dimension_order',$dim_order);
+    $hf->set_value($s_tag."dimension_order",$dim_order);
 #    $hf->set_value("${s_tag}channels",'');
     if ( $hf->get_value('ne')>1) {
 	$hf->set_value("${s_tag}varying_parameter",'echos');
