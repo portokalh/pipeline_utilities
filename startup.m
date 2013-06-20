@@ -21,23 +21,27 @@ paths={
   [ workstation_home '/recon/mat_recon_pipe']
   [ workstation_home '/shared/civm_matlab_common_utils' ]
 };
-gen_paths={
+genpaths={
   [ workstation_home 'shared/mathworks']
 };
 
-for p=1:length(paths)
+for p=1:length(old_paths)
     if exist(old_paths{p},'dir')
 	addpath(old_paths{p});
     end
+end
+for p=1:length(paths)
     if exist(paths{p},'dir')
 	addpath(paths{p});
     end
 end
 
-for p=1:length(genpaths)
+for p=1:length(old_genpaths)
     if exist(old_genpaths{p},'dir')
-	addpath(old_genpath(paths{p}));
+	addpath(genpath(old_paths{p}));
     end
+end
+for p=1:length(genpaths)
     if exist(genpaths{p},'dir')
 	addpath(genpath(paths{p}));
     end
