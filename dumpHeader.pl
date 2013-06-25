@@ -17,7 +17,6 @@ if (! defined($RADISH_RECON_DIR)) {
     print STDERR "Bye.\n";
     exit $ERROR_EXIT;
 }
-#use lib "$RADISH_RECON_DIR/modules/script";
 use Env qw(RADISH_PERL_LIB);
 if (! defined($RADISH_PERL_LIB)) {
     print STDERR "Cannot find good perl directories, quiting\n";
@@ -31,12 +30,13 @@ if (! defined($RECON_HOSTNAME)) {
 }
 
 require Headfile;
+require hoaoa;
 #require shared;
 require pipeline_utilities;
 use civm_simple_util qw(load_file_to_array printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);
-use agilent;
-use aspect;
-use bruker;
+# use agilent;
+# use aspect;
+# use bruker;
 use English;
 use Getopt::Std;
 use File::Basename;
@@ -144,10 +144,12 @@ our $verbose=0;
 	$hf_prefix='z_Agilent_';
 	$hf_short_prefix="A_";
 	$data_filename="fid";
+	import hoaoa qw(aoa_hash_to_headfile);
 	require agilent;
 	import agilent qw(parse_header determine_volume_type );
 	require agilent::hf ;
-	import agilent::hf qw(aoa_hash_to_headfile copy_relevent_keys);
+	import agilent::hf qw( copy_relevent_keys);
+
     }elsif( $scanner_vendor eq 'aspect') { 
 	my @files=glob( $directory.'/'."*.DAT");
 	if ($#infiles == -1 ) { 
@@ -173,10 +175,11 @@ our $verbose=0;
 	$hf_prefix='z_Bruker_';
 	$hf_short_prefix="B_";
 	$data_filename="fid";
+	import hoaoa qw(aoa_hash_to_headfile);
 	require bruker ;
 	import bruker qw(parse_header determine_volume_type );
 	require bruker::hf ;
-	import bruker::hf qw(aoa_hash_to_headfile copy_relevent_keys);
+	import bruker::hf qw(copy_relevent_keys);
     } else {
 	error_out("scanner_vendor unspecifed");
     }

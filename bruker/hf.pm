@@ -18,57 +18,19 @@ use strict;
 use warnings;
 use Carp;
 use List::MoreUtils qw(uniq);
-use bruker qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa @knownmethods);
+use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa);
+use bruker qw( @knownmethods);
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 #use vars qw($debug_val $debug_locator);
 #use favorite_regex qw ($num_ex)
 use Headfile;
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(aoa_hash_to_headfile set_volume_type copy_relevent_keys);
+our @EXPORT_OK = qw(set_volume_type copy_relevent_keys);
 #my $debug=100;
 
 our $num_ex="[-]?[0-9]+(?:[.][0-9]+)?(?:e[-]?[0-9]+)?"; # positive or negative floating point or integer number in scientific notation.
 our $plain_num="[-]?[0-9]+(?:[.][0-9]+)?"; # positive or negative number 
-
-=item aoa_hash_to_headfile
-
-input: ($aoa_hashheader_ref, $headfile_ref , $prefix_for_elements)
-
- aoa_hashheader_ref - hashreference for the bruker header this module
-creates.
- headfile_ref - ref to civm headfile opend by sally's headfile code 
- preffix_for_elements -prefix to put onto each key from aoa_hashheader
-
-output: status maybe?
-
-=cut
-###
-sub aoa_hash_to_headfile {  # ( $aoa_hashheader_ref, $hf , $prefix_for_elements)
-###
-    my ($header_ref,$hf,$prefix) = @_;
-    debugloc();
-    if ( ! defined $prefix ) { 
-        carp "Prefix undfined when converting header hash to CIVM headfile";
-    }
-    my @hash_keys=(); #qw/a b/;
-    @hash_keys=keys(%{$header_ref});
-    my $value="test";
-    printd(75,"Hashref:<$header_ref>\n");
-    printd(55,"keys @hash_keys\n");
-    if ( $#hash_keys == -1 ) { 
-        print ("No keys found in hash\n");
-    } else {
-        foreach my $key (keys %{$header_ref} ) {
-            $value=aoaref_to_printline(${$header_ref}{$key});
-	    if ( $value eq "BLANK" ) { 
-		$value = '';
-	    }
-            $hf->set_value("$prefix$key",$value);
-        }
-    }
-    return;
-}
 
 =item set_volume_type($bruker_headfile[,$debug_val])
 

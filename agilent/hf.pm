@@ -18,15 +18,433 @@ use strict;
 use warnings;
 use Carp;
 use List::MoreUtils qw(uniq);
-use agilent qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single);
+use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single);
+use agilent qw( @knownmethods);
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 #use vars qw($debug_val $debug_locator);
 use Headfile;
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(aoa_hash_to_headfile copy_relevent_keys);
+our @EXPORT_OK = qw(set_volume_type copy_relevent_keys);
 #my $debug=100;
 
+our $num_ex="[-]?[0-9]+(?:[.][0-9]+)?(?:e[-]?[0-9]+)?"; # positive or negative floating point or integer number in scientific notation.
+our $plain_num="[-]?[0-9]+(?:[.][0-9]+)?"; # positive or negative number 
+
+=item set_volume_type($bruker_headfile[,$debug_val])
+
+looks at variables and detmines the volume output type from the
+different posibilities.  2D, or 3D if 2d, multi position or single
+position 2d, single or multi echo, or multi time (maybe multiecho is
+same as multi time.)  3D are there multi volumes? may have to check
+for each kind of multivolume are there multi echo's?  (time and or
+dti) or slab?
+
+sets headfile values 
+    vol_type
+    vol_detail 
+    vol_num 
+    x 
+    y 
+    z 
+    timepoints  
+    bit_depth   # expectecd recon type 
+    data_type   # expected  recon type
+    input_type  # input bit depth and type
+    order       # report order of y and x, 
+    raworder    # sets order of dimensions in raw data, xyzct, generally its fcept  (order determins if f is y or x, and same for p
+=cut
+###
+sub set_volume_type { # ( bruker_headfile[,$debug_val] )
+###
+    my (@input)=@_;
+    my $hf = shift @input;
+    my $old_debug=$debug_val;
+    $debug_val = shift @input or $debug_val=$old_debug;
+    my $vol_type=1;
+    my $vol_detail="single";
+    my $vol_num=1; # total number of volumes, 
+    my $time_pts=1; # number timepoints
+    my $channels=1;
+    my $channel_mode='separate'; # separate or integrate, if integrate use math per channel to add to whole image. 
+    # this doesnt have much meaning in the reconstruction end of things.
+    my $x=0;
+    my $y=0;
+    my $z=0; # slices per volume
+    my $slices=1;#total z dimension 
+
+    my $s_tag=$hf->get_value('S_tag');
+    my $data_prefix=$hf->get_value('U_prefix');
+    my $extraction_mode_bool=$hf->get_value("R_extract_mode");
+    if ( $extraction_mode_bool eq 'NO_KEY') { $extraction_mode_bool=0; }
+    my $method;
+    $method = $hf->get_value($data_prefix."ACQ_method");
+    if ( $method eq 'NO_KEY' ) {
+	croak "Required field missing from bruker header:\"${data_prefix}ACQ_method\" ";
+    }
+    printd(45, "Method:$method\n");
+    my $method_ex="<(".join("|",@knownmethods).")>";
+    if ( $method !~ m/^$method_ex$/x ) { 
+        croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
+#\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
+    }
+    if ( $method =~ m/MDEFT/x ) {
+	printd(5,"WARNING WARNING WARNING MDEFT DETECTED!\n".
+	       "MDEFT PRETENDS TO BE A 2D SEQUENCE WHEN IT IS IN FACT 3D!\n".
+	       "rad_mat will require special options to run!\n\tvol_type_override=3D\n\tU_dimension_order=xcpyzt\n");
+	sleep_with_countdown(8);
+    }
+### keys which may help
+### multi2d
+### -arrays 9
+###   ACQ_O1B_list ACQ_O1_list ACQ_grad_matrix ACQ_obj_order ACQ_phase1_offset ACQ_phase2_offset ACQ_read_offset ACQ_slice_offset
+###   PVM_ObjOrderList PVM_SPackArrGradOrient
+### -singles 9
+###   ACQ_O1B_list_size ACQ_O1_list_size NI NSLICES
+###   PVM_SPackArrNSlices
+### multi3d, dti
+### -arrays 7
+###   ACQ_movie_descr ACQ_time_points
+###   PVM_DwBMat PVM_DwEffBval PVM_DwEffGradTraj PVM_DwGradPhase PVM_DwGradRead PVM_DwGradSlice PVM_DwGradVec PVM_DwSpDir
+### -singles 7
+###  ACQ_n_movie_frames ACQ_nr_completed NR
+###  PVM_DwNDiffExp
+### multislab
+### -arrays 20
+###   ACQ_O1B_list ACQ_O1_list ACQ_grad_matrix ACQ_obj_order ACQ_phase1_offset ACQ_phase2_offset ACQ_read_offset ACQ_slice_angle ACQ_slice_offset ACQ_slice_sepn
+###   PVM_ObjOrderList PVM_SPackArrGradOrient(20x3x3) PVM_SPackArrNSlices PVM_SPackArrPhase1Offset PVM_SPackArrPhase2Offset PVM_SPackArrReadOffset PVM_SPackArrReadOrient PVM_SPackArrSliceDistance PVM_SPackArrSliceGap PVM_SPackArrSliceGapMode PVM_SPackArrSliceOffset PVM_SPackArrSliceOrient
+### -arrays 288
+###   ACQ_spatial_phase_1 
+###   PVM_EncSteps1
+### -singles 20
+###   ACQ_O1B_list_size ACQ_O1_list_size DSPFVS NAE NI NSLICES 
+###   PVM_FovSatSpoilGrad PVM_InFlowSatSpoilGrad PVM_NAverages PVM_NSPacks
+### -single 288
+###   ACQ_spatial_size_1   
+### 3d single
+### -arrays which appear to have length(1) based on above information(its hard to sepearate important places wehre values of 1, or all places with only one element)
+###   ACQ_O1B_list ACQ_O1_list ACQ_grad_matrix ACQ_obj_order ACQ_phase1_offset ACQ_phase2_offset ACQ_read_offset ACQ_slice_angle ACQ_slice_offset ACQ_slice_sepn
+###   PVM_ObjOrderList PVM_SPackArrGradOrient(01x3x3) PVM_SPackArrNSlices PVM_SPackArrPhase1Offset PVM_SPackArrPhase2Offset 
+
+# 4d dti
+# ACQ_time_points array of time points or 0 if only one time point, dti has 7 entries, might be in minutes from start, not really sure
+# ACQ_nr_completed should equal ACQ_time_points.
+# ACQ_movie_descr, should describe what each timepoint was. For dti, will contain "Dir [1-ACQ_time_points]"
+
+# 3(4?)d slab
+# ACQ_spacial_size_1, total size, wont exist for other types?
+# ACQ_spacial_size_2, slab size
+
+### collect multivars to check on.
+# n_echo_images, never seen not sur what it'll do or how to incorporate
+# movie_frames only seen with dti so far. indicates multi volume for sure
+# n_dwi_exp, only dti, indicates multi volume, should be linked to movie_frames.
+# list_size & list_sie_B indicate multi_volume.
+# n_slice_packs, could mean a few things, either multi volume or, that we much multiply slices*nslicepacks, to get the whole volume's worth of slices.
+    my $n_echos;
+    $n_echos=$hf->get_value($data_prefix.'ACQ_n_echo_images');
+    if ( $n_echos eq 'NO_KEY')  {
+	$n_echos=1;
+    }
+    printd(45,"n_echos:$n_echos\n");
+    my $movie_frames;
+    $movie_frames=$hf->get_value($data_prefix."ACQ_n_movie_frames"); # ntimepoints=length, or 0 if only one time point
+    if ( $movie_frames ne "NO_KEY" && $movie_frames>1 ) {  
+	## set dim_t, perhpas time_pts?
+	$time_pts=$time_pts*$movie_frames;
+	printd(45,"movie_frames:$movie_frames\n");
+    }
+    my $n_dwi_exp;
+    $n_dwi_exp=$hf->get_value($data_prefix."PVM_DwNDiffExp");
+    if ( $n_dwi_exp ne 'NO_KEY'  && $n_dwi_exp>1) { 
+#	if ($n_dwi_exp > 1 ) {
+	     printd(45,"n_diffusion_gradients:$n_dwi_exp\n");
+#	}
+    }
+    my $b_slices;
+#    if ( defined $hf->get_value("NSLICES") ) { 
+    if ( defined $hf->get_value($data_prefix."NSLICES") ) { 
+	$b_slices=$hf->get_value($data_prefix."NSLICES");
+	printd(45,"bslices:$b_slices\n");
+    }
+    my $list_sizeB;#(2dslices*echos*time)
+    my $list_size;
+    $list_sizeB=$hf->get_value($data_prefix."ACQ_O1B_list_size");  # appears to be total "volumes" for 2d multi slice acquisitions will be total slices acquired. matches NI, (perhaps ni is number of images and images may be 2d or 3d), doesent appear to accout for channel data.
+    $list_size=$hf->get_value($data_prefix."ACQ_O1_list_size");    # appears to be nvolumes/echos matches NSLICES most of the time, notably does not match on 2d me(without multi slice), looks like its nslices*echos for 2d ms me
+    if ( $list_size ne 'NO_KEY' ) {
+	printd(45,"List_size:$list_size\n"); # is this a multi acquisition of some kind. gives nvolumes for 2d multislice and 3d(i think) 
+	printd(45,"List_sizeB:$list_sizeB\n"); 
+    }
+    my @lists=qw(ACQ_O2_list_size ACQ_O3_list_size ACQ_vd_list_size ACQ_vp_list_size);
+    for my $list_s (@lists) { 
+	if ($hf->get_value($data_prefix.$list_s) != 1 ) { confess("never saw $list_s value other than 1 Unsure how to continue"); }
+    }
+
+    my @slice_offsets;
+    my $n_slice_packs=1;
+    my $slice_pack_size=1;
+   
+    my $s_offsets=$hf->get_value($data_prefix."ACQ_slice_offset");
+    if ( $s_offsets ne 'NO_KEY') {
+#	@slice_offsets=split('test','s'); # MORE WORK TO DO HERE!
+	@slice_offsets=printline_to_aoa($hf->get_value($data_prefix."ACQ_slice_offset"));
+	shift @slice_offsets;
+    }
+    
+    $n_slice_packs=$hf->get_value($data_prefix."PVM_NSPacks"); 
+    if ($n_slice_packs ne 'NO_KEY') { 
+       
+	if ( ! defined $n_slice_packs ) {        
+            croak "Required field missing from bruker header:\"PVM_NSPacks\" ";
+        }
+    }
+    $slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
+    if ($slice_pack_size ne 'NO_KEY' ) {
+       $slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
+    } else { 
+    # $list_size == $slice_pack_size
+	$slice_pack_size=$hf->get_value($data_prefix."NI");
+	carp("No ${data_prefix}PVM_SPackArrNSlices, using NI instead, could be wrong value ") ;
+	sleep_with_countdown(4);
+    }
+    printd(45,"n_spacks:$n_slice_packs\n");        
+    printd(45,"spack_size:$slice_pack_size\n");
+### get the dimensions 
+# matrix 2 or 3 element vector containing the dimensions, shows wether we're 2d or 3d 
+# ACQ_size=2,400 200 pvm_matrix not defined for acquisition only so we'll go with acq size if pvm_matrix undefined. 
+# spatial_phase_1, either frequency or phase dimension, only defined in 2d or slab data on rare sequence, unsure for others
+# spatial_size_2, 3rd dimension size, should match $matrix[1] if its defined.;
+    my @matrix; #get 2/3D matix size
+    my $order= "UNDEFINED";  #report_order for matricies
+    if ( $hf->get_value($data_prefix."PVM_EncMatrix") ne 'NO_KEY' ||  $hf->get_value($data_prefix."ACQ_size")ne 'NO_KEY' ) {
+
+	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
+	if ( $#matrix == 0 ) { 
+	    
+	}
+#         if ( $#matrix > 0 ) { 
+# 	     @matrix=@{$hf->{"PVM_EncMatrix"}->[0]};
+# 	}
+
+# 	if( ! defined $matrix[0] ) {
+# 	    printd(45,"PVM_EncMatrix undefined, or empty, using ACQ_size\n"); ### ISSUES HERE, f direction of acq_size is doubled. 
+# 	    @matrix=@{$hf->{"ACQ_size"}->[0]};
+# 	} 
+	if (defined $matrix[0]) { 
+	    #shift @matrix;
+	    if ($#matrix>2) { croak("PVM_EncMatrix too big, never had more than 3 entries before, what has happened"); }
+	    printd(45,"Matrix=".join('|',@matrix)."\n");
+	}
+    }
+    if (! defined $matrix[0]) {
+        croak "Required field missing from bruker header:\"PVM_EncMatrix|ACQ_size\" ";
+    }
+    # use absence of pvm variables to set the default to UNDEFINED orientation which is x=acq1, y=acq2.
+    if ( defined $hf->{"PVM_SPackArrReadOrient"} ) { 
+        $order=$hf->get_value($data_prefix."PVM_SPackArrReadOrient" );
+        if ( $order eq 'NO_KEY' && $matrix[0]) { 
+            croak("Required field missing from bruker header:\"PVM_SPackArrReadOrient\"");
+        }
+    } else { 
+	
+    } 
+### get channels
+    if ($hf->get_value($data_prefix."PVM_EncActReceivers") ne 'NO_KEY') { 
+	$channels=$hf->get_value($data_prefix."PVM_EncNReceivers");
+	
+#	$channel_mode='integrate';
+    }
+### get bit depth
+    my $bit_depth;
+    my $data_type;
+    my $recon_type=$hf->get_value($data_prefix."RECO_wordtype");
+    my $raw_type=$hf->get_value($data_prefix."GO_raw_data_format");
+    if ( $recon_type ne 'NO_KEY' || $raw_type ne 'NO_KEY') {
+	my $input_type;
+	if ( $recon_type ne 'NO_KEY' && $extraction_mode_bool) { 
+	    $input_type=$recon_type;
+	} elsif ( $raw_type ne 'NO_KEY' ) { 
+	    $input_type=$raw_type;
+	} else { 
+	    croak("input_type undefined, did not find either GO_raw_data_format or RECO_wordtype found. ");
+	}
+	if ( ! defined $input_type ) { 
+	    warn("Required field missing from bruker header:\"RECO_wordtype\"");
+	} else {
+	    if    ( $input_type =~ /.*_16BIT_.*/x ) { $bit_depth = 16; }
+	    elsif ( $input_type =~ /.*_32BIT_.*/x ) { $bit_depth = 32; }
+	    elsif ( $input_type =~ /.*_64BIT_.*/x ) { $bit_depth = 64; }
+	    else  { warn("Unhandled bit depth in $input_type"); }
+	    if    ( $input_type =~ /.*_SGN_/x ) { $data_type = "Signed"; }
+	    elsif ( $input_type =~ /.*_USGN_.*/x ) { $data_type = "Unsigned"; }
+	    elsif (  $input_type =~ /.*_FLOAT_.*/x ) { $data_type = "Real"; }
+	    else  { warn("Unhandled data_type in $input_type"); }
+	}
+    } else { 
+	warn("cannot find bit depth at RECO_wordtype");
+    }
+    
+### if both spatial phases, slab data? use spatial_phase_1 as x?y?
+### for 3d sequences ss2 is n slices, for 2d seqences it is dim2, thats annoying..... unsure of this
+    my $ss2 = $hf->get_value($data_prefix."ACQ_spatial_size_2");
+    if (  $ss2 ne 'NO_KEY' ) { # exists in 3d, dti, and slab, seems to be the Nslices per vol,
+	printd(45,"spatial_size2:$ss2\n");
+    } elsif($#matrix==1 && $ss2 eq 'NO_KEY') { #if undefined, there is only one slice. 
+        $ss2=1;
+#    } else { 
+#	$ss2=0;
+    }
+
+###### determine dimensions and volumes
+    if ( $order =~  m/^H_F|A_P$/x  ) { 
+        $order ='yx'; 
+        $x=$matrix[1];
+        $y=$matrix[0];
+# 	if ( ! defined $hf->{"PVM_EncMatrix"}->[0]) {
+# 	    $y=$y/2;
+# 	    printd(45, "halving y\n");
+# 	}
+    } else { 
+        $order='xy';
+        $x=$matrix[0];
+        $y=$matrix[1];
+# 	if ( ! defined $hf->{"PVM_EncMatrix"}->[0]) {
+# 	    $x=$x/2;
+# 	    printd(45, "halving x\n");
+# 	}
+    }
+    printd(45,"order is $order\n");
+    if ( $#matrix ==1 ) {
+        $vol_type="2D";
+	$slices=$b_slices;
+	printd(90,"Setting type 2D, slices are b_slices->slices\n");
+	#should find detail here, not sure how, could be time or could be space, if space want to set slices, if time want to set vols
+    } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
+        $vol_type="3D";
+	if ( defined $ss2 ) { 
+	    $slices=$ss2;
+	} else {
+	    $slices = $matrix[2];
+	}
+        if ( $slices ne $matrix[2] ) {
+            croak "n slices in question, hard to determing correct number, either2 $slices or $matrix[2]\n";
+        }
+    }   
+###### set time_pts    
+    if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
+        $time_pts=$movie_frames;
+        $vol_type="4D";
+        if ( defined $n_dwi_exp ) { 
+            printd(45,"diffusion exp with $n_dwi_exp frames\n");
+            if ( $movie_frames!=$n_dwi_exp) { 
+                croak "ACQ_n_movie_frames not equal to PVM_DwNDiffExp we have never seen that before.\nIf this is a new method its fesable that ACQ_spatial_phase1 would be defined.";
+            }
+            $vol_detail="DTI";
+        } else { 
+            $vol_detail="MOV";
+        }
+    }
+###### set z and volume number
+    printd(45,"LIST:$list_sizeB $slice_pack_size\n");
+### if listsize<listsizeb we're multi acquisition we hope. if list_size >1 we might be multi multi 
+    if ( $list_sizeB > 1 ) { 
+        $vol_detail='multi';
+        if($n_slice_packs >1 ) { 
+            $z=$slices*$n_slice_packs*$slice_pack_size; #thus far slice_pack_size has always been 1 for slab data, but we dont want to miss out on the chance to explode when itsnot 1, see below for error 
+            $vol_detail='slab';
+	    if ("$n_slice_packs" ne "$b_slices") { 
+		croak "PVM_NSPacks should equal NSLICES"; 
+	    }
+	    if ("$slice_pack_size" ne "1" ) {
+		confess "Slab data never saw PVM_SPackArrNSlcies array with values other than 1";
+	    }
+	    if ("$n_slice_packs" ne "$list_size" ){
+		confess "PVM_NSPacks should equal ACQ_O1_list_size with slab data";
+                ### there is potential for multi-slab type, but we'll assume that wont happen for now and just die.
+            }
+        } elsif( $list_sizeB <= $slice_pack_size ) {
+# should check the slice_offset, makeing sure that they're all the same incrimenting by uniform size.
+# If they are then we have a 2d multi acq volume, not points in time. so for each value in ACQ_slice_offset,
+# for 2D acq, get difference between first and second, and so long as they're the same, we have slices not volumes
+	    printd(45,"slice_offsets:".join(',',@slice_offsets)."\n");
+	    my $offset_num=1;
+	    my $num_a=sprintf("%.9f",$slice_offsets[($offset_num-1)]);
+	    my $num_b=sprintf("%.9f",$slice_offsets[$offset_num]);
+	    my $first_offset=$num_b-$num_a;
+	    $first_offset=sprintf("%.9f",$first_offset);
+	    printd(75,"\tfirst diff $first_offset\n");
+	    for($offset_num=1;$offset_num<$#slice_offsets;$offset_num++) {
+		my $num_a=sprintf("%.9f",$slice_offsets[($offset_num-1)]);
+		my $num_b=sprintf("%.9f",$slice_offsets[$offset_num]);
+		my $current_offset=$num_b-$num_a;
+		$current_offset=sprintf("%.9f",$current_offset);
+#		printd(85,"num1 (".($slice_offsets[$offset_num]).")  num-1(".($slice_offsets[($offset_num-1)]).")\n");
+		printd(85,"num_a:$num_a, num_b:$num_b\n");
+		
+		if("$first_offset" ne "$current_offset") { # for some reason numeric comparison fails for this set, i dont understnad why.
+		    printd(85,"diff bad  num:$offset_num  out of cur, <$current_offset> first, <$first_offset>\n");
+		    $first_offset=-1000; #force bad for rest
+		} else { 
+		    printd(85,"diff checks out of $current_offset $first_offset\n");
+		}
+	    }
+	    if( ($first_offset==-1000) &&  ( $list_sizeB == $slice_pack_size) ){
+		printd(45,"list b and slice_pack size equal and first offset -1000, z using b_slices ");
+#		$z=
+		$z=$slices;
+		$vol_num=$list_sizeB;
+	    } elsif ( $list_sizeB == $slice_pack_size) { 
+		printd(45,"list b and slice_pack size equal, z using b_slices ");
+		#list_sizeB seems to be number of slices in total, 
+		$vol_num=$list_sizeB/$list_size;
+		$z=$slices;
+	    }
+	    
+	    if ($z > 1 ){
+		$vol_detail=$vol_detail.'-vol';
+	    } 
+	    if ($n_echos >1 ) {
+		$vol_detail=$vol_detail.'-echo';		    
+	    }
+	} else { 
+	    #$z=1;
+            $vol_num=$list_sizeB;
+        }
+    } elsif ( $slice_pack_size>1 ) {
+	if ( $list_sizeB == $slice_pack_size) { 
+	    printd(45,"list b and slice_pack size equal, z using b_slices ");
+	    #list_sizeB seems to be number of slices in total, 
+	    $vol_num=$list_sizeB/$list_size;
+	    $z=$slices;
+	} elsif ($list_sizeB < $slice_pack_size )  {
+		printd(45,"z using PVM_SPackArrNSlices");
+		$vol_num=$list_sizeB/$list_size;
+		$z=$slice_pack_size;
+	    }
+	else {
+	    printd(10,"Unknown error in setting $z size");
+	}
+    } else { 
+       
+        $z=$slices;
+    }
+    if ( $channels>1 ) { 
+	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
+	$vol_num=$vol_num*$channels;
+	
+    }
+
+    $vol_num=$time_pts*$vol_num;# not perfect
+
+
+###### handle xy swapping
+    
+
+    printd(45,"Set X=$x, Y=$y, Z=$z, vols=$vol_num\n");
+    printd(45,"vol_type:$vol_type, $vol_detail\n");
+    $debug_val=$old_debug;
+    return "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth}:${data_type}:${order}";
+}
 
 =item aoa_hash_to_headfile
 
@@ -41,7 +459,7 @@ output: status maybe?
 
 =cut
 ###
-sub aoa_hash_to_headfile {  # ( $aoa_header_ref, $hf , $prefix_for_elements)
+sub moved_aoa_hash_to_headfile {  # ( $aoa_header_ref, $hf , $prefix_for_elements)
 ###
     my ($header_ref,$hf,$prefix) = @_; 
     debugloc();
