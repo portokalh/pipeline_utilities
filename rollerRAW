@@ -1,0 +1,399 @@
+#
+# rollerRAW
+#
+# CONTENTS: Script to roll _all_ images in a stack. To solve
+#           problem of x and or y wrap around.  
+# NOTES: Assumes the data location conventions for ping ponging recon on lx's.
+#           Run from machine with recon directories available.
+# HISTORY: created 9/30/94 Sally L. Gewalt Duke CIVM 
+#          8/10/95 slg add ability to do other size images automatically. 
+#          8/10/95b slg add info about shadow
+#          12/29/95 slg add manta
+#          8/27/99 slg add wallace 
+#          1/20/00 slg request x and y image dims if no convert_info file
+#                      (i.e. for signa reconned image sets). 
+#          9/7/04 slg add jessie 
+#          from lxrollerUNPAD1000
+#          2/2/05 slg now just do ####.raw
+#          12/6/07 slg change convert info file from auto to fixed for radish
+#          2/10/09 slg add syros, tinos
+#          7/17/09 slg get iroll from shadow:~slg/SUN.veryimportant into radish source dir
+#                      now find iroll_mine program in arch bin dir setup, on macs.
+#
+#                
+set version = "7/17/09"
+#set verbose
+#
+# should be 1 for real use:
+set do_it = 1
+#
+set headext = headfile
+#
+# ======== check input parameters 
+if (($#argv < 3) || ($#argv > 4)) then
+   echo "   Script to roll all images in a set to a new upper left corner."
+   echo "   Rolls image stacks with named like RUNNO.####.raw" 
+   echo " "
+   echo "usage: rollerRAW  runno  newCornerX newCornerY  [optional dir_name]"
+   echo "example: rollerRAW N12345  100  50"
+   echo "example: rollerRAW N12345  100  50 /analyzet"
+   echo "   runno:      the run number for the image set." 
+   echo "   newCornerX: the x coord of the new upper left corner"  
+   echo "   newCornerY: the y coord of the new upper left corner" 
+   echo "   dir_name: only required when your data is in an unusual"
+   echo "             location.  Give the (mounted) directory of the runno dir."
+   echo "             By default script looks in /reconXta /reconXt/omega for"
+   echo "             runno, where X is determined by recon_computer_name."
+   echo "             USE NO FINAL SLASH on dir name." 
+   echo " Output files are named RUNNOroimx.NNN; the ro is for roll."
+   echo " Assumes dataset numbering starts from slice number 1."
+   echo " Handles various image sizes."
+   echo " This script expects the conventional locations for images," 
+   echo "   i.e. those created by the standard radish recon script."
+   echo "Version $version"
+   if ($do_it != 1) echo "do_it flag is off! Script is running in test mode."
+   exit 1
+endif
+#
+#
+echo " "
+set runno = $1
+set cornerX = $2
+set cornerY = $3
+#
+# ======== set up the list of places to look for data 
+#
+if (! $?RECON_HOSTNAME) then
+  echo "===   (in .cshrc add setenv RECON_HOSTNAME [name of recon host computer])"
+  set error = "The environment variable RECON_HOSTNAME must be set."
+  goto errorend
+endif
+set engine = $RECON_HOSTNAME
+echo "engine hostname = $engine"
+#
+if ($#argv == 4) then
+  set recon_dirs = ($4)
+  set iroll_name = iroll_mine
+  set special_dir = 1
+else
+  set special_dir = 0
+  switch ($engine)
+    case lx2t:
+            set recon_dirs = (/recon2ta /recon2t/omega /recon2tb)
+            set iroll_name = iroll
+            breaksw
+    case lx7t:
+            set recon_dirs = (/recon7ta /recon7t/omega /recon7tb)
+            set iroll_name = iroll
+            breaksw
+    case lx9t:
+            set recon_dirs = (/recon9ta /recon9t/omega /recon9tc /recon9tb /recon9td)
+            set iroll_name = iroll
+            breaksw
+    case iris:
+            set recon_dirs = (/reconI/omega)
+            set iroll_name = iroll_mine
+            breaksw
+    case shadow:
+            set recon_dirs = (/recon-re)
+            set iroll_name = iroll_mine
+            breaksw
+    case bullseye:
+            set recon_dirs = (/reconbu)
+            set iroll_name = iroll_mine
+            breaksw
+    case jessie:
+            set recon_dirs = (/reconje)
+            set iroll_name = iroll_mine
+            breaksw
+    case manta:
+            set recon_dirs = (/reconma)
+            set iroll_name = iroll_mine
+            breaksw
+    case wallace:
+            set recon_dirs = (/reconwa)
+            set iroll_name = iroll_mine
+            breaksw
+    case NOTsyros:
+            set recon_dirs = (/syrosspace)
+            set iroll_name = iroll_mine
+            breaksw
+    case NOTtinos:
+            set recon_dirs = (/analyzet)
+            set iroll_name = iroll_mine
+            breaksw
+  default:    
+	    #set error = "Unknown: $engine (as recon computer name)"  
+	    #goto errorend
+
+            # for system with Radish recon engine setup this will work
+            set recon_dirs = $BIGGUS_DISKUS
+            set iroll_name = $RADISH_ARCH_BIN_DIR/iroll_mine
+            breaksw
+  endsw
+endif
+echo " computer name: $engine, program iroll_name= $iroll_name"
+#
+# ======== Try to find the recon dir on the list of locations 
+#          Check the locations in order on the list
+#
+foreach rd ($recon_dirs)
+  set runno_dir = $rd/$runno
+  if (-e $runno_dir) goto found_dir 
+end
+if ($special_dir) then
+  echo "Is partition $4 mounted on the archive host computer?"
+endif
+set error = "couldn't find $runno in $recon_dirs."  
+goto errorend
+#
+found_dir:
+echo "Found the recon directory $runno_dir." 
+#
+set warnings = () 
+#
+# ======== check basic items before doing anything 
+#
+set image_dir = $runno_dir/$runno\images
+#
+# check that image directory exists
+  if (-e $image_dir == 0) then
+    echo "$image_dir does not exist on $engine"
+    echo "  Since it asks no questions, this script must assume"
+    echo "  it will find your images in a specific location."
+    echo "  Possibly your images are not located as expected: as images"
+    echo "  created by the lxrecon script."  
+    set error =  "Can't reach the image files"
+    goto errorend
+  endif
+#
+# make sure we have write permission to image_dir 
+if (!(-w $image_dir)) then
+  set current_who = `whoami`
+  set error = "you ($current_who) don't have write access to $image_dir"
+  goto errorend
+endif
+#
+# ========== check if more than one image set is present in image dir
+#
+# check howmany runno*.0001.raw images are in image dir;
+# find out which one to shift.  e.g. Perhaps rescaled images are there.
+#
+# rigamaroll to avoid getting "no match" message: 
+set temp_file = $image_dir/roller_temp_file
+cd $image_dir 
+# unalias ls so that list is always in numeric order
+unalias ls
+set empty = `(ls $runno*.0001.raw > $temp_file) >& /dev/null`
+set flist = `cat $temp_file` 
+@ n001 = 0 
+foreach f ($flist)
+  @ n001 = $n001 + 1
+  echo "from dir file list: $f"
+end
+unalias rm
+rm $temp_file
+switch ($n001)
+case 0:
+       echo "  WARNING: Couldn't find .0001 image in $image_dir."
+       echo "  This script requires file numbering to start from 1."
+       set error = "Image numbering does not start from 1."
+       goto errorend
+       breaksw
+case 1:
+       # ok 
+       set onebase = 1 
+       set basename = $flist[1]:r 
+       echo "  basename $basename."
+       breaksw
+default:
+       echo "WARNING: There is more than one image set in $image_dir"
+       set warnings = ($warnings multiple_image_sets)
+
+       echo "Several .001 files exist in $image_dir,"
+       echo "  indicating multiple image sets are present."
+       echo The multiple image set names are: $flist
+
+       if (0) then
+          echo -n "enter desired image set basename for rolling here now: "
+          set basename  = $<
+          set onebase = 0 
+       endif
+       set error = "Please eliminate one data set from the image directory."
+       goto errorend
+       breaksw
+endsw 
+#
+# ============ figure out the dimensions of the images
+# use the convert_info file to find dimensions, if it is available.
+# If these are signa sigextracted images, not reconned by
+# my recon, then there is no convert_info file, so ask for 
+# the dimensions.
+#if (-e $image_dir/convert_info_auto == 0) then
+# radish make convert_info_fixed by histo scaling
+set info = convert_info_fixed
+#if (-e $image_dir/convert_info_auto == 0) then
+if (-e $image_dir/$info == 0) then
+    echo "No convert_info $info file is available for this dataset."
+    echo "  (These may be signa reconned images.)"
+    echo "  The convert_info file would contain the image dimensions for this set."
+    echo " "
+    echo "You must provide the X and Y dimensions of this image set."
+    echo "  Enter image X dimension (width) :"
+    set ixdim  = $<
+    echo "  Enter image Y dimension (height):"
+    set iydim  = $<
+else
+   #set ixdim = `cat $image_dir/convert_info_auto | grep dimension | awk '{printf("%s",$1)}'`
+   #set iydim = `cat $image_dir/convert_info_auto | grep dimension | awk '{printf("%s",$2)}'`
+   set ixdim = `cat $image_dir/$info | grep dimension | awk '{printf("%s",$1)}'`
+   set iydim = `cat $image_dir/$info | grep dimension | awk '{printf("%s",$2)}'`
+endif
+# =============
+
+echo "About to roll image set $basename in directory $image_dir."
+echo "Image dimensions are $ixdim $iydim"
+#
+if ($onebase) then
+   set multibasesignal = (-)
+else
+   # there may be extra files: script not specific about basename
+   set multibasesignal = (---)
+endif
+#
+# ============ roll all the files 
+#
+# need to have short lists or will get argument too long error
+# increase hundreds range if more than 512 images possible:
+#
+# unalias ls so that list is always in numeric order
+unalias ls
+#
+unalias rm
+set temp_file = $image_dir/roller_temp_file
+set temp_file2 = $image_dir/roller_temp_file2
+rm $temp_file2
+
+if (0) then
+echo "NEVER SEE THIS"
+# do any unpadded 0-999
+set hundreds = (0 1 2 3 4 5 6 7 8 9)
+set tens = (0 1 2 3 4 5 6 7 8 9)
+foreach hundred ($hundreds)
+  foreach ten ($tens)
+
+    # rigamaroll to avoid getting "no match" message:
+    if ($onebase) then
+      # make sure we only take the single set of data starting at .001
+      set thefiles = $basename.$hundred$ten\?.raw
+    else
+      # do the best we can after warning assume no extra files outside series
+      set thefiles = $runno\*.$hundred$ten\?.raw
+    endif
+
+    set empty = `(ls $thefiles > $temp_file) >& /dev/null`
+    set flist = `cat $temp_file`
+    echo "$flist";
+    foreach f ($flist)
+       set ext = $f:e
+       set rollfile = $runno\roimx.$ext 
+       # for possible overwrite of roimx file
+       cp $image_dir/$f $temp_file2
+       set myargs =  "$temp_file2 $ixdim $iydim $cornerX $cornerY 2"
+       if ($do_it) then
+            $iroll_name $myargs > $image_dir/$rollfile  
+            set keepstat = $status
+       else
+            echo fake: $iroll_name $myargs \> $rollfile
+            set keepstat = 0
+       endif
+       if ($keepstat != 0) then
+            echo "(cp status is $keepstat -- during roll an error occurred.)"
+            set error = "roll of $f in $image_dir failed."
+            goto errorend
+       endif
+       rm $temp_file2
+       echo "  rolled $f into $image_dir/$rollfile $multibasesignal"
+    end
+  end
+end
+endif
+
+# do any padded 0-999 and any thousands 
+set thousands = (0 1 2 3 4)
+set hundreds = (0 1 2 3 4 5 6 7 8 9)
+set tens = (0 1 2 3 4 5 6 7 8 9)
+foreach thousand ($thousands)
+foreach hundred ($hundreds)
+  foreach ten ($tens)
+
+    # rigamaroll to avoid getting "no match" message:
+    set front = $basename:r
+    if ($onebase) then
+      # make sure we only take the single set of data starting at .001
+      #set thefiles = $basename.$thousand$hundred$ten\?.raw
+      set thefiles = $front.$thousand$hundred$ten\?.raw
+    else
+      # do the best we can after warning assume no extra files outside series
+      #set thefiles = $runno\*.$thousand$hundred$ten\?.raw
+      set thefiles = $runno\*.$thousand$hundred$ten\?.raw
+    endif
+
+    set empty = `(ls $thefiles > $temp_file) >& /dev/null`
+    set flist = `cat $temp_file`
+    #echo "$thefiles have $flist";
+    foreach f ($flist)
+       set ext = $f:e
+       set head = $f:r
+       set nbr = $head:e
+       set rollfile = $runno\roimx.$nbr.$ext
+       #echo "rollfile = $rollfile"
+       # for possible overwrite of roimx file
+       cp $image_dir/$f $temp_file2
+       set myargs =  "$temp_file2 $ixdim $iydim $cornerX $cornerY 2"
+       if ($do_it) then
+            $iroll_name $myargs > $image_dir/$rollfile
+            set keepstat = $status
+       else
+            echo fake: $iroll_name $myargs \> $rollfile
+            set keepstat = 0
+       endif
+       if ($keepstat != 0) then
+            echo "(cp status is $keepstat -- during roll an error occurred.)"
+            set error = "roll of $f in $image_dir failed."
+            goto errorend
+       endif
+       rm $temp_file2
+       echo "  rolled $f into $image_dir/$rollfile $multibasesignal"
+    end
+  end
+end
+end
+
+#
+#
+# ========== successful completion 
+#
+#
+if ($#warnings >= 1) then
+echo " "
+echo "In completing the roll some warnings were noted:" 
+echo "   Warning summary: $warnings"
+endif
+echo " "
+echo "-- Rolled image set $rollfile:r created successfully"
+echo "     in $image_dir."
+echo "     Roll newCornerX, newCornerY used: $cornerX $cornerY"  
+echo "   Remember, archive will archive just one image set from this directory."
+echo "     Delete any redundant image sets before archiving."
+if ($do_it == 0) echo ">>> do_it = 0, so no creates were performed"
+exit 0 
+#
+#
+#---------------------------------------------------------------------
+errorend:
+  echo PROBLEM: $error
+  echo "-- lxroller script terminated UNsuccessfully\!"
+  echo " "
+  exit 1 
+#---------------------------------------------------------------------

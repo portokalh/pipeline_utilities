@@ -1,0 +1,316 @@
+#
+# lxrestack 
+#
+# CONTENTS: Script to restack image stack by circulation. To solve
+#           problem of z/slice wrap around.  
+# NOTES: Assumes the data location conventions for ping ponging recon on lx's.
+# Run from machine with recon directories available.
+# HISTORY: created 6/08/94 Sally L. Gewalt Duke CIVM 
+#                  4/22/95 slg added shadow
+#                  8/7/97 slg added manta
+#                  10/29/99 slg added wallace
+#                  48/8/02 slg added wallace
+#                  12/2/04 slg handle 0001.raw extensions from old .001
+#		   1/28/09 slg add syros engine
+#                  2/4/11  slg replace some venerable engines with naxos and syros
+#                
+set version = "2/04/11"
+#set verbose
+#
+# should be 1 for real use:
+set do_it = 1
+#
+set headext = headfile
+#
+# ======== check input parameters 
+if (($#argv < 3) || ($#argv > 4)) then
+   echo " "
+   echo "   Script to restack 3D image slice set so new slice is on top."
+   echo "usage: lxrestack  runno  new_top_slice  nslices  [optional dir_name]"
+   echo " "
+   echo "example: lxrestack N12345  57  256"
+   echo "   runno:    the run number for the image set." 
+   echo "   new_top_slice:  the number of the slice to put on top of the"
+   echo "             new stack." 
+   echo "             Slice number (new_top_slice - 1) will end up on bottom."
+   echo "   nslices:  Number of slices in image set."
+   echo "   dir_name: only required when your data is in an unusual"
+   echo "             location.  Give the (mounted) directory of the runno dir."
+   echo "             By default script looks in /reconXta /reconXt/omega for"
+   echo "             runno, where X is determined by recon_computer_name."
+   echo " Output files are named RUNNOrsimx.NNN; the rs is for restack."
+   echo " Assumes dataset numbering starts from slice number 1."
+   echo " This script expects the conventional locations for images," 
+   echo "   i.e. those created by the standard lxrecon script."
+   echo "Version $version"
+   if ($do_it != 1) echo "do_it flag is off! Script is running in test mode."
+   exit 1
+endif
+#
+#
+echo " "
+set runno = $1
+set new_top = $2
+set nslices = $3
+#
+# ======== set up the list of places to look for data 
+#
+if (! $?RECON_HOSTNAME) then
+  echo "===   (in .cshrc add setenv RECON_HOSTNAME [name of recon host computer])"
+  set error = "The environment variable RECON_HOSTNAME must be set."
+  goto errorend
+endif
+set engine = $RECON_HOSTNAME
+#
+if ($#argv == 4) then
+  set recon_dirs = ($4)
+  set special_dir = 1
+else
+  set special_dir = 0
+  switch ($engine)
+    case lx2t:
+            set recon_dirs = (/recon2ta /recon2t/omega /recon2tb)
+            breaksw
+    case lx7t:
+            set recon_dirs = (/recon7ta /recon7t/omega /recon7tb)
+            breaksw
+    case lx9t:
+            set recon_dirs = (/recon9ta /recon9t/omega /recon9tc /recon9tb /recon9td)
+            breaksw
+    case iris:
+            set recon_dirs = (/reconI/omega)
+            breaksw
+    case shadow:
+            set recon_dirs = (/recon-re)
+            breaksw
+    case delos:
+            set recon_dirs = (/delosspace)
+            breaksw
+    case naxos:
+            set recon_dirs = (/naxosspace)
+            breaksw
+    case manta:
+            set recon_dirs = (/reconma)
+            breaksw
+    case wallace:
+            set recon_dirs = (/reconwa)
+            breaksw
+    case syros:
+            set recon_dirs = (/syrosspace)
+            breaksw
+  default:    
+	    set error = "Unknown: $engine (as recon computer name)"  
+	    goto errorend
+            breaksw
+  endsw
+endif
+#
+# ======== Try to find the recon dir on the list of locations 
+#          Check the locations in order on the list
+#
+foreach rd ($recon_dirs)
+  set runno_dir = $rd/$runno
+  if (-e $runno_dir) goto found_dir 
+end
+if ($special_dir) then
+  echo "Is partition $4 mounted on the archive host computer?"
+endif
+set error = "couldn't find $runno in $recon_dirs."  
+goto errorend
+#
+found_dir:
+#echo "Found the directory $runno_dir." 
+#
+set warnings = () 
+#
+# ======== check basic items before doing anything 
+#
+set image_dir = $runno_dir/$runno\images
+#
+# check that image directory exists
+  if (-e $image_dir == 0) then
+    echo "$image_dir does not exist on $engine"
+    echo "  Since it asks no questions, this script must assume"
+    echo "  it will find your images in a specific location."
+    echo "  Possibly your images are not located as expected: as images"
+    echo "  created by the lxrecon script."  
+    set error =  "Can't reach the image files"
+    goto errorend
+  endif
+#
+# make sure we have write permission to image_dir 
+if (!(-w $image_dir)) then
+  set current_who = `whoami`
+  set error = "you ($current_who) don't have write access to $image_dir"
+  goto errorend
+endif
+#
+# ========== check if more than one image set is present in image dir
+#
+# check howmany runno*.001 images are in image dir;
+# find out which one to shift.  e.g. Perhaps rescaled images are there.
+#
+# rigamaroll to avoid getting "no match" message: 
+set temp_file = $image_dir/restack_temp_file
+cd $image_dir 
+# unalias ls so that list is always in numeric order
+unalias ls
+set empty = `(ls $runno*.0001.raw > $temp_file) >& /dev/null`
+set flist = `cat $temp_file` 
+@ n001 = 0 
+foreach f ($flist)
+  @ n001 = $n001 + 1
+end
+unalias rm
+rm $temp_file
+switch ($n001)
+case 0:
+       echo "  WARNING: Couldn't find .0001.raw image in $image_dir."
+       echo "  This script requires file numbering to start from 1."
+       set error = "Image numbering does not start from 1."
+       goto errorend
+       breaksw
+case 1:
+       # ok 
+       set onebase = 1 
+       set basename = $flist[1]:r 
+       set basename = $basename:r 
+       breaksw
+default:
+       echo "WARNING: There is more than one image set in $image_dir"
+       set warnings = ($warnings multiple_image_sets)
+
+       echo "Several .0001.raw files exist in $image_dir,"
+       echo "indicating multiple image sets are present."
+       echo The full multiple image set names are: $flist
+
+       echo " Do not attempt to restack an \'rs\' named set (already restacked)...it won't work... "
+       echo -n "enter desired image set BASENAME (pre-dot) for archive here now: "
+       set basename  = $<
+       set onebase = 0 
+       breaksw
+endsw 
+#
+echo "About to restack image set $basename in directory $image_dir."
+#
+if ($onebase) then
+   set multibasesignal = (-)
+else
+   # there may be extra files: script not specific about basename
+   set multibasesignal = (---)
+endif
+#
+# ============ make a list of (001 ... 100) xxxxxxxxx
+# ============ make a list of (001 ... ALL)
+
+#
+set start = 1
+#set end = 100  
+set end = $nslices  
+set ggo = 1
+set numbers100 = ()
+@ fnum = $start
+# pad to 4 
+while ($ggo == 1)
+        if ($fnum < 10) then
+             set exten = 000$fnum.raw 
+        else
+                if ($fnum < 100) then
+                   set exten = 00$fnum.raw
+                else
+                   if ($fnum < 1000) then
+                      set exten = 0$fnum.raw
+                   else 
+                      set exten = 0$fnum.raw
+                   endif
+                endif   
+        endif
+        #echo "adding $exten , $fnum, end=$end";
+        @ fnum++
+        if ($fnum > $end) then 
+                set ggo = 0
+        endif
+        set numbers100 = ($numbers100 $exten)
+end
+#
+# ========== copy images to renumbered filename 
+#
+set newbase = $runno"rsimx"
+#
+# first do from middle of old stack
+# cp slice new_top -> 1, etc,  thru nslices -> xxx
+@ oldslice = $new_top 
+@ new = 1 
+while ($oldslice <= $nslices)
+    if ($oldslice < 100) then
+       set oldnum = $numbers100[$oldslice]
+    else
+       #set oldnum = $oldslice
+       set oldnum = $numbers100[$oldslice]
+    endif
+    if ($new < 100) then
+       set newnum = $numbers100[$new]
+    else
+       #set newnum = $new
+       set newnum = $numbers100[$new]
+    endif
+    # make sure file numbers go out this far
+    if (! -e $basename.$oldnum) then 
+      echo "All $nslices image slices not available."
+      set error = "Image $basename.$oldnum does not exist"
+      goto errorend
+    endif
+
+    echo p1: $multibasesignal copying $basename.$oldnum to $newbase.$newnum
+    if ($do_it) cp $basename.$oldnum $newbase.$newnum
+    @ new ++
+    @ oldslice ++
+end
+ echo --- first part done ---
+#
+# now do from top of old stack
+# slice 1 -> new, thru slice new_top-1 -> nslices 
+@ oldslice = 1
+while ($oldslice < $new_top)
+    if ($oldslice < 100) then
+       set oldnum = $numbers100[$oldslice]
+    else
+       #set oldnum = $oldslice
+       set oldnum = $numbers100[$oldslice]
+    endif
+    if ($new < 100) then
+       set newnum = $numbers100[$new]
+    else
+       #set newnum = $new
+       set newnum = $numbers100[$new]
+    endif
+  echo p2: $multibasesignal copying $basename.$oldnum to $newbase.$newnum
+  if ($do_it) cp $basename.$oldnum $newbase.$newnum
+  @ new ++
+  @ oldslice ++
+end
+#
+# ========== successful completion 
+#
+#
+if ($#warnings >= 1) then
+echo " "
+echo "In completing the restack some warnings were noted:" 
+echo "   Warning summary: $warnings"
+endif
+echo " "
+echo "-- Restacked image set $newbase created successfully -- this is a NEW image set"
+echo "     in $image_dir."
+echo "   Remember, archive can accept just one image set from this directory."
+echo "     Delete any redundant image sets before archiving."
+if ($do_it == 0) echo ">>> do_it = 0, so no copies were performed"
+exit 0 
+#
+#
+#---------------------------------------------------------------------
+errorend:
+  echo PROBLEM: $error
+  echo "-- lxrestack script terminated UNsuccessfully\!"
+  echo " "
+  exit 1 
+#---------------------------------------------------------------------
