@@ -170,14 +170,21 @@ sub make_matlab_command {
 # short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
    my $work_dir   = $Hf->get_value('dir_work');
    if ( $work_dir eq "NO_KEY" ) { $work_dir=$Hf->get_value('dir-work'); }
-   my $matlab_app = $Hf->get_value('engine_app_matlab');
-   if ($matlab_app eq "NO_KEY" ) { $matlab_app = $Hf->get_value('engine-app-matlab'); }
+   my $matlab_app  = $Hf->get_value('engine_app_matlab');
+   my $matlab_opts = $Hf->get_value('engine_app_matlab_opts');
+   if ($matlab_app  eq "NO_KEY" ) { $matlab_app  = $Hf->get_value('engine-app-matlab'); }
+   if ($matlab_opts eq "NO_KEY" ) { $matlab_opts = $Hf->get_value('engine-app-matlab-opts'); 
+   } else { # app = $Hf->get_value('engine-app-matlab'); 
+       print("Could not find matlab opts\n");
+       $matlab_opts="";
+   } 
    print("make_matlab_command:\n\tengine_matlab_path:${matlab_app}\n\twork_dir:$work_dir\n") if($debug_val>=25);
    
    my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}";
    my $function_call = "$function_m_name ( $args )";
    make_matlab_m_file ($mfile_path, $function_call);
-   my $cmd_to_execute = "$matlab_app < $mfile_path > /tmp/matlab_pipe_stuff";
+   my $logpath="$work_dir/matlab_${function_m_name}";
+   my $cmd_to_execute = "$matlab_app $matlab_opts < $mfile_path > $logpath";
    return ($cmd_to_execute);
 }
 
@@ -185,16 +192,19 @@ sub make_matlab_command {
 sub make_matlab_command_nohf {
 # -------------
 #  my $matlab_cmd=make_matlab_command_nohf($mfilename, $mat_args, $purpose, $local_dest_dir, $Engine_matlab_path);
-   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,$destination) = @_;
+   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,$logpath) = @_;
    print("make_matlab_command:\n\tengine_matlab_path:${matlab_app}\n\twork_dir:$work_dir\n") if($debug_val>=25);
    my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}";
    my $function_call = "$function_m_name ( $args )";
-   if (! defined $destination) { 
-       $destination = '> /tmp/matlab_pipe_stuff';
-   } 
+
+   if (! defined $logpath) { 
+       $logpath = '> /tmp/matlab_pipe_stuff';
+   } else { 
+       $logpath='> '."$work_dir/matlab_${function_m_name}";
+   }
 
    make_matlab_m_file_quiet ($mfile_path, $function_call);
-   my $cmd_to_execute = "$matlab_app < $mfile_path $destination"; 
+   my $cmd_to_execute = "$matlab_app < $mfile_path $logpath"; 
    return ($cmd_to_execute);
 }
 
@@ -243,10 +253,13 @@ sub make_matlab_command_V2_OBSOLETE {
 # short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
    my $work_dir   = $Hf->get_value('dir-work');
    my $matlab_app = $Hf->get_value('engine-app-matlab');
+   my $matlab_opts = $Hf->get_value('engine_app_matlab_opts');
    my $mfile_path = "$work_dir/$short_unique_purpose$function_m_name";
    my $function_call = "$function_m_name ( $args )";
    make_matlab_m_file ($mfile_path, $function_call);
-   my $cmd_to_execute = "$matlab_app < $mfile_path > /tmp/matlab_pipe_stuff";
+   my $logpath="$work_dir/matlab_${function_m_name}";
+   my $cmd_to_execute = "$matlab_app < $mfile_path > $logpath";
+#   my $cmd_to_execute = "$matlab_app $matlab_opts < $mfile_path > /tmp/matlab_pipe_stuff";
    return ($cmd_to_execute);
 }
 

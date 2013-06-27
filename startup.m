@@ -29,7 +29,7 @@ paths={
 
 };
 genpaths={
-  [ workstation_home 'shared/mathworks']
+  [ workstation_home '/shared/mathworks']
 };
 
 for p=1:length(old_paths)
