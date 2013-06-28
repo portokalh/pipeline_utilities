@@ -35,6 +35,7 @@ paths={
 };
 genpaths={
   [ workstation_home '/shared/mathworks']
+  [ workstation_home '/shared/matlab_img_processing']
 };
 
 for p=1:length(old_paths)
