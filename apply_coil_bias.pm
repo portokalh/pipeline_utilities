@@ -33,10 +33,13 @@ sub apply_coil_bias {
       error_out("$in_nii, could not find input nii in headfile. KEY:  ${hf_nii_id}-nii-path");
   }
 
-  my $iterations="1000x1000x1000";
+  my $iterations="1000x1000";
+  my $shrink="4x2";
+
   if ( defined($test_mode)) {
       if ($test_mode==1) {
-	  $iterations="1x0x0";
+	  $iterations="0";
+	  $shrink="1";
 	  print STDERR "  TESTMODE enabled, will do very fast (incomplete) coil bias calc! (-t)\n" if ($debug_val>=5);
       }
   }  
@@ -45,9 +48,11 @@ sub apply_coil_bias {
   my $suffix="bias"; 
   my $out_nii = $path . $name . "_${suffix}${extension}";
   my $out_field = $path . $name . "_${suffix}_field${extension}";
+
 ## need to set ${hf_nii_id}-nii-file and ${hf_nii_id}-nii-path
 #./N4BiasFieldCorrection 3 -i /Volumes/xtrinity/orig.nii -s 2 -c [ 1000x1000x1000,0.0002] -o [ /Volumes/xtrinity/orig_bias.nii,/Volumes/xtrinity/orig_field.nii]
-  my $params = "$dimensions -i $in_nii -o [ $out_nii,$out_field ] -s 2 -c [ ${iterations},0.0002] ";
+#tighter convergence added 0, added two level its
+  my $params = "-d $dimensions -i $in_nii -o [ $out_nii,$out_field ] -s ${shrink} -c [ ${iterations},0.00002] ";
   my $cmd = "$coil_bias_program_path " . "$params";
 #./ImageMath ImageDimension  OutputImage.ext   Operator   Image1.ext   Image2.extOrFloat
   log_info("Useing coil bias comand: $cmd\n");

@@ -1,9 +1,13 @@
 
 old_paths={
   '/pipe_home/script/matlab_functions_local'
-  '/pipe_home/matlab_functions_external/NIFTI_20110921'
-  '/pipe_home/matlab_library/NIFTI_20110921'
   '/pipe_home/script/matlab_functions_local/T2WsuseptibilityReg/'
+  '/pipe_home/script/matlab_functions_local/image_filters'
+  '/pipe_home/script/matlab_functions_local/skull_stripping'
+  '/pipe_home/script/matlab_functions_local/label_measurements'
+  '/pipe_home/matlab_library/NIFTI_20130326'
+  '/pipe_home/matlab_library/NIFTI_20110921'
+  '/pipe_home/matlab_functions_external/NIFTI_20110921'
 %  '/recon_home/script/dir_radish/modules/matlab/agilent'
 %  '/recon_home/script/dir_radish/modules/matlab'
   '/recon_home/script/dir_radish/modules/matlab/mat_recon_pipe'
@@ -17,6 +21,7 @@ old_paths={
 };
 old_genpaths={
   '/recon_home/script/dir_radish/modules/matlab/mathworks'
+
 };
 workstation_home=getenv('WORKSTATION_HOME');
 paths={
