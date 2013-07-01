@@ -17,7 +17,8 @@ use strict;
 use warnings;
 use Carp;
 #use bruker;
-
+use Scalar::Util qw(looks_like_number);
+use File::Find;
 #require Exporter;
 
 BEGIN {
@@ -25,13 +26,15 @@ BEGIN {
     our @ISA = qw(Exporter); # perl cricit wants this replaced with use base; not sure why yet.
     our @EXPORT_OK = qw(
 load_file_to_array 
+get_engine_constants_path
 printd 
 whoami 
 whowasi 
 debugloc 
 sleep_with_countdown 
 $debug_val 
-$debug_locator); 
+$debug_locator
+); 
 }
 use vars qw($debug_val $debug_locator);
 $debug_val=0;
@@ -66,7 +69,37 @@ sub load_file_to_array { # (path,array_ref[,debug_val]) loads text to array ref,
     return $#all_lines+1;
 }
 
+=item constant_path=get_engine_constants_path { # (hostname[,debug_val])
 
+=cut
+###
+sub get_engine_constants_path { # (hostname[,debug_val])
+###
+# 
+    my (@input)=@_;
+    my $search_base=shift @input;
+    my $hostname=shift @input;
+    if ( looks_like_number($hostname) ) {
+	unshift(@input,$hostname);
+    }
+    my $old_debug=$debug_val;
+    $debug_val =   shift @input or $debug_val=$old_debug;
+    civm_simple_util::debugloc();
+#    my @all_lines =();
+    civm_simple_util::whoami();
+    if ( $hostname eq ""  or ! defined ($hostname)) {
+	$hostname=qx/ hostname -s/;
+	civm_simple_util::printd(5,"host was undefined.\n");
+    }
+    civm_simple_util::printd(5,",using hostname=$hostname\n");
+#find( sub { print $File::Find::name."\n" if ( $_ =~ /engine_$hostname.*dependencies/ ); } , "$search_base");
+    my %files;
+    find( sub { ${files{$File::Find::name}} = 1 if ($_ =~  m/^engine.*$hostname.*dependencies$/x ) ; },$search_base);
+    my @fnames=sort(keys(%files));
+    if ($#fnames==-1 ) { push(@fnames,""); } 
+    civm_simple_util::printd(30,"Found constants File $fnames[0].\n");
+    return ($fnames[0]);
+}
 
 =item printd
     

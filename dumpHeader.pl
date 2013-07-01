@@ -6,40 +6,52 @@
 # dumpHeader scanner dir
 # finds first header in directory for scanner of type $scanner loads scanner values from scanner dependencies.
 
-use strict;
-use warnings;
+
+
+
+
+
+
+
+
+
+
+
 my $ERROR_EXIT = 1;
 my $GOOD_EXIT  = 0;
-use Env qw(RADISH_RECON_DIR);
-if (! defined($RADISH_RECON_DIR)) {
+
+use strict;
+use warnings;
+use English;
+use Getopt::Std;
+use File::Basename;
+
+
+use Env qw(RADISH_PERL_LIB RADISH_RECON_DIR WORKSTATION_HOME WKS_SETTINGS RECON_HOSTNAME WORKSTATION_HOSTNAME); # root of radish pipeline folders
+if (! defined($RADISH_PERL_LIB)) {
+    print STDERR "Cannot find good perl directories, quiting\n";
+    exit $ERROR_EXIT;
+}
+if (! defined($RADISH_RECON_DIR) && ! defined ($WORKSTATION_HOME)) {
     print STDERR "Environment variable RADISH_RECON_DIR must be set. Are you user omega?\n";
     print STDERR "   CIVM HINT setenv RADISH_RECON_DIR /recon_home/script/dir_radish\n";
     print STDERR "Bye.\n";
     exit $ERROR_EXIT;
 }
-use Env qw(RADISH_PERL_LIB);
-if (! defined($RADISH_PERL_LIB)) {
-    print STDERR "Cannot find good perl directories, quiting\n";
-    exit $ERROR_EXIT;
-}
-use lib split(':',$RADISH_PERL_LIB);
-use Env qw(RECON_HOSTNAME);
-if (! defined($RECON_HOSTNAME)) {
-    print STDERR "Environment variable RECON_HOSTNAME must be set.";
+if (! defined($RECON_HOSTNAME) && ! defined($WORKSTATION_HOSTNAME)) {
+    print STDERR "Environment variable RECON_HOSTNAME or WORKSTATION_HOSTNAME must be set.";
     exit $ERROR_EXIT;
 }
 
+use lib split(':',$RADISH_PERL_LIB);
 require Headfile;
 require hoaoa;
 #require shared;
 require pipeline_utilities;
-use civm_simple_util qw(load_file_to_array printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);
+use civm_simple_util qw(load_file_to_array get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);
 # use agilent;
 # use aspect;
 # use bruker;
-use English;
-use Getopt::Std;
-use File::Basename;
 
 ### parse input
 our %opt;
@@ -87,8 +99,21 @@ our $verbose=0;
 ###
 # Read Dependencies
 ###
-    my $engine_file = join("_","engine","$RECON_HOSTNAME","radish_dependencies");
-    my $this_engine_constants_path = join("/",$RADISH_RECON_DIR, $engine_file);
+    my $engine_file ;
+    my $this_engine_constants_path ;
+    if ( defined $WKS_SETTINGS) {
+	$this_engine_constants_path = get_engine_constants_path($RADISH_RECON_DIR,$WORKSTATION_HOSTNAME);
+#    printd(5,"found constants $this_engine_constants_path\n");
+    } else { 
+	$this_engine_constants_path = join("/",$RADISH_RECON_DIR, $engine_file);
+#    printd(5,"using old constants $this_engine_constants_path\n");
+    }
+    $engine_file = join("_","engine","$RECON_HOSTNAME","radish_dependencies");
+#    my $engine_file = join("_","engine","$RECON_HOSTNAME","radish_dependencies");
+#    my $this_engine_constants_path = join("/",$RADISH_RECON_DIR, $engine_file);
+
+
+
     
     my $Engine_constants = new Headfile ('ro', $this_engine_constants_path);
     if (! $Engine_constants->check())       { 
