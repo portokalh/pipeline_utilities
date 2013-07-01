@@ -240,9 +240,13 @@ our $verbose=0;
 
 sub usage_message  {
     my ($msg)=@_;
-    print( STDERR "\nPROBLEM: $msg\n");
-    print STDERR "".
-	"$0 scanner directory outputname\n";
+    print( STDERR "\ndumpHeader PROBLEM: $msg\n");
+    print STDERR "$0 <options> scanner directory outputname\n".
+	"dumpHeader : Generic header dumper dumping to instement_name.headfile. \n".
+	" Options: \n".
+	"  -o overwrite enable\n".
+	"  -d # debug level\n".
+	"";
     
     exit $ERROR_EXIT;
 }
