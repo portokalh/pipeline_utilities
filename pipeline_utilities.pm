@@ -198,8 +198,8 @@ sub make_matlab_command_nohf {
    my $function_call = "$function_m_name ( $args )";
 
    if (! defined $logpath) { 
-       $logpath = '> /tmp/matlab_pipe_stuff';
-   } else { 
+#       $logpath = '> /tmp/matlab_pipe_stuff';
+#   } else {  
        $logpath='> '."$work_dir/matlab_${function_m_name}";
    }
 
