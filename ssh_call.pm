@@ -133,7 +133,7 @@ sub most_recent_pfile {
         print STDERR "  * cmd was: $cmd\n";
         return "";
        }
-       chop ($last_Pno_withDir);
+       chomp ($last_Pno_withDir);
        my @parts = split ("/",$last_Pno_withDir);
        my $pfile = pop @parts;
        return $pfile; 
@@ -156,7 +156,7 @@ sub most_recent_file {
         print STDERR "  * cmd was: $cmd\n";
         return "";
        }
-       chop ($last_Pno_withDir);
+       chomp ($last_Pno_withDir);
        my @parts = split ("/",$last_Pno_withDir);
        my $pfile = pop @parts;
        return $pfile; 
@@ -172,6 +172,7 @@ sub resolve_wildcards {
   my $cmd   = "ssh -Y $system \"$lscmd\" ";
 #  print ("$cmd\n");
   my $plain_path = `$cmd`;
+  chomp $plain_path;
   if ($plain_path eq "") {
       print STDERR "  Problem:\n";
         print STDERR "  * You specified recon with wildcards in the name.\n";
@@ -193,6 +194,7 @@ sub resolve_wildcards_multi {
   my $cmd   = "ssh -Y $system \"$lscmd\" ";
 #  print ("$cmd\n");
   my $plain_path = `$cmd`;
+  chomp $plain_path;
   if ($plain_path eq "") {
       print STDERR "  Problem:\n";
         print STDERR "  * You specified recon with wildcards in the name.\n";
@@ -200,6 +202,7 @@ sub resolve_wildcards_multi {
       print STDERR "  * cmd was: $cmd\n";
       return "";
   }
+
 #       chop ($last_Pno_withDir);
 #       my @parts = split ("/",$last_Pno_withDir);
 #       my $pfile = pop @parts;
@@ -221,7 +224,7 @@ sub most_recent_directory {
         print STDERR "  * cmd was: $cmd\n";
         return "";
        }
-       chop ($last_Pno_withDir);
+       chomp ($last_Pno_withDir);
        my @parts = split ("/",$last_Pno_withDir);
        my $pfile = pop @parts;
        return $pfile; 
