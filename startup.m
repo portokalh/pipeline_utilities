@@ -31,6 +31,7 @@ paths={
   [ workstation_home '/recon/mat_recon_pipe/agilent/radish/radish_filter' ]
   [ workstation_home '/shared/civm_matlab_common_utils/' ]
   [ workstation_home '/analysis/mr_relaxation_calc/' ]
+  [ workstation_home '/analysis/label_measurements/' ]
 
 };
 genpaths={
