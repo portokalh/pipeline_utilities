@@ -159,6 +159,15 @@ sub make_matlab_m_file_quiet {
 #simple utility to save an mfile with a contents of function_call at mfile_path
    my ($mfile_path, $function_call) = @_;
    open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path";
+   # insert startup.m call here.
+   use Env qw(WKS_SHARED);
+
+   if ( defined $WKS_SHARED) { 
+       if ( -e "$WKS_SHARED/pipeline_utilities/startup.m") 
+       {
+	   print MATLAB_M "run('$WKS_SHARED/pipeline_utilities/startup.m');\n";
+       }
+   }
    print MATLAB_M "$function_call";
    close MATLAB_M;
 }
