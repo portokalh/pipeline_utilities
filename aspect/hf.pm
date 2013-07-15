@@ -506,7 +506,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 			       1,
 			       'ECCITAZIONI',            # kind of a blind guess
 			   ],
-			   "echo_asymetry"=>[            # move from percentage to fraction of 1
+			   "echo_asymmetry"=>[            # move from percentage to fraction of 1
 			       (1/100),
 			       'ASIMMETRIA',               # echo assymetry
 			   ],
