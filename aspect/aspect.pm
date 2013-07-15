@@ -27,44 +27,6 @@ aspect scanner.
 ################################################################################
 #
 ################################################################################
-# aspect format definition estimation
-#  ##$name=value or size
-#  identifiable types are scalar, string, or array of scalars or strings, arrays mixed scalars and strings, and arrays of arrays.
-#  for arrays of scalars and chars the type is "( maximum dimensions )", 
-#  for mixed arrays otherwise it will be ( data ) where data would be a coma separated list of values this apears analagous to a cell array in matlab
-#  arrays of scalers list the values space separated 
-#  arrays of characters are in <text> brackets arrays of chars like this could be arrays of strings with one element, this is uncertain
-#  arrays of arrays enclose each element like (arraydata1 arraydata2 arraydata3)
-#                   can have any ombinaation of strings or scalrs in them. Generally strings are first.
-#                   elements of sub arrays are comma separated`
-# 
-#  WARNING: arrays of scalars when multidimensional specify the slowest dimension first, the rest of the dimensions follow fastest to slowest. 
-#  WARNING: arrays when related to spacial dimensions often follow frequency phase instead of xy, 
-# 
-# exampeldata, lines in quotes 
-# string, var name is ACQ_experiment_mode, value is ParallelExperiment
-# "##$ACQ_experiment_mode=ParallelExperiment"
-# scalar, var name is ACQ_ns_list_size,    value is 1
-# "##$ACQ_ns_list_size=1"
-# array of scalars var name is ACQ_slice_angle, 20 elements, values are 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-# "##$ACQ_slice_angle=( 20)
-# 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
-# array of chars(strings?) name is ACQ_coil_config_file 512 max elements, data is HWIDS_Z106781_009_2
-# "##$ACQ_coil_config_file=( 512 )
-# <HWIDS_Z106781_009_2>"
-# mixed array, name is RefPulse, 14 elements coma separated values are 2.325 2000 180 13.1443094147176 100 0 100 LIB_REFOCUS <sinc3.rfc> 4650 0.1848513 0 0.0256 conventional"
-# "##$RefPulse=(2.325, 2000, 180, 13.1443094147176, 100, 0, 100, LIB_REFOCUS, <
-# sinc3.rfc>, 4650, 0.1848513, 0, 0.0256, conventional)"
-# array of arrays, name is ACQ_coils 4 elements, elements one per line, 20 elements per sub array. 
-# element1 "(<RF CP F2 300 1H M.BR1 Q S T/R>, <BMRIDE>, <Z106781>, <009>, 20101101, SurfaceCoil, 300, 1, 2, 9)"
-# element2 "(                             <>,       <>,        <>,    <>,        0,      NoCoil,   0, 0, 0, 0)"
-# element3 "(                             <>,       <>,        <>,    <>,        0,      NoCoil,   0, 0, 0, 0)"
-# element4 "(                             <>,       <>,        <>,    <>,        0,      NoCoil,   0, 0, 0, 0)"
-##$ACQ_coil_elements=( 2 )   
-# "##$ACQ_coils=( 4 )
-# (<RF CP F2 300 1H M.BR1 Q S T/R>, <BMRIDE>, <Z106781>, <009>, 20101101,
-# SurfaceCoil, 300, 1, 2, 9) (<>, <>, <>, <>, 0, NoCoil, 0, 0, 0, 0) (<>, <>, <
-# >, <>, 0, NoCoil, 0, 0, 0, 0) (<>, <>, <>, <>, 0, NoCoil, 0, 0, 0, 0)"
 
 package aspect;
 use strict;
@@ -73,6 +35,7 @@ use Carp;
 use List::MoreUtils qw(uniq);
 #require civm_simple_util;
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
+use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa);
 #my (@ISA,@Export,@EXPORT_OK);
 BEGIN { #require Exporter;
     use Exporter(); #
@@ -81,12 +44,6 @@ BEGIN { #require Exporter;
     our @EXPORT_OK = qw(
 parse_header
 determine_volume_type
-aoaref_get_single
-aoaref_get_subarray
-aoaref_get_length
-aoaref_get_sub_length
-aoaref_to_singleline
-aoaref_to_printline
 display_header
 array_find_by_length
 single_find_by_value
@@ -100,12 +57,19 @@ printline_to_aoa
 );
 }    
 
+# aoaref_get_single
+# aoaref_get_subarray
+# aoaref_get_length
+# aoaref_get_sub_length
+# aoaref_to_singleline
+# aoaref_to_printline
+
 my $Hfile = 0;
 my $NAME = "aspect lib";
 my $VERSION = "2013/05/29";
 my $COMMENT = "Aspect meta data functions";
 use vars qw(@knownsequences @TwoDsequences @ThreeDsequences @FourDsequences);
-@TwoDsequences=qw();
+@TwoDsequences=qw(SE_);
 @ThreeDsequences=qw(GRE_EXT_  gre_sp_ GRE_SP_ GRE_SS_ );
 @FourDsequences=qw();
 push(@knownsequences,@TwoDsequences);
@@ -206,7 +170,7 @@ takes an array reference to the header loaded as one line per element
     } # @aspectheader out of lines
     $debug_val=$old_debug;
     return \%aspecthash;
-} # end of parse_head function
+} # end of parse_header function
 
 
 =item determine_volume_type($aspect_header_hash_ref[,$debug_val])
@@ -578,7 +542,7 @@ get single value from aspect ehader.
 
 =cut
 ###
-sub aoaref_get_single { # ( $ref_to_AoA )
+sub old_aoaref_get_single { # ( $ref_to_AoA )
 ###
     my ($dataarray_ref) = @_;
     my $reftype=ref($dataarray_ref); 
@@ -597,7 +561,7 @@ sub aoaref_get_single { # ( $ref_to_AoA )
 }
 
 ###
-sub aoaref_get_length { # ( $ref_to_AoA )
+sub old_aoaref_get_length { # ( $ref_to_AoA )
 ###
 =item aoaref_get_length ( $ref_to_AoA )
 
@@ -629,7 +593,7 @@ get length of subarray in first element of aoa at aoareference
 
 =cut
 ###
-sub aoaref_get_sub_length { # ( $ref_to_AoA )
+sub old_aoaref_get_sub_length { # ( $ref_to_AoA )
 ###
     my ($dataarray_ref) = @_;
     my $reftype=ref($dataarray_ref); 
@@ -657,7 +621,7 @@ get subarray $n of aoa at aoareference, n starts counting at 1 to length of aoa 
 
 =cut
 ###
-sub aoaref_get_subarray { # ( $ref_to_AoA )
+sub old_aoaref_get_subarray { # ( $ref_to_AoA )
 ###
     my ($n, $dataarray_ref) = @_;
     my $reftype=ref($dataarray_ref); 
@@ -694,7 +658,7 @@ ex, a 2 element array with 3 element subarrays would be converted to
 
 =cut
 ###
-sub aoaref_to_singleline { # ( $ ref_to_AoA ) 
+sub old_aoaref_to_singleline { # ( $ ref_to_AoA ) 
 ###
     my ($dataarray_ref) = @_;
     my $reftype=ref($dataarray_ref); 
@@ -866,7 +830,7 @@ reference error checking, calls aoa_to_printline to do the work
 
 =cut
 ###
-sub aoaref_to_printline { # ( $ ref_to_AoA ) 
+sub old_aoaref_to_printline { # ( $ ref_to_AoA ) 
 ###
     my ($dataarray_ref) = @_;
     my $reftype=ref($dataarray_ref); 

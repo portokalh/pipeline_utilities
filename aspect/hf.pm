@@ -18,8 +18,9 @@ use strict;
 use warnings;
 use Carp;
 use List::MoreUtils qw(uniq);
-use aspect qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa @knownsequences @TwoDsequences @ThreeDsequences @FourDsequences);
+use aspect qw( @knownsequences @TwoDsequences @ThreeDsequences @FourDsequences); #aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
+use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa);
 #use vars qw($debug_val $debug_locator);
 #use favorite_regex qw ($num_ex)
 use Headfile;
@@ -291,6 +292,9 @@ sub set_volume_type { # ( aspect_headfile[,$debug_val] )
      if ( defined $hf->get_value($data_prefix."CODIFICHE") ) { 
  	$y=$hf->get_value($data_prefix."CODIFICHE");
      }
+#     if ( $sequence =~ /SE_/x ) { 
+# 	$x=$x+50;
+#     }
 # but aspect gives us these with Camponi Codifiche strati and ? maybe others for multivols
 #     if ( $order =~  m/^H_F|A_P$/x  ) { 
 #         $order ='yx'; 
@@ -811,10 +815,15 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 	
 #     }
 
-    
-    $hf->set_value("ray_length",$dx);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing. 
+    # SE scans have a 50 pt navigator at the beginning of each ray. so we adjust their raylength.
+#    if ( $sequence eq 'SE_') { 
+#	$hf->set_value("ray_length",$dx+50);
+#    } else {
+        $hf->set_value("ray_length",$dx);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing. 
+#    }
     my $ntr=1; # number of tr values, just 1 for now, should cause errors on data load for recon if anything but one
     if ( $vol_type eq '2D') { 
+
 	# if interleave we have to load lots of data at a time or fall over to ray by ray loading. 
 	my $ntr=1; # number of tr's 
 	$hf->set_value("rays_per_block",$dy*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
