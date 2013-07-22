@@ -13,11 +13,18 @@ use English;
 
 # Indicate where archive related modules are found
 # ##use lib '/Users/oracle/Source/perl/dir_dbi';
-use Env qw(ATLAS_SCRIPT_DIR);
-if (! defined($ATLAS_SCRIPT_DIR)) {
-    printy ("Environment variable ATLAS_SCRIPT_DIR must be set.", 4);
+# use Env qw(ATLAS_SCRIPT_DIR);
+# if (! defined($ATLAS_SCRIPT_DIR)) {
+#     print ("Environment variable ATLAS_SCRIPT_DIR must be set.", 4);
+# }
+# use lib "$ATLAS_SCRIPT_DIR/dir_dbi";
+my $ERROR_EXIT=0;
+use Env qw(RADISH_PERL_LIB);
+if (! defined($RADISH_PERL_LIB)) {
+    print STDERR "Cannot find good perl directories, quiting\n";
+    exit $ERROR_EXIT;
 }
-use lib "$ATLAS_SCRIPT_DIR/dir_dbi";
+use lib split(':',$RADISH_PERL_LIB);
 use Query;
 use base_dbi;
 
