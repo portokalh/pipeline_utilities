@@ -107,15 +107,15 @@ sub RunnoExists {
   my $result;
   ($result, $oracle_msg1) = exists_in_db ($self->{'__dbh'}, 'runno', $runno, 'scan.itemrun'); 
   my $query1_ok_bool    = $oracle_msg1 eq "ok" ? 1 : 0;
-  my $runno_exists_bool = $result              ? 1 : 0;
-  #print "runno:      $runno, $result==$runno_exists_bool, $oracle_msg1, meok=$query1_ok_bool\n";
+  my $runno_exists_bool = ($result eq $runno ) ? 1 : 0;
+  print "runno:      $runno, $result==$runno_exists_bool, $oracle_msg1, meok=$query1_ok_bool\n";
 
   ($result, $oracle_msg2) = exists_in_db ($self->{'__dbh'}, 'uniquename', $runno, 'scan.rdarchiveinfo'); 
   my $query_ok_bool     = ($oracle_msg2 eq "ok") && $query1_ok_bool ? 1 : 0;
-  my $runno_exists_bool |= $result                                  ? 1 : 0;
-  #print "uniquename: $runno, $result==$runno_exists_bool, $oracle_msg2, bothok=$query_ok_bool \n";
+  my $runno_exists_bool = ($result eq $runno) || $runno_exists_bool ? 1 : 0;
+  print "uniquename: $runno, $result==$runno_exists_bool, $oracle_msg2, bothok=$query_ok_bool \n";
 
-  #print "final:     $runno, exists=$runno_exists_bool, query=$query_ok_bool\n";
+  print "final:     $runno, exists=$runno_exists_bool, query=$query_ok_bool\n";
 
   return ($query_ok_bool, $runno_exists_bool, "$oracle_msg1, $oracle_msg2\n ");
 }
