@@ -22,7 +22,7 @@
 #                      now find iroll_mine program in arch bin dir setup, on macs.
 #
 #                
-set version = "7/17/09"
+set version = "20130725"
 #set verbose
 #
 # should be 1 for real use:
@@ -129,7 +129,8 @@ else
 
             # for system with Radish recon engine setup this will work
             set recon_dirs = $BIGGUS_DISKUS
-            set iroll_name = $RADISH_ARCH_BIN_DIR/iroll_mine
+#            set iroll_name = $RADISH_ARCH_BIN_DIR/iroll_mine
+            set iroll_name = iroll_mine
             breaksw
   endsw
 endif
