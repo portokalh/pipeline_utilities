@@ -38,7 +38,7 @@ sub apply_coil_bias {
 
   if ( defined($test_mode)) {
       if ($test_mode==1) {
-	  $iterations="0";
+	  $iterations="1";
 	  $shrink="1";
 	  print STDERR "  TESTMODE enabled, will do very fast (incomplete) coil bias calc! (-t)\n" if ($debug_val>=5);
       }
