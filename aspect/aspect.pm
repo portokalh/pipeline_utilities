@@ -35,28 +35,22 @@ use Carp;
 use List::MoreUtils qw(uniq);
 #require civm_simple_util;
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
-use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa);
+use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa array_find_by_length single_find_by_value display_header_entry printline_to_aoa);
 #my (@ISA,@Export,@EXPORT_OK);
 BEGIN { #require Exporter;
     use Exporter(); #
     our @ISA = qw(Exporter);
-#    our @Export = qw();
     our @EXPORT_OK = qw(
 parse_header
-determine_volume_type
 display_header
-array_find_by_length
-single_find_by_value
-display_header_entry
 read_til_next_keyline
-printline_to_aoa
 @knownsequences
 @TwoDsequences
 @ThreeDsequences
 @FourDsequences
 );
 }    
-
+# determine_volume_type
 # aoaref_get_single
 # aoaref_get_subarray
 # aoaref_get_length
@@ -69,7 +63,7 @@ my $NAME = "aspect lib";
 my $VERSION = "2013/05/29";
 my $COMMENT = "Aspect meta data functions";
 use vars qw(@knownsequences @TwoDsequences @ThreeDsequences @FourDsequences);
-@TwoDsequences=qw(SE_);
+@TwoDsequences=qw(SE_ ME_SE_);
 @ThreeDsequences=qw(GRE_EXT_  gre_sp_ GRE_SP_ GRE_SS_ );
 @FourDsequences=qw();
 push(@knownsequences,@TwoDsequences);
@@ -186,7 +180,7 @@ returns info as "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth
 
 =cut
 ###
-sub determine_volume_type_old { # ( \%aspect_header_ref[,$debug_val] )
+sub old_determine_volume_type { # ( \%aspect_header_ref[,$debug_val] )
 ###
     my (@input)=@_;
     my $aspect_header_ref = shift @input;
@@ -677,7 +671,7 @@ sub old_aoaref_to_singleline { # ( $ ref_to_AoA )
 }
 
 ###
-sub aoa_to_singleline {  # ( @AoA, mode )    
+sub old_aoa_to_singleline {  # ( @AoA, mode )    
 ###
 =item aoa_to_singleline ( @AoA, mode )    
 
@@ -725,7 +719,7 @@ mode 'single' get single, (first element of first subarray)
     return $data;
 }
 ###
-sub aoa_to_printline {  # ( @AoA )    
+sub old_aoa_to_printline {  # ( @AoA )    
 ###
 =item aoa_to_printline ( @AoA )    
 
@@ -771,7 +765,7 @@ internal function doing the work of aoaref_to_printline
     return $data;
 }
 ###
-sub printline_to_aoa {  # ( $string )    
+sub old_printline_to_aoa {  # ( $string )    
 ###
 =item printline_to_aoa ( $string )    
 
@@ -900,7 +894,7 @@ sub display_header { # ( $aspecthash_ref,$indent,$format,$pathtowrite )
 }
 
 ###
-sub array_find_by_length { # ( $aspecthash_ref,$arraylength)
+sub old_array_find_by_length { # ( $aspecthash_ref,$arraylength)
 ###
 =item array_find_by_length
 
@@ -941,7 +935,7 @@ $arraylength
 }
 
 ###
-sub single_find_by_value { # ( $aspecthash_ref,$arraylength)
+sub old_single_find_by_value { # ( $aspecthash_ref,$arraylength)
 ###
 =item single_find_by_value
 
@@ -984,7 +978,7 @@ $value
 
 
 ###
-sub display_header_entry { # ( $ref_to_aoa
+sub old_display_header_entry { # ( $ref_to_aoa
 ###
 =item display_header_entry { # ( $ref_to_aoa
 

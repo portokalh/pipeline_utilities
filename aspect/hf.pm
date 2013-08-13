@@ -45,7 +45,7 @@ output: status maybe?
 
 =cut
 ###
-sub aoa_hash_to_headfile {  # ( $aoa_hashheader_ref, $hf , $prefix_for_elements)
+sub old_aoa_hash_to_headfile {  # ( $aoa_hashheader_ref, $hf , $prefix_for_elements)
 ###
     my ($header_ref,$hf,$prefix) = @_;
     debugloc();
@@ -148,11 +148,11 @@ sub set_volume_type { # ( aspect_headfile[,$debug_val] )
 # list_size & list_sie_B indicate multi_volume.
 # n_slice_packs, could mean a few things, either multi volume or, that we much multiply slices*nslicepacks, to get the whole volume's worth of slices.
     my $n_echoes;
-#     $n_echoes=$hf->get_value($data_prefix.'ACQ_n_echo_images');
-#     if ( $n_echoes eq 'NO_KEY')  {
-# 	$n_echoes=1;
-# 	printd(45,"n_echoes:$n_echoes\n");
-#     }
+     $n_echoes=$hf->get_value($data_prefix.'NECHOES');
+     if ( $n_echoes eq 'NO_KEY')  {
+ 	$n_echoes=1;
+ 	printd(45,"n_echoes:$n_echoes\n");
+     }
 #     my $movie_frames;
 #     $movie_frames=$hf->get_value($data_prefix."ACQ_n_movie_frames"); # ntimepoints=length, or 0 if only one time point
 #     if ( $movie_frames ne "NO_KEY" && $movie_frames>1 ) {  
@@ -389,9 +389,10 @@ sub set_volume_type { # ( aspect_headfile[,$debug_val] )
 # 		if ($z > 1 ){
 # 		    $vol_detail=$vol_detail.'-vol';
 # 		} 
-# 		if ($n_echoes >1 ) {
-# 		    $vol_detail=$vol_detail.'-echo';		    
-# 		}
+ 		if ($n_echoes >1 ) {
+ 		    $vol_detail=$vol_detail.'-echo';
+		    $vol_num=$vol_num*$n_echoes;
+ 		}
 # 	    }
 # 	} else { 
 # 	    #$z=1;
@@ -500,7 +501,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 			   ],
 			   "ne"=>[
 			       1,
-			       'UNKNOWN',
+			       'NECHOES',
 			   ],
 			   "nex"=>[
 			       1,
