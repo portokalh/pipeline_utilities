@@ -144,12 +144,15 @@ sub nifti_ize_util
   }
 
   my $cmd =  make_matlab_command ($NIFTI_MFUNCTION, $args, "$setid\_", $Hf); 
-  if (! execute($ggo, "nifti conversion", $cmd) ) {
-    error_out("Matlab could not create nifti file from runno $runno:\n  using $cmd\n");
+  if ( ! -e $dest_nii_path) { 
+      if (! execute($ggo, "nifti conversion", $cmd) ) {
+	  error_out("Matlab could not create nifti file from runno $runno:\n  using $cmd\n");
+      }
+      if (! -e $dest_nii_path) {
+	  error_out("Matlab did not create nifti file $dest_nii_path from runno $runno:\n  using $cmd\n");
+      }
   }
-  if (! -e $dest_nii_path) {
-    error_out("Matlab did not create nifti file $dest_nii_path from runno $runno:\n  using $cmd\n");
-  }
+
 
   # --- required return and setups -----
 
@@ -158,11 +161,12 @@ sub nifti_ize_util
       $nii_setid = "${setid}-nii";
       $Hf->set_value("${nii_setid}-file" , $dest_nii_file);
       $Hf->set_value("${nii_setid}-path", $dest_nii_path);
+      print "** nifti-ize created [${nii_setid}-path]=$dest_nii_path\n";
   } else { # the old behavior use _ to separate words in keynames added to the headfile by the pipeline
       $nii_setid = "${setid}_nii";
       $Hf->set_value("${nii_setid}_file" , $dest_nii_file);
       $Hf->set_value("${nii_setid}_path", $dest_nii_path);
-      print "** nifti-ize created [${nii_setid}-path]=$dest_nii_path\n";
+      print "** nifti-ize created [${nii_setid}_path]=$dest_nii_path\n";
   }
   return ($nii_setid);
 }

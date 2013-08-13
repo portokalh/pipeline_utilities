@@ -8,9 +8,12 @@
 # created 09/10/15  Sally Gewalt CIVM
 #                   based on t2w pipeline  
 # 110308 slg open_log returns log path
-
+# 130731 james, added new function new_get_engine_dependenceis, to replace that chunk of code used all the damn time.
+#               takes an output identifier, and an array of required values in the constants file to be checked. 
+#               should add a standard headfile settings file for the required values in an engine_dependencie headfile 
+#               returns the three directories  in work result, outhf_path, and the engine_constants headfile.
 # be sure to change version:
-my $VERSION = "12/03/21";
+my $VERSION = "130731";
 
 my $log_open = 0;
 my $pipeline_info_log_path = "UNSET";
@@ -182,8 +185,8 @@ sub make_matlab_command {
    my $matlab_app  = $Hf->get_value('engine_app_matlab');
    my $matlab_opts = $Hf->get_value('engine_app_matlab_opts');
    if ($matlab_app  eq "NO_KEY" ) { $matlab_app  = $Hf->get_value('engine-app-matlab'); }
-   if ($matlab_opts eq "NO_KEY" ) { $matlab_opts = $Hf->get_value('engine-app-matlab-opts'); 
-   } else { # app = $Hf->get_value('engine-app-matlab'); 
+   if ($matlab_opts eq "NO_KEY" ) { $matlab_opts = $Hf->get_value('engine-app-matlab-opts'); }
+   if ($matlab_opts eq "NO_KEY" ) { # app = $Hf->get_value('engine-app-matlab'); 
        print("Could not find matlab opts\n");
        $matlab_opts="";
    } 
@@ -487,6 +490,110 @@ if (0) {
   }
   return 1; # ok = 1
 }
+
+# -------------
+sub start_pipe_script {
+# -------------
+#my $version = "20130725";
+#my $BADEXIT = 1;
+#my $GOODEXIT = 0;
+
+# use Env qw(RADISH_RECON_DIR);
+# if (! defined($RADISH_RECON_DIR)) {
+#   print STDERR "Environment variable RADISH_RECON_DIR must be set. Are you user omega?\n";
+#   print STDERR "   CIVM HINT setenv RADISH_RECON_DIR /recon_home/script/dir_radish\n";
+#   print STDERR "Bye.\n";
+#   exit $BADEXIT;
+# }
+
+#use lib "$RADISH_RECON_DIR/modules/script";
+use Env qw(RADISH_PERL_LIB);
+if (! defined($RADISH_PERL_LIB)) {
+    print STDERR "Cannot find good perl directories, quiting\n";
+#    exit $ERROR_EXITA;
+}
+use lib split(':',$RADISH_PERL_LIB);
+
+#use Getopt::Std;
+#use File::Path;
+#use File::Spec;
+
+#require shared;
+#require Headfile;
+return 1; 
+}
+
+
+# ------------------
+sub new_get_engine_dependencies {
+# ------------------
+# finds and reads engine dependency file 
+  my ($identifier,@required_values) = @_;
+
+
+  use Env qw(PIPELINE_HOSTNAME PIPELINE_HOME BIGGUS_DISKUS WKS_SETTINGS WORKSTATION_HOSTNAME);
+  
+  if (! defined($BIGGUS_DISKUS)) { error_out ("Environment variable BIGGUS_DISKUS must be set."); }
+  if (!-d $BIGGUS_DISKUS)        { error_out ("unable to find $BIGGUS_DISKUS"); }
+  if (!-w $BIGGUS_DISKUS)        { error_out ("unable to write to $BIGGUS_DISKUS"); }
+  if  ( ! defined($WORKSTATION_HOSTNAME)) { 
+      print("WARNING: obsolete variable PIPELINE_HOSTNAME used.\n");
+  } else { 
+      $PIPELINE_HOSTNAME=$WORKSTATION_HOSTNAME;
+  }
+  my $engine_constants_dir ;
+  if ( ! defined($WKS_SETTINGS) ) { 
+      print("WARNING: obsolete variable PIPELINE_HOME used to find dependenceis\n");
+      $engine_constants_dir="$PIPELINE_HOME/dependencies";
+  } else { 
+      $PIPELINE_HOME=$WKS_SETTINGS;
+      $engine_constants_dir="$PIPELINE_HOME/engine_deps";
+  }
+  if (! defined($PIPELINE_HOSTNAME)) { error_out ("Environment variable WORKSTATION_HOSTNAME must be set."); }
+  if (! defined($PIPELINE_HOME)) { error_out ("Environment variable WKS_SETTINGS must be set."); }
+  if (!-d $PIPELINE_HOME)        { error_out ("unable to find $PIPELINE_HOME"); }
+  if (! -d $engine_constants_dir) {
+      error_out ("$engine_constants_dir does not exist.");
+  }
+  my $engine_file =join("_","engine","$PIPELINE_HOSTNAME","dependencies"); 
+  my $engine_constants_path = "$engine_constants_dir/".$engine_file;
+  if ( ! -f $engine_constants_path ) { 
+      $engine_file=join("_","engine","$PIPELINE_HOSTNAME","pipeline_dependencies");
+      $engine_constants_path = "$engine_constants_dir/".$engine_file;
+      print("WARNING: OBSOLETE SETTINGS FILE USED, $engine_file\n")
+  }
+  
+  my $Engine_constants = new Headfile ('ro', $engine_constants_path);
+  if (! $Engine_constants->check()) {
+    error_out("Unable to open engine constants file $engine_constants_path\n");
+  }
+  if (! $Engine_constants->read_headfile) {
+     error_out("Unable to read engine constants from headfile form file $engine_constants_path\n");
+  }
+  my @errors;
+  foreach (@required_values) { 
+      print("$_: ".$Engine_constants->get_value($_)."\n");      
+      if ( ! defined ( $Engine_constants->get_value($_) ) ){ 
+	  push(@errors," Unable to find required value $_"); 
+      } elsif ( ! -e $Engine_constants->get_value($_) ) { 
+	  push(@errors," Required value set but file not found : $_=$Engine_constants->get_value($_)");
+      }
+  }
+  my $conventional_input_dir = "$BIGGUS_DISKUS/$identifier\-inputs"; # may not exist yet
+  
+  my $conventional_work_dir  = "$BIGGUS_DISKUS/$identifier\-work";
+  if (! -e $conventional_work_dir) {
+    mkdir $conventional_work_dir;
+  }
+  my $conventional_result_dir  = "$BIGGUS_DISKUS/$identifier\-results";
+  if (! -e $conventional_result_dir) {
+    mkdir $conventional_result_dir;
+  }
+
+  my $conventional_headfile = "$conventional_result_dir/$identifier\.headfile"; 
+  return($conventional_input_dir, $conventional_work_dir, $conventional_result_dir, $conventional_headfile, $Engine_constants);
+}
+
 
 # -------------
 sub make_list_of_files {

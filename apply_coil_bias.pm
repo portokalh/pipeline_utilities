@@ -21,16 +21,23 @@ sub apply_coil_bias {
 ### runs for each element in there.
 
   my $ants_app_dir      = $Hf_out->get_value("engine-app-ants-dir");
+
+  if($ants_app_dir eq "NO_KEY" || $ants_app_dir eq "EMPTY_VALUE" || $ants_app_dir eq "UNDEFINED_VALUE") {
+      $ants_app_dir      = $Hf_out->get_value("engine_app_ants_dir");
+      #error_out("$ants_app_dir, could not find ants path in headfile. KEY:  engine-app-ants-dir");
+  }
   my $coil_bias_program = "N4BiasFieldCorrection";
   my $coil_bias_program_path = "${ants_app_dir}/${coil_bias_program}";
   my $dimensions = 3;
-
   my $in_nii = $Hf_out->get_value("${hf_nii_id}-nii-path");
+  if($in_nii eq "NO_KEY" || $in_nii eq "EMPTY_VALUE" || $in_nii eq "UNDEFINED_VALUE") {
+      $in_nii=$Hf_out->get_value("${hf_nii_id}_nii_path");
+  }
   if($ants_app_dir eq "NO_KEY" || $ants_app_dir eq "EMPTY_VALUE" || $ants_app_dir eq "UNDEFINED_VALUE") {
       error_out("$ants_app_dir, could not find ants path in headfile. KEY:  engine-app-ants-dir");
   }
   if($in_nii eq "NO_KEY" || $in_nii eq "EMPTY_VALUE" || $in_nii eq "UNDEFINED_VALUE") {
-      error_out("$in_nii, could not find input nii in headfile. KEY:  ${hf_nii_id}-nii-path");
+      error_out("$in_nii, could not find input nii in headfile. KEY:  ${hf_nii_id}-nii-path or ${hf_nii_id}_nii_path");
   }
 
   my $iterations="1000x1000";

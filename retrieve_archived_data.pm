@@ -106,7 +106,14 @@ sub retrieve_archive_dir_util {
   my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno/  $local_dest_dir/$runno";
 
   #print ("DO_PULL = $do_pull\n");
-  my $ok = execute($do_pull, "archive retrieve", $cmd);
+  my $ok =0;
+  if ( ! -d "$local_dest_dir/$runno" ) { 
+      $ok = execute($do_pull, "archive retrieve", $cmd);
+  } else { 
+      print STDERR "Found $local_dest_dir/$runno, assuming complete, and not pulling\n";
+      $ok=1;
+      
+  }
   if (! $ok) {
     error_out("Could not retrieve archived images for $runno: $cmd\n");
   }

@@ -19,13 +19,15 @@
 # 090528 slg add subs that parse group format items (e.g. group_id[grouptype]=value) 
 #            Sub names start with "group" or "all_group".
 #            group_XXX[YYY] items are for grouping images in n-dimensions
+# 120731 james Updated copy_in to allow a prefix and a post fix to be put around the key value
+#              from the incoming file. Either of them can be blank or undefined. 
 
 package Headfile;
 use strict;
 ## doesn't work on intel mac: use diagnostics;
 ###use IO::File;
 use IO qw(Handle File);
-my $VERSION = "090528 slg";
+my $VERSION = "120731";
 my $COMMENT = 0;
 
 # Constructor --------
@@ -599,10 +601,17 @@ sub copy_in {
 #------------
 # copy the fields of provided hf into this hf
 # this will overwrite shared fields in this hf
-    my ($self, $other_hf) = @_;
+# prefix and postfix can be used to control that behavior
+    my ($self, $other_hf,$prefix, $postfix) = @_;
     my @keys = $other_hf->get_keys();
+    if ( ! defined ($prefix)) {
+	$prefix='';
+    }
+    if ( ! defined ($postfix)) {
+	$postfix='';
+    }
     foreach my $k (@keys) {
-	private_set_value($self, $k, $other_hf->get_value($k));
+	private_set_value($self, $prefix.$k.$postfix, $other_hf->get_value($k));
     }
     # also copy the comments from other_hf to self
     #foreach my $comment (@{$other_hf->{'__comment_arrayref'}}) {

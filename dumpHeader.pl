@@ -25,7 +25,7 @@ use warnings;
 use English;
 use Getopt::Std;
 use File::Basename;
-
+use File::Glob qw(:globally :nocase);
 
 use Env qw(RADISH_PERL_LIB RADISH_RECON_DIR WORKSTATION_HOME WKS_SETTINGS RECON_HOSTNAME WORKSTATION_HOSTNAME); # root of radish pipeline folders
 if (! defined($RADISH_PERL_LIB)) {
@@ -45,7 +45,9 @@ if (! defined($RECON_HOSTNAME) && ! defined($WORKSTATION_HOSTNAME)) {
 
 use lib split(':',$RADISH_PERL_LIB);
 require Headfile;
-require hoaoa;
+#require hoaoa;
+#import hoaoa qw(aoa_hash_to_headfile);
+use hoaoa qw(aoa_hash_to_headfile);
 #require shared;
 require pipeline_utilities;
 use civm_simple_util qw(load_file_to_array get_engine_constants_path printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);
@@ -169,9 +171,7 @@ our $verbose=0;
 	$hf_prefix='z_Agilent_';
 	$hf_short_prefix="A_";
 	$data_filename="fid";
-	import hoaoa qw(aoa_hash_to_headfile);
 	require agilent;
-	import agilent qw(parse_header determine_volume_type );
 	require agilent::hf ;
 	import agilent::hf qw( copy_relevent_keys);
 
@@ -186,9 +186,9 @@ our $verbose=0;
 	$hf_short_prefix="A_";
 	$data_filename="*tnt";
 	require aspect;
-	import aspect qw(parse_header determine_volume_type );
+	import aspect qw(parse_header );
 	require aspect::hf ;
-	import aspect::hf qw(aoa_hash_to_headfile copy_relevent_keys);
+	import aspect::hf qw( copy_relevent_keys);
     } elsif($scanner_vendor eq 'bruker') {
 	if ($#infiles == -1 ) { 
 	    push(@infiles,$directory.'/'."subject");
@@ -200,9 +200,7 @@ our $verbose=0;
 	$hf_prefix='z_Bruker_';
 	$hf_short_prefix="B_";
 	$data_filename="fid";
-	import hoaoa qw(aoa_hash_to_headfile);
 	require bruker ;
-	import bruker qw(parse_header determine_volume_type );
 	require bruker::hf ;
 	import bruker::hf qw(copy_relevent_keys);
     } else {
@@ -217,10 +215,6 @@ our $verbose=0;
 ###
     my $hfhashref = parse_header(\@header_lines,$debug_val ); # loads mr scanner header to a hash.
     my %hfhash=%{$hfhashref};
-#    my $volinfotext=determine_volume_type(\%hfhash);
-#    my $volinfotext=determine_volume_type($hfhashref); # only determines the output volume type, need alternate to determine the kspace data and its orientations and orders.
- #   my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type,$reportorder)=split(':',$volinfotext);
-#    printd(45,$volinfotext."\n");
     $Hfile->set_value("kspace_data_path",glob($directory.'/'.$data_filename)); # glob resolves the * in aspectnames  : )
     $Hfile->set_value("S_scanner_tag","${hf_short_prefix}");
 # i feel like this could be improved. better to dive back into the  header and look up what kind of repetitions if that is relevent, then set mutli scan appropriately.
