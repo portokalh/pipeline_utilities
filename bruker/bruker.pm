@@ -73,7 +73,7 @@ use Carp;
 use List::MoreUtils qw(uniq);
 #require civm_simple_util;
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
-use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa);
+use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa display_header_entry);
 #my (@ISA,@Export,@EXPORT_OK);
 BEGIN { #require Exporter;
     use Exporter(); #

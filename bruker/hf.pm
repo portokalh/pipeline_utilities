@@ -93,7 +93,9 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	printd(5,"WARNING WARNING WARNING MDEFT DETECTED!\n".
 	       "MDEFT PRETENDS TO BE A 2D SEQUENCE WHEN IT IS IN FACT 3D!\n".
 	       "rad_mat will require special options to run!\n\tvol_type_override=3D\n\tU_dimension_order=xcpyzt\n");
-	sleep_with_countdown(8);
+	if ( $debug_val>= 5 ) { 
+	    sleep_with_countdown(8);
+	}
     }
 ### keys which may help
 ### multi2d
@@ -216,29 +218,36 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 # spatial_phase_1, either frequency or phase dimension, only defined in 2d or slab data on rare sequence, unsure for others
 # spatial_size_2, 3rd dimension size, should match $matrix[1] if its defined.;
     my @matrix; #get 2/3D matix size
-    my $order= "UNDEFINED";  #report_order for matricies
-    if ( $hf->get_value($data_prefix."PVM_EncMatrix") ne 'NO_KEY' ||  $hf->get_value($data_prefix."ACQ_size")ne 'NO_KEY' ) {
 
-	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
+    my $order= "UNDEFINED";  #report_order for matricies
+    my $prefered_matrix_key="PVM_EncMatrix";
+    if ( $extraction_mode_bool ) {
+	$prefered_matrix_key="PVM_Matrix";
+    }
+
+    if ( $hf->get_value($data_prefix."$prefered_matrix_key") ne 'NO_KEY' ||  $hf->get_value($data_prefix."ACQ_size")ne 'NO_KEY' ) {
+
+	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."$prefered_matrix_key"));
 	if ( $#matrix == 0 ) { 
 	    
 	}
 #         if ( $#matrix > 0 ) { 
-# 	     @matrix=@{$hf->{"PVM_EncMatrix"}->[0]};
+# 	     @matrix=@{$hf->{"$prefered_matrix_key"}->[0]};
 # 	}
 
 # 	if( ! defined $matrix[0] ) {
-# 	    printd(45,"PVM_EncMatrix undefined, or empty, using ACQ_size\n"); ### ISSUES HERE, f direction of acq_size is doubled. 
+# 	    printd(45,"$prefered_matrix_key undefined, or empty, using ACQ_size\n"); ### ISSUES HERE, f direction of acq_size is doubled. 
 # 	    @matrix=@{$hf->{"ACQ_size"}->[0]};
 # 	} 
 	if (defined $matrix[0]) { 
 	    #shift @matrix;
-	    if ($#matrix>2) { croak("PVM_EncMatrix too big, never had more than 3 entries before, what has happened"); }
+	    if ($#matrix>2) { croak("$prefered_matrix_key too big, never had more than 3 entries before, what has happened"); }
 	    printd(45,"Matrix=".join('|',@matrix)."\n");
 	}
     }
+
     if (! defined $matrix[0]) {
-        croak "Required field missing from bruker header:\"PVM_EncMatrix|ACQ_size\" ";
+        croak "Required field missing from bruker header:\"$prefered_matrix_key|ACQ_size\" ";
     }
     # use absence of pvm variables to set the default to UNDEFINED orientation which is x=acq1, y=acq2.
     if ( defined $hf->{"PVM_SPackArrReadOrient"} ) { 
@@ -284,7 +293,10 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     } else { 
 	warn("cannot find bit depth at RECO_wordtype");
     }
-    
+    if ( $extraction_mode_bool ) { 
+	$hf->set_value("B_image_bit_depth",$bit_depth);
+	$hf->set_value("B_image_data_type",$data_type);
+    }
 ### if both spatial phases, slab data? use spatial_phase_1 as x?y?
 ### for 3d sequences ss2 is n slices, for 2d seqences it is dim2, thats annoying..... unsure of this
     my $ss2 = $hf->get_value($data_prefix."ACQ_spatial_size_2");
@@ -301,7 +313,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         $order ='yx'; 
         $x=$matrix[1];
         $y=$matrix[0];
-# 	if ( ! defined $hf->{"PVM_EncMatrix"}->[0]) {
+# 	if ( ! defined $hf->{"$prefered_matrix_key"}->[0]) {
 # 	    $y=$y/2;
 # 	    printd(45, "halving y\n");
 # 	}
@@ -309,11 +321,11 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         $order='xy';
         $x=$matrix[0];
         $y=$matrix[1];
-# 	if ( ! defined $hf->{"PVM_EncMatrix"}->[0]) {
+# 	if ( ! defined $hf->{"$prefered_matrix_key"}->[0]) {
 # 	    $x=$x/2;
 # 	    printd(45, "halving x\n");
 # 	}
-    }
+    }   
     printd(45,"order is $order\n");
     if ( $#matrix ==1 ) {
         $vol_type="2D";
@@ -331,6 +343,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
             croak "n slices in question, hard to determing correct number, either2 $slices or $matrix[2]\n";
         }
     }   
+###### MDEFT LAME FIX
+    if ( $method =~ m/MDEFT/x && $extraction_mode_bool ) {
+	my $temp=$x;
+	$x=$y;
+	$y=$temp;
+	$vol_type='3D';
+	$order='yx'
+    }
 ###### set time_pts    
     if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
         $time_pts=$movie_frames;
@@ -429,7 +449,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
        
         $z=$slices;
     }
-    if ( $channels>1 ) { 
+    if ( $channels>1 && ! $extraction_mode_bool) { 
 	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
 	$vol_num=$vol_num*$channels;
 	
@@ -447,7 +467,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     return "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth}:${data_type}:${order}";
 }
 
-=item copy_relvent_keys
+=item copy_relevent_keys
   
 input:($bruker_header_ref, $headfile_ref)
 
@@ -490,6 +510,8 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     my $key_tag=$hf->get_value("S_tag");
     my $s_tag=$hf->get_value('S_tag');
     my $data_prefix=$hf->get_value('U_prefix');
+    my $extraction_mode_bool=$hf->get_value("R_extract_mode");
+    if ( $extraction_mode_bool eq 'NO_KEY') { $extraction_mode_bool=0; }
 #    my $bruker_prefix=$hf->get_value("${s_tag}prefix"); #z_Bruker_
     my $report_order=$hf->get_value("${s_tag}axis_report_order");
     my $binary_header_size=0;
@@ -538,7 +560,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			       'NR',                      # repetitions, from ACQ
 			       'PVM_NRepetitions',        # repetitions, from method, not always the same thing as acq, notably for dti sets. # might be number of tr's in multi tr set...
 			   ],
-			   "B_rare_factor"=>[
+			   "${s_tag}rare_factor"=>[
 			       1,
 			       'ACQ_rare_factor',          # rare factor from ACQ, seems to be 1 if no rare factor.
 			   ],
@@ -562,6 +584,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #       'PVM_SpatResol',           # spatial resolution, must look at slice thickness for 2d acquisionts, 
 			   "slthick"=>[
 			       1,
+#			       'PVM_SliceThick',           # thickness of each slice, for 2d acquisitions should multiply by the SPackArrNSlices, not relevent, because we check it when we look at the pvm matrix size
 			       'ACQ_slice_thick',          # thickness of each slice, for 2d acquisitions should multiply by the SPackArrNSlices, not relevent, because we check it when we look at the pvm matrix size
 			   ],
 			   "S_PSDname"=>[
@@ -693,13 +716,15 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 
 
     my $volinfotext=set_volume_type($hf); # only determines the output volume type, need alternate to determine the kspace data and its orientations and orders.
-   my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type);
+    my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type);
     ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type,$report_order)=split(':',$volinfotext);
 #    my $vol_type=$hf->get_value("${s_tag}vol_type");
 #    my $vol_detail=$hf->get_value("${s_tag}vol_type_detail");
     $hf->set_value("dim_X",$x);
     $hf->set_value("dim_Y",$y);
     $hf->set_value("dim_Z",$z);
+    $hf->set_value("${s_tag}image_bit_depth",$bit_depth);
+    $hf->set_value("${s_tag}image_data_type",$data_type);
     printd(75,"echos before set_volume_type".$hf->get_value($s_tag."echos")."\n");
     $hf->set_value("${s_tag}volumes",$vols);
     $hf->set_value("${s_tag}echos",$hf->get_value('ne'));
@@ -831,8 +856,8 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     my $fov_x; 
     my $fov_y;
     my $fov_z;
-#     my $dx=$hf->get_value("dim_X");
-#     my $dy=$hf->get_value("dim_Y");
+    my $dx=$hf->get_value("dim_X");
+    my $dy=$hf->get_value("dim_Y");
 #     my $dz=$hf->get_value("dim_Z");
     my $df;
     my $dp;
@@ -848,15 +873,19 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 # 	croak("${s_tag}axis_report_order missing!");
 #     }
     
-    #if ( $hf->get_value("PVM_EncMatrix") ne 'NO_KEY' ) {
+    #if ( $hf->get_value("$prefered_matrix_key") ne 'NO_KEY' ) {
 
-    #my @dims=printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
-    ($df, $dp, $dz) = printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
+    #my @dims=printline_to_aoa($hf->get_value($data_prefix."$prefered_matrix_key"));
+    my $prefered_matrix_key="PVM_EncMatrix";
+    if ( $extraction_mode_bool ) {
+	$prefered_matrix_key="PVM_Matrix";
+    }
+    ($df, $dp, $dz) = printline_to_aoa($hf->get_value($data_prefix."$prefered_matrix_key"));
 
 #    printd(90,"dims are ".join('|',@dims)."\n");
 #    ($df, $dp, $dz)=@dims;
 	if ( ! defined $dz ) { 
-	    printd(45,$data_prefix."PVM_EncMatrix did not specify 3rd Dimension!\n");
+	    printd(45,$data_prefix."$prefered_matrix_key did not specify 3rd Dimension!\n");
 	    
 	    $dz = $hf->get_value($data_prefix."NSLICES");
 	    if (  $dz == 1) {
@@ -870,17 +899,35 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 		printd(25,"ERROR: no slices\n" );
 	    } 
 	}
-    #}        
+    #}      
+    ($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
+    ($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov")); 
     if ( $hf->get_value($data_prefix."PVM_SpatResol") ne 'NO_KEY') {
-	($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
-	$fov_f=$df*$thick_f;
-	$fov_p=$dp*$thick_p;
+#	($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
+	if ( $fov_f!=$df*$thick_f/10 )
+	{
+	    carp("WARNING: fov_f from acq_fov does not match thickness * dimenison, recalculating with PVM_SpatResol.");
+	    $fov_f=$df*$thick_f;
+	}
+	if ( $fov_p!=$dp*$thick_p/10 ) 
+	{
+	    carp("WARNING: fov_p from acq_fov does not match thickness * dimenison, recalculating with PVM_SpatResol.");
+	    $fov_p=$dp*$thick_p;
+	}
+	
 	if (defined $thick_z) {
 	    printd(45,"Using ${data_prefix}PVM_SpatResol for fov_z\n");
-	    $fov_z=$dz*$thick_z;
+	    if ( $fov_z!=$dz*$thick_z/10 ) 
+	    {
+		carp("WARNING: fov_z from acq_fov does not match thickness * dimenison");
+	    }
+	} elsif (defined $fov_z) {
+	    printd(45,"Using ${data_prefix}ACQ_fov for fov_z\n");
+	    $fov_z  =$fov_z*10;
+   #	    $thick_z=$fov_z/$dz; 
 	}
     } else {
-	($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov"));
+#	($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov"));
 	$fov_f=$fov_f*10;
 	$fov_p=$fov_p*10;
 	$thick_f=$fov_f/$df;
@@ -911,9 +958,9 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	if ( defined ($thick_z) ) { 
 	    printd(45,"Using ${data_prefix}ACQ_slice_thick for fov_z\n");
 	    my $spackns=$hf->get_value($data_prefix."SPackArrNSlices\n");
- 	    printd(45,"\t".$data_prefix."SPackArrNSlices\n");
+ 	    printd(45,"\t".$data_prefix."SPackArrNSlices $spackns\n");
  	    my $nspacks=$hf->get_value($data_prefix."PVM_NSPacks\n");
- 	    printd(45,"\t".$data_prefix."NSPacks\n");
+ 	    printd(45,"\t".$data_prefix."NSPacks $nspacks\n");
 	    if ( $hf->get_value($data_prefix."PVM_SPackArrNSlices") > 1 && $hf->get_value($data_prefix."PVM_NSPacks")== 1){ 
 		printd(45,"\t".$data_prefix."fov_z set using dz*thick_z\n");
 		$fov_z=$dz*$thick_z; 
@@ -926,31 +973,29 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	}	    
     }
     
-	    
-    $hf->set_value("ray_length",$df);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing. 
-    my $ntr=1; # number of tr values, just 1 for now, should cause errors on data load for recon if it should have been anything but one
-    if ( $vol_type eq '2D') { 
-	# if interleave we have to load lots of data at a time or fall over to ray by ray loading. 
-	my $ntr=1; # number of tr's 
-	$hf->set_value("rays_per_block",$dp*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
-	$hf->set_value("ray_blocks",1);
-    } else  {
-	$hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
-	$hf->set_value("ray_blocks",$dz);
+    $hf->set_value("fovx","$fov_x");
+    $hf->set_value("fovy","$fov_y");
+    $hf->set_value("fovz","$fov_z");
+
+    printd(25,"dx=$dx: dy=$dy: dz=$dz\n");
+    printd(25,"fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n");
+    if (  ! $extraction_mode_bool ) { 
+	$hf->set_value("ray_length",$df);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing. 
+	my $ntr=1; # number of tr values, just 1 for now, should cause errors on data load for recon if it should have been anything but one
+	if ( $vol_type eq '2D') { 
+	    # if interleave we have to load lots of data at a time or fall over to ray by ray loading. 
+	    my $ntr=1; # number of tr's 
+	    $hf->set_value("rays_per_block",$dp*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	    $hf->set_value("ray_blocks",1);
+	} else  {
+	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	    $hf->set_value("ray_blocks",$dz);
+	}
+	printd(25,"ray_length:".$hf->get_value('ray_length').
+	       ", rays_per_block:".$hf->get_value('rays_per_block').
+	       ", ray_blocks:".$hf->get_value('ray_blocks')."\n");
     }
-    printd(25,"dx=$df: dy=$dp: dz=$dz\n");
-    printd(25,"fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n".
-	  "ray_length:".$hf->get_value('ray_length').
-	  ", rays_per_block:".$hf->get_value('rays_per_block').
-	  ", ray_blocks:".$hf->get_value('ray_blocks')."\n");
-#     if (! defined $dx || ! defined $dy ||! defined $dz ||! defined $thick_f ||! defined $thick_p ||! defined $thick_z ){
-# 	croak("Problem resolving FOV!\n");
-#     } else { 
- 	$hf->set_value("fovx","$fov_x");
- 	$hf->set_value("fovy","$fov_y");
- 	$hf->set_value("fovz","$fov_z");
-# #	$hf->set_value("volumes","");
-#     }
+
  #    my %fov_keys=(
 #"fov_x","fov_y","fov_z"
 #       'PVM_Fov',                 # fov is handled at the same time as matrix, they are reported in order, frequency phase, the same as dimension. 
