@@ -62,12 +62,16 @@ sub convert_to_nifti_util {
       
   }
  
+  my $image_suffix   = $Hf->get_value("${data_setid}-image-suffix");
+  if ($image_suffix eq 'NO_KEY') { $image_suffix   = $Hf->get_value("${data_setid}_image_suffix"); }
+  if ($image_suffix !~ m/[raw|nii]/ ) { error_out("nifti_ize: image suffix $image_suffix not known to be handled by matlab nifti converter (just \.raw or \.nii)");}
   my @voxelsize=();
+# ($image_suffix !~ m/[nii]/ ));
   if ($xdim eq "NO_KEY" || $zdim eq "NO_KEY" || $ydim eq "NO_KEY" || $xfov_mm eq "NO_KEY"|| $yfov_mm eq "NO_KEY"|| $zfov_mm eq "NO_KEY") {
-      error_out("Could not find good value for xyz or xyz fov\n\tx=$xdim, y=$ydim, z=$zdim, xfov=$xfov_mm, yfov=$yfov_mm, zfov=$zfov_mm\n") unless($ggo==0);
-      @voxelsize=(1,1,1);
-      ($xfov_mm,$yfov_mm,$zfov_mm)=(1,1,1);
-      ($xdim,$ydim,$zdim)=(1,1,1);
+      error_out("Could not find good value for xyz or xyz fov\n\tx=$xdim, y=$ydim, z=$zdim, xfov=$xfov_mm, yfov=$yfov_mm, zfov=$zfov_mm\n") unless(($ggo==0) || ($image_suffix =~ m/[nii]/ ));
+      @voxelsize=(0,0,0);
+      ($xfov_mm,$yfov_mm,$zfov_mm)=(0,0,0);
+      ($xdim,$ydim,$zdim)=(0,0,0);
   } else  {
       @voxelsize=($xfov_mm/$xdim,$yfov_mm/$ydim,$zfov_mm/$zdim);
 #  my $iso_vox_mm = $xfov_mm/$xdim;
@@ -84,9 +88,14 @@ sub convert_to_nifti_util {
 #  my $nii_raw_data_type_code = 4; # civm .raw  (short - big endian)
 #  my $nii_i32_data_type_code = 8; # .i32 output of t2w image set creator 
 
-  my $nii_setid = 
-      nifti_ize_util ($data_setid, $xdim, $ydim, $zdim, $nii_raw_data_type_code,$xfov_mm/$xdim,$yfov_mm/$ydim,$zfov_mm/$zdim , $flip_y, $flip_z, $Hf);
-
+  my $nii_setid ;
+  if  ($image_suffix !~ m/[nii]/ ) {
+      $nii_setid = nifti_ize_util ($data_setid, $xdim, $ydim, $zdim, $nii_raw_data_type_code,$xfov_mm/$xdim,$yfov_mm/$ydim,$zfov_mm/$zdim , $flip_y, $flip_z, $Hf);
+  } else {
+      $nii_setid = 
+	  nifti_ize_util ($data_setid, $xdim, $ydim, $zdim, $nii_raw_data_type_code,0,0,0 , $flip_y, $flip_z, $Hf);
+      # 0,0,0 is magic number for voxel size to set a nifti being reprocessed the same as its input settings.
+  }
   ## dimensions are for the SOP acquisition. 
   ##nifti_ize ("input", 512, 256, 256, $nii_raw_data_type_code, 2, $flip_y, $flip_z, $Hf);
   #should become
@@ -113,20 +122,16 @@ sub nifti_ize_util
   if ($padded_digits eq 'NO_KEY') { $padded_digits  = $Hf->get_value("${setid}_image_padded_digits"); }
   my $image_suffix   = $Hf->get_value("${setid}-image-suffix");
   if ($image_suffix eq 'NO_KEY') { $image_suffix   = $Hf->get_value("${setid}_image_suffix"); }
-  my $sliceselect    = $Hf->get_value_like("slice-selection");  # using get_value like is experimental, should be switched to get_value if this fails.
-  if ($image_suffix ne 'raw') { error_out("nifti_ize: image suffix $image_suffix not known to be handled by matlab nifti converter (just \.raw)");}
+  if($image_suffix !~ m/[raw|nii]/ ) { error_out("nifti_ize: image suffix $image_suffix not known to be handled by matlab nifti converter (just \.raw or \.nii)");}
 #  $Hf->set_value("$setid\_image_suffix", $image_suffix);  # wtf mates? we just read this value out?
+  my $sliceselect    = $Hf->get_value_like("slice-selection");  # using get_value like is experimental, should be switched to get_value if this fails.
   my  $NIFTI_MFUNCTION = $Hf->get_value("nifti_matlab_converter");
   if ( $NIFTI_MFUNCTION eq 'NO_KEY' ){
       error_out("nifti_matlab_converter not set in hf");
   }
-  
-  my $dest_nii_file = "$runno\.nii";
-  my $dest_nii_path = "$dest_dir/$dest_nii_file";
-  print("srcpath:$src_image_path\trunno:$runno\n\tdest:$dest_dir\n\timage_name:$image_base\tdigits:$padded_digits\tsuffix:$image_suffix\n") if ($debug_val >=25);
-  # --- handle image filename number padding (.0001, .001).
-  # --- figure out the img prefix that the case stmt for the filename will need (inside the nifti.m function)
-  #     something like: 'N12345fsimx.0'
+  my ($zstart, $zstop); # = split('-',$sliceselect);  
+  my $roll_string    = $Hf->get_value_like("roll_string");  # using get_value like is experimental, should be switched to get_value if this fails.
+
   my $ndigits = length($padded_digits);
   if ($ndigits < 3) { error_out("nifti_ize needs fancier padder"); }
   my $padder;
@@ -135,13 +140,40 @@ sub nifti_ize_util
   }
   else { $padder = ''; }
 
-  my $image_prefix = $image_base . '.' . $padder;
-  my $args;
-  if ( $sliceselect eq "all" || $sliceselect eq "NO_KEY" || $sliceselect eq "UNDEFINED_VALUE" || $sliceselect eq "EMPTY_VALUE" ) {        $args =   "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z";
+
+  my $dest_nii_file;# = "$runno\.nii";
+  my $dest_nii_path;# = "$dest_dir/$dest_nii_file";
+  my $image_prefix ;
+  if ($image_suffix !~ m/[nii]/ ) { 
+      $image_prefix = $image_base . '.' . $padder; 
+      $dest_nii_file = "$runno\.nii";
+      $dest_nii_path = "$dest_dir/$dest_nii_file";
+      
   } else {
-    my ($zstart, $zstop) = split('-',$sliceselect);
-    $args = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z, $zstart, $zstop";
+      $image_prefix = $image_base ;
+      $dest_nii_file = "$image_base\.nii";
+      $dest_nii_path = "$dest_dir/$dest_nii_file";
+      
   }
+
+
+  print("srcpath:$src_image_path\trunno:$runno\n\tdest:$dest_dir\n\timage_name:$image_base\tdigits:$padded_digits\tsuffix:$image_suffix\n") if ($debug_val >=25);
+  # --- handle image filename number padding (.0001, .001).
+  # --- figure out the img prefix that the case stmt for the filename will need (inside the nifti.m function)
+  #     something like: 'N12345fsimx.0'
+
+  my $args;
+  if ( $roll_string eq "NO_KEY" || $roll_string eq "UNDEFINED_VALUE" || $roll_string eq "EMPTY_VALUE" ) {
+    $roll_string="0:0";
+  }
+  if ( $sliceselect eq "all" || $sliceselect eq "NO_KEY" || $sliceselect eq "UNDEFINED_VALUE" || $sliceselect eq "EMPTY_VALUE" ) {
+    ($zstart, $zstop) = ( 1, $zdim);
+  #$args =   "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z";
+  } else { 
+    ($zstart, $zstop) = split('-',$sliceselect);
+  }
+#      $args = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z, $zstart, $zstop";   
+  $args = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z, $zstart, $zstop, \'$roll_string\'";
 
   my $cmd =  make_matlab_command ($NIFTI_MFUNCTION, $args, "$setid\_", $Hf); 
   if ( ! -e $dest_nii_path) { 
