@@ -814,7 +814,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	warn("cannot find bit depth at GO_raw_data_format");
     }
     $hf->set_value($s_tag."kspace_bit_depth",$bit_depth);
-    $hf->set_value($s_tag."kspace_data_typh",$data_type);
+    $hf->set_value($s_tag."kspace_data_type",$data_type);
     $hf->set_value($s_tag."kspace_endian","little");
 
 ### set volume output dimensions

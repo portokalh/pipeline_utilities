@@ -740,7 +740,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 #    my $bit_depth=32;
 #    my $data_type="Real";
     $hf->set_value($s_tag."kspace_bit_depth",$bit_depth);
-    $hf->set_value($s_tag."kspace_data_typh",$data_type);
+    $hf->set_value($s_tag."kspace_data_type",$data_type);
     $hf->set_value($s_tag."kspace_endian","big");
 ### sort out fov
     my $fov_x; 

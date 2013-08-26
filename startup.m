@@ -25,6 +25,11 @@ old_genpaths={
     
     };
 workstation_home=getenv('WORKSTATION_HOME');
+if isempty(workstation_home)
+    p = mfilename('fullpath');
+    p = fileparts(p);
+    
+end
 paths={
     [ workstation_home '/recon/mat_recon_pipe' ]
     [ workstation_home '/recon/mat_recon_pipe/aspect' ]
