@@ -27,8 +27,15 @@ old_genpaths={
 workstation_home=getenv('WORKSTATION_HOME');
 if isempty(workstation_home)
     p = mfilename('fullpath');
-    p = fileparts(p);
-    
+    [p, ~, ~] = fileparts(p);
+    p=strsplit(p,'/');
+    last=1;
+    for idx=1:length(p)
+        if strcmp(p{idx},'software')
+            last=idx;
+        end
+    end
+    workstation_home=strjoin(p(1:last),'/');
 end
 paths={
     [ workstation_home '/recon/mat_recon_pipe' ]
