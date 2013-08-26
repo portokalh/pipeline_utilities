@@ -115,7 +115,7 @@ if (! defined($RADISH_PERL_LIB)) {
 #    exit $ERROR_EXIT;
 }
 use lib split(':',$RADISH_PERL_LIB);
-use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa);
+use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa display_header_entry);
 use civm_simple_util qw(printd whoami whowasi debugloc $debug_val $debug_locator);
 use hoaoa;
 #my (@ISA,@Export,@EXPORT_OK);

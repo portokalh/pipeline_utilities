@@ -172,6 +172,7 @@ our $verbose=0;
 	$hf_short_prefix="A_";
 	$data_filename="fid";
 	require agilent;
+	import agilent qw(parse_header );
 	require agilent::hf ;
 	import agilent::hf qw( copy_relevent_keys);
 

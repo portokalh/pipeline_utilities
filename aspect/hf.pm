@@ -718,8 +718,9 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 #     } else { 
 # 	warn("cannot find bit depth at GO_raw_data_format");
 #     }
-    $hf->set_value("${s_tag}kspace_bit_depth",$bit_depth);
-    $hf->set_value("${s_tag}kspace_data_type",$data_type);
+    $hf->set_value($s_tag."kspace_bit_depth",$bit_depth);
+    $hf->set_value($s_tag."kspace_data_typh",$data_type);
+    $hf->set_value($s_tag."kspace_endian","little");
 
 ### set volume output dimensions
 # should determine 2d/3d/3d acquisition

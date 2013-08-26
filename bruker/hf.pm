@@ -296,6 +296,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     if ( $extraction_mode_bool ) { 
 	$hf->set_value("B_image_bit_depth",$bit_depth);
 	$hf->set_value("B_image_data_type",$data_type);
+    } else { 
     }
 ### if both spatial phases, slab data? use spatial_phase_1 as x?y?
 ### for 3d sequences ss2 is n slices, for 2d seqences it is dim2, thats annoying..... unsure of this
@@ -812,8 +813,9 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     } else { 
 	warn("cannot find bit depth at GO_raw_data_format");
     }
-    $hf->set_value("${s_tag}kspace_bit_depth",$bit_depth);
-    $hf->set_value("${s_tag}kspace_data_type",$data_type);
+    $hf->set_value($s_tag."kspace_bit_depth",$bit_depth);
+    $hf->set_value($s_tag."kspace_data_typh",$data_type);
+    $hf->set_value($s_tag."kspace_endian","little");
 
 ### set volume output dimensions
 # should determine 2d/3d/3d acquisition
