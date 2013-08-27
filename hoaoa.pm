@@ -66,7 +66,8 @@ internal function doing the work of printline_to_aoa
 #    split($printline
     ($dims, $values)=split(',',$printline);
     
-    @dim_array=  ( $dims =~ m/([0-9]+[:]?[ ]?)+/gx  );#(:?:([0-9]+)?)*
+    @dim_array=  ( $dims =~ m/([0-9]+[:+]?[ ]?)+/gx  );#(:?:([0-9]+)?)*
+#    @dim_array=  ( $dims =~ m/([0-9]+[:+]?[ ]?)+/gx  );#(:?:([0-9]+)?)*
 
 #    my $nsubarrays=shift@dim_array;
     my $subarraysize;

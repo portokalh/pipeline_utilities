@@ -82,8 +82,8 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #     if ( $method eq 'NO_KEY' ) {
 # 	croak "Required field missing from bruker header:\"${data_prefix}ACQ_method\" ";
 #     }
-    printd(45, "Method:$method\n");
-    my $method_ex="<(".join("|",@knownmethods).")>";
+#     printd(45, "Method:$method\n");
+#     my $method_ex="<(".join("|",@knownmethods).")>";
 #     if ( $method !~ m/^$method_ex$/x ) { 
 #         croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
 # #\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
@@ -252,6 +252,15 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 ### get bit depth
     my $bit_depth=32;
     my $data_type="Real";
+#    my @aoaref =printline_to_aoa($hf->get_value($data_prefix."dp")); #( @bd_lines) 
+    my @bd_strings=split(',',$hf->get_value($data_prefix."dp")); #( @bd_lines) 
+    my ($bd_code, @bd_opts) = $bd_strings[1] =~ m/([yn])/gx ;
+#    printd(25, "BitDepth <$bd_code><@bd_opts><$bd_strings[0]><$bd_strings[1]><$#bd_strings>  \n");
+    printd(45,"BitDepth code parsing, input is <".join(",",@bd_strings)."> parsed into bd_code <$bd_code> of possibilities <@bd_opts>\n");
+     if ($bd_code eq 'n' ) {
+	 $bit_depth=16;
+	 $data_type="Signed";
+     }
 #     my $recon_type=$hf->get_value($data_prefix."RECO_wordtype");
 #     my $raw_type=$hf->get_value($data_prefix."GO_raw_data_format");
 #     if ( $recon_type ne 'NO_KEY' || $raw_type ne 'NO_KEY') {
@@ -297,9 +306,17 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
         $order='xy';
 #        $x=$matrix[0];
 #        $y=$matrix[1];
-    $x=$hf->get_value("${data_prefix}np")/2;
-    $y=$hf->get_value("${data_prefix}nv");
-    $z=$hf->get_value("${data_prefix}nv2");
+
+
+### dimX dimY dimX are field of view not voxels
+#     $x=$hf->get_value($data_prefix.$hf->get_value($data_prefix."dimX"))/2;    
+#     $y=$hf->get_value($data_prefix.$hf->get_value($data_prefix."dimY"));
+#     $z=$hf->get_value($data_prefix.$hf->get_value($data_prefix."dimZ")
+
+    $x=$hf->get_value($data_prefix."np")/2;
+    $y=$hf->get_value($data_prefix."nv");
+    $z=$hf->get_value($data_prefix."nv2");
+
     if ( $z eq 'NO_KEY' ) { 
      	$z=$hf->get_value("${data_prefix}ns");
     }
@@ -315,7 +332,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # 	printd(90,"Setting type 2D, slices are b_slices->slices\n");
 # 	#should find detail here, not sure how, could be time or could be space, if space want to set slices, if time want to set vols
 #     } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
-#         $vol_type="3D";
+    $vol_type="3D";
 # 	if ( defined $ss2 ) { 
 # 	    $slices=$ss2;
 # 	} else {
