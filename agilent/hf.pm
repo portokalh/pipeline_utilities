@@ -252,15 +252,13 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 ### get bit depth
     my $bit_depth=32;
     my $data_type="Real";
-#    my @aoaref =printline_to_aoa($hf->get_value($data_prefix."dp")); #( @bd_lines) 
     my @bd_strings=split(',',$hf->get_value($data_prefix."dp")); #( @bd_lines) 
     my ($bd_code, @bd_opts) = $bd_strings[1] =~ m/([yn])/gx ;
-#    printd(25, "BitDepth <$bd_code><@bd_opts><$bd_strings[0]><$bd_strings[1]><$#bd_strings>  \n");
     printd(45,"BitDepth code parsing, input is <".join(",",@bd_strings)."> parsed into bd_code <$bd_code> of possibilities <@bd_opts>\n");
-     if ($bd_code eq 'n' ) {
-	 $bit_depth=16;
-	 $data_type="Signed";
-     }
+    if ($bd_code eq 'n' ) {
+	$bit_depth=16;
+	$data_type="Signed";
+    }
 #     my $recon_type=$hf->get_value($data_prefix."RECO_wordtype");
 #     my $raw_type=$hf->get_value($data_prefix."GO_raw_data_format");
 #     if ( $recon_type ne 'NO_KEY' || $raw_type ne 'NO_KEY') {
@@ -332,7 +330,18 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # 	printd(90,"Setting type 2D, slices are b_slices->slices\n");
 # 	#should find detail here, not sure how, could be time or could be space, if space want to set slices, if time want to set vols
 #     } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
-    $vol_type="3D";
+	$vol_type="3D";
+    my $cycles=$hf->get_value($data_prefix."acqcycles");
+    if ( $cycles ne 1  && $hf->get_value("ray_blocks")==1 ) { 
+#	$vol_type="2D";
+	$hf->set_value("ray_blocks",$cycles);
+	croak("\n\nERROR:\n\tCIVM RECONSTRUCTION HAS NEVER HAD SUCESS RECONSTRUCTING IMAGES WITH acqcycles > 1!\n JAMES HAS FORCED THIS TO BE A FAILURE.\n\n");
+    } elsif ( $cycles > 1 && $hf->get_value("ray_blocks") > 1 )  { 
+	carp("acqcycles>1 and ray_blocks>1, un expected condition see JAMES!");
+#	$hf->set_value("rays_per_block",$hf->get_value("rays_per_block")*$cycles); # this isnt it.
+    } else { 
+	
+    }
 # 	if ( defined $ss2 ) { 
 # 	    $slices=$ss2;
 # 	} else {
@@ -604,7 +613,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 			       1, 
 			       'nf',
 			   ],
-			   "ray_blocks"=>[ #ray_blocks_per_volume
+			   "ray_blocks"=>[ #ray_blocks_per_volume, need to get per slices also
 			       1,
 			       'nblocks',
 			   ],
