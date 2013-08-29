@@ -26,6 +26,7 @@ BEGIN {
     our @ISA = qw(Exporter); # perl cricit wants this replaced with use base; not sure why yet.
     our @EXPORT_OK = qw(
 load_file_to_array 
+write_array_to_file
 get_engine_constants_path
 printd 
 whoami 
@@ -68,7 +69,36 @@ sub load_file_to_array { # (path,array_ref[,debug_val]) loads text to array ref,
     push (@{$array_ref}, @all_lines);
     return $#all_lines+1;
 }
+=item write_array_to_file($path,$array_ref[,$debug_val])
 
+writes an array of strings to a text file located at path 
+
+=cut
+###
+sub write_array_to_file { # (path,array_ref[,debug_val]) writes text to array ref.
+###
+    my (@input)=@_;
+#    my ($file,$array_ref)=@_;
+    my $file=shift @input;
+    my $array_ref=shift @input; 
+    my $old_debug=$debug_val;
+    $debug_val = shift @input or $debug_val=$old_debug;
+    civm_simple_util::debugloc();
+    my @all_lines =@{$array_ref};
+    civm_simple_util::whoami();
+    civm_simple_util::printd(30,"Opening file $file.\n");
+    open my $text_fid, ">", "$file" or croak "could not open $file";
+#  open SESAME_OUT, ">$outpath"; 
+    croak "file <$file> not Text\n" unless -T $text_fid ;
+    foreach ( @all_lines ) 
+    {
+	print  $text_fid $_;  # write out every line modified or not 
+    }
+#    @all_lines =  <$text_fid> ;
+    close  $text_fid;
+#    push (@{$array_ref}, @all_lines);
+    return;# $#all_lines+1;
+}
 =item constant_path=get_engine_constants_path { # (hostname[,debug_val])
 
 =cut

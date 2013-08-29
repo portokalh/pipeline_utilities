@@ -88,10 +88,10 @@ internal function doing the work of printline_to_aoa
     my $num_sa_ex="((?:$num_ex)(?:[ ]$num_ex){$subarraysize})"; 
 #    my $element_ex="[a-zA-Z0-9.-_]+";
 
-    my $data='';
+#    my $data='';
 #    @val_array = ( $values =~ m/$element_ex/gx ) ;
     @val_array = ( $values =~ m/$num_ex/gx ) ;
-
+    
     printd(90," nvalues$#val_array,  text->array  $values -> ".join('|',@val_array)."\n");
 #     for my $aref ( @dataarray) {
 #         my @subarray=@{$aref}; 
