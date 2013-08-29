@@ -335,7 +335,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     if ( $cycles ne 1  && $hf->get_value("ray_blocks")==1 ) { 
 #	$vol_type="2D";
 	$hf->set_value("ray_blocks",$cycles);
-	croak("\n\nERROR:\n\tCIVM RECONSTRUCTION HAS NEVER HAD SUCESS RECONSTRUCTING IMAGES WITH acqcycles > 1!\n JAMES HAS FORCED THIS TO BE A FAILURE.\n\n");
+	carp("\n\nwarning:\n\tCIVM RECONSTRUCTION HAS NEVER HAD SUCESS RECONSTRUCTING IMAGES WITH acqcycles > 1!\n\n");# JAMES HAS FORCED THIS TO BE A FAILURE.\n\n");
     } elsif ( $cycles > 1 && $hf->get_value("ray_blocks") > 1 )  { 
 	carp("acqcycles>1 and ray_blocks>1, un expected condition see JAMES!");
 #	$hf->set_value("rays_per_block",$hf->get_value("rays_per_block")*$cycles); # this isnt it.
