@@ -147,13 +147,13 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 	$n_echos=1;
     }
     printd(45,"n_echos:$n_echos\n");
-    my $movie_frames;
-    $movie_frames=$hf->get_value($data_prefix."ACQ_n_movie_frames"); # ntimepoints=length, or 0 if only one time point
-    if ( $movie_frames ne "NO_KEY" && $movie_frames>1 ) {  
-	## set dim_t, perhpas time_pts?
-	$time_pts=$time_pts*$movie_frames;
-	printd(45,"movie_frames:$movie_frames\n");
-    }
+#    my $movie_frames;
+#     $movie_frames=$hf->get_value($data_prefix."ACQ_n_movie_frames"); # ntimepoints=length, or 0 if only one time point
+#     if ( $movie_frames ne "NO_KEY" && $movie_frames>1 ) {  
+# 	## set dim_t, perhpas time_pts?
+# 	$time_pts=$time_pts*$movie_frames;
+# 	printd(45,"movie_frames:$movie_frames\n");
+#     }
 #     my $n_dwi_exp;
 #     $n_dwi_exp=$hf->get_value($data_prefix."PVM_DwNDiffExp");
 #     if ( $n_dwi_exp ne 'NO_KEY'  && $n_dwi_exp>1) { 
@@ -354,6 +354,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 ###### set time_pts    
 #     if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
 #         $time_pts=$movie_frames;
+    $time_pts=$hf->get_value($data_prefix."volumes");
 #         $vol_type="4D";
 #         if ( defined $n_dwi_exp ) { 
 #             printd(45,"diffusion exp with $n_dwi_exp frames\n");
@@ -448,11 +449,11 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #     }
 #     if ( $channels>1 ) { 
 # 	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
-# 	$vol_num=$vol_num*$channels;
+ 	$vol_num=$vol_num*$channels;
 	
 #     }
 
-#     $vol_num=$time_pts*$vol_num;# not perfect
+     $vol_num=$time_pts*$vol_num;# not perfect
 
 
 ###### handle xy swapping
