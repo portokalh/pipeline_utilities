@@ -449,12 +449,15 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #     }
 #     if ( $channels>1 ) { 
 # 	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
+
  	$vol_num=$vol_num*$channels;
 	
 #     }
 
-     $vol_num=$time_pts*$vol_num;# not perfect
-
+    $vol_num=$time_pts*$vol_num;# not perfect
+    if ( $vol_num>1) { 
+	$vol_type="4D";
+    }
 
 ###### handle xy swapping
     
