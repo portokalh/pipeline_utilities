@@ -143,7 +143,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # n_slice_packs, could mean a few things, either multi volume or, that we much multiply slices*nslicepacks, to get the whole volume's worth of slices.
     my $n_echos;
     $n_echos=$hf->get_value($data_prefix.'ACQ_n_echo_images');
-    if ( $n_echos eq 'NO_KEY')  {
+    if ( $n_echos =~ /NO_KEY/x)  {
 	$n_echos=1;
     }
     printd(45,"n_echos:$n_echos\n");
@@ -244,11 +244,6 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #     } else { 
 	
 #     } 
-### get channels
-#     if ($hf->get_value($data_prefix."PVM_EncActReceivers") ne 'NO_KEY') { 
-# 	$channels=$hf->get_value($data_prefix."PVM_EncNReceivers");
-# #	$channel_mode='integrate';
-#     }
 ### get bit depth
     my $bit_depth=32;
     my $data_type="Real";
@@ -314,18 +309,43 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     $x=$hf->get_value($data_prefix."np")/2;
     $y=$hf->get_value($data_prefix."nv");
     $z=$hf->get_value($data_prefix."nv2");
-
     if ( $z eq 'NO_KEY' ) { 
      	$z=$hf->get_value("${data_prefix}ns");
     }
+    if ( $z==0 || $z eq 'NO_KEY') { 
+	printd(5,"Z dimension reading zero in variable nv2, or ns, using 1 instead\n");
+	$z=1;
+    }
+    
+### get channels
+# for diffusion arraydim is the number of diffusion experiments
+# for gems and ge3d it is the number of channels. We'll detect for acqcycles = arraydim and presume that if they're equal we're diffusion and channels =1(boy will that ever break later. 
+     if ($hf->get_value($data_prefix."arraydim") ne 'NO_KEY') { 
+	 if ( $hf->get_value($data_prefix."acqcycles") ne $hf->get_value($data_prefix."arraydim") ) {
+	     $channels=$hf->get_value($data_prefix."arraydim")/$z;
+	     printd(45,"Setting channels using arraydim|celem/z channels=$channels, z=$z arraydim=".$hf->get_value($data_prefix."arraydim")."\n");
+	     #	$channel_mode='integrate';
+	     if ($hf->get_value($data_prefix."celem") ne 'NO_KEY') { 
+		 if ($hf->get_value($data_prefix."celem")/$z != $channels ) { 
+		     printd(5,$data_prefix."celem does not equal array dim. This is a new condition.\n");
+		 }  
+		 $vol_detail='multi';
+	     }
+	 } else { 
+	     printd(45,"acqcycles are equivalent ot arraydims we think this means diffsion and single channel data, but proof was never properly looked after.\n");
+	 }
+     }
+
+#
 # 	if ( ! defined $hf->{"PVM_EncMatrix"}->[0]) {
 # 	    $x=$x/2;
 # 	    printd(45, "halving x\n");
 # 	}
 #     }
     printd(45,"order is $order\n");
-#     if ( $#matrix ==1 ) {
-#         $vol_type="2D";
+    if ( $hf->get_value($data_prefix."acqdim") == 2) {
+         $vol_type="2D";
+    }
 # 	$slices=$b_slices;
 # 	printd(90,"Setting type 2D, slices are b_slices->slices\n");
 # 	#should find detail here, not sure how, could be time or could be space, if space want to set slices, if time want to set vols
@@ -447,12 +467,12 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
        
 #         $z=$slices;
 #     }
-#     if ( $channels>1 ) { 
-# 	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
-
- 	$vol_num=$vol_num*$channels;
+    if ( $channels>1 ) { 
+	 $vol_detail=$vol_detail.'-channel';#."-$channel_mode";
+    }
+    $vol_num=$vol_num*$channels;
 	
-#     }
+
 
     $vol_num=$time_pts*$vol_num;# not perfect
     if ( $vol_num>1) { 
@@ -711,14 +731,6 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 #     if($vol_type eq "4D" && $vol_detail eq "DTI") { 
 # 	my $temp=pop(@{$hfkey_aliaslist{"B_NRepetitions"}});
 #     }
-    
-    if (defined $agilent_header_hash_ref->{"channels"}->[0] ) { 
-	$hf->set_value('A_channels', aoaref_get_single($agilent_header_hash_ref->{"channels"}));
-    } else {
-	$hf->set_value('A_channels', 1);
-    }
-
-
 ### insert standard keys * multiplier into civm headfile
     for my $hfkey (keys %hfkey_aliaslist) { 
         printd(55,"civmheadfilekey=$hfkey\n");
@@ -744,7 +756,12 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	}
 	printd(25,"\n");
     }
-
+#     if ( $hf->get_value($data_prefix.'ne') !~ /^[0-9]+$/x ) {
+# 	printd(5,"ne not defined in agilent headfile
+# 	$hf->set_value('ne',1);
+#     }
+    
+    
 
     my $volinfotext=set_volume_type($hf); # only determines the output volume type, need alternate to determine the kspace data and its orientations and orders.
     my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type);
@@ -758,12 +775,20 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     $hf->set_value("${s_tag}image_data_type",$data_type);
     printd(75,"echos before set_volume_type".$hf->get_value($s_tag."echos")."\n");
     $hf->set_value("${s_tag}volumes",$vols);
-    $hf->set_value("${s_tag}echos",$hf->get_value('ne'));
+    $hf->set_value("${s_tag}echos",$hf->get_value($data_prefix.'ne'));
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
     printd(75,"echos after set_volume_type = ".$hf->get_value($s_tag."echos").".\n");
-    my $dim_order='xyzptc';
+    my $dim_order='xycpzt';
     $hf->set_value("${s_tag}dimension_order",$dim_order);
+    printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
+    if ( $vol_detail =~ /multi.*channel/x) {
+	printd(40," setting channel data using volumes / echos ( $vols / ".$hf->get_value($data_prefix.'ne').")\n");
+	$hf->set_value($s_tag.'channels', $vols/$hf->get_value($data_prefix.'ne'));
+    } else {
+  	$hf->set_value($s_tag.'channels', 1);
+    }
+
 
 
 ### set kspace bit depth and type    
@@ -785,6 +810,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     $fov_y=$hf->get_value($data_prefix.$hf->get_value($data_prefix."dimX"))*10;
     #dimZ stores procpar variable name of dimz fov
     $fov_z=$hf->get_value($data_prefix.$hf->get_value($data_prefix."dimZ"))*10;
+    print("dim_X:$dx, dim_Y:$dy, dim_Z:$dz, echos:".$hf->get_value("${s_tag}echos").", channels:".$hf->get_value("${s_tag}channels")."\n");
     print("fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n");
     if (! defined $dx || ! defined $dy ||! defined $dz ) {#||! defined $thick_f ||! defined $thick_p ||! defined $thick_z ){
 	croak("Problem resolving FOV!\n");
