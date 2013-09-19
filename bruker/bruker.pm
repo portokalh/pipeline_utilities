@@ -103,7 +103,7 @@ my $NAME = "bruker lib";
 my $VERSION = "2013/04/29";
 my $COMMENT = "Bruker meta data functions";
 use vars qw(@knownmethods);
-@knownmethods= qw( MGE RARE MSME MDEFT);
+@knownmethods= qw( MGE RARE MSME MDEFT UTE3D);
 # brukere extract tested methods are qw( DtiEpi EPI FLASH GEFC MDEFT MGE MSME PRESS RARE UTE UTE2D UTE3D ute3d_keyhole ); # tested acquisition methods for bruker extract. might be good to pull this out to configuration variables. 
 
 ###
@@ -495,6 +495,7 @@ sub determine_volume_type_old { # ( \%bruker_header_ref[,$debug_val] )
         printd(45,"spatial_size2:$ss2\n");
     } elsif($#matrix==1 && !defined $bruker_header_ref->{'ACQ_spatial_size_2'}) { #if undefined, there is only one slice. 
         $ss2=1;
+        printd(45,"spatial_size2:$ss2\n");
 #    } else { 
 #	$ss2=0;
     }
@@ -526,8 +527,10 @@ sub determine_volume_type_old { # ( \%bruker_header_ref[,$debug_val] )
     } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
         $vol_type="3D";
 	if ( defined $ss2 ) { 
+	    printd(5, "found ss2 as $ss2\n");
 	    $slices=$ss2;
 	} else {
+	    printd(5, "found putting $matrix[2] into slices\n");
 	    $slices = $matrix[2];
 	}
         if ( $slices ne $matrix[2] ) {

@@ -305,8 +305,9 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	printd(45,"spatial_size2:$ss2\n");
     } elsif($#matrix==1 && $ss2 eq 'NO_KEY') { #if undefined, there is only one slice. 
         $ss2=1;
-#    } else { 
-#	$ss2=0;
+        printd(45,"spatial_size2:$ss2\n");
+    } else { 
+	$ss2=undef;
     }
 
 ###### determine dimensions and volumes
@@ -726,13 +727,24 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     $hf->set_value("dim_Z",$z);
     $hf->set_value("${s_tag}image_bit_depth",$bit_depth);
     $hf->set_value("${s_tag}image_data_type",$data_type);
-    printd(75,"echos before set_volume_type".$hf->get_value($s_tag."echos")."\n");
     $hf->set_value("${s_tag}volumes",$vols);
-    $hf->set_value("${s_tag}echos",$hf->get_value('ne'));
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
+
+    printd(75,"echos before set_volume_type".$hf->get_value($s_tag."echos")."\n");
+    if ( $hf->get_value('ne') eq 'NO_KEY') {
+	$hf->set_value('ne',1);
+    }
+    $hf->set_value("${s_tag}echos",$hf->get_value('ne'));
     printd(75,"echos after set_volume_type = ".$hf->get_value($s_tag."echos").".\n");
 
+    printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
+    if ( $vol_detail =~ /multi.*channel/x) {
+	printd(40," setting channel data using volumes / echos ( $vols / ".$hf->get_value($data_prefix.'ne').")\n");
+	$hf->set_value($s_tag.'channels', $vols/$hf->get_value($data_prefix.'ne'));
+    } else {
+  	$hf->set_value($s_tag.'channels', 1);
+    }
     # find the encoding order, EncOrder1=CENTRIC_ENC (slices offest by center), so add 1/2 z+1, no, just put value in.
     #my $decode_list=0;
 
@@ -759,9 +771,16 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    printd(35,"dim_Z encoding from PVM_ObjOrderList($objs)\n");
 	    $hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_ObjOrderList'));
 	} else { 
-	    carp("PVM_ObjOrderScheme was not Sequential, however PVM_ObjOrderList only contained 0\n");
+	    my $string="PVM_ObjOrderScheme was not Sequential, however PVM_ObjOrderList only contained 0,".
+		" ObjOrderScheme=<$objs>\n".
+		"Reconstruction will probably fail!\n";
+	    if ( $extraction_mode_bool ) {
+		warn($string); 
+	    } else { 
+		confess($string);
+	    }
 	}
-	    
+	
     } else { 
 	printd(35,"dim_Z encding not specified with $enc2 or $objs\n");
     }
@@ -1150,13 +1169,15 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     $hf->set_value("${s_tag}dimension_order",$dim_order);
 #    $hf->set_value("${s_tag}channels",'');
 
-    if ( $hf->get_value('ne')>1) {
-	$hf->set_value("${s_tag}varying_parameter",'echos');
-    } elsif ($hf->get_value('ne')>1) {
-    } elsif ($hf->get_value('ne')>1) {
-    } else {
-	#printd(35, "Doing default set of echos with $vols/".$hf->get_value('ne')."\n");
-	#$hf->set_value("${s_tag}echos",$vols/$hf->get_value('ne'));
+    if ( $hf->get_value('ne') ne 'NO_KEY' ) {
+	if ( $hf->get_value('ne')>1) {
+	    $hf->set_value("${s_tag}varying_parameter",'echos');
+	} elsif ($hf->get_value('ne')>1) {
+	} elsif ($hf->get_value('ne')>1) {
+	} else {
+	    #printd(35, "Doing default set of echos with $vols/".$hf->get_value('ne')."\n");
+	    #$hf->set_value("${s_tag}echos",$vols/$hf->get_value('ne'));
+	}
     }
 #    $hf->set_value('ne,); PVM_NEchoImages
 #    $hf->set_value("${s_tag}",'');
