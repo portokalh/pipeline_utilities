@@ -250,8 +250,10 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         croak "Required field missing from bruker header:\"$prefered_matrix_key|ACQ_size\" ";
     }
     # use absence of pvm variables to set the default to UNDEFINED orientation which is x=acq1, y=acq2.
-    if ( defined $hf->{"PVM_SPackArrReadOrient"} ) { 
-        $order=$hf->get_value($data_prefix."PVM_SPackArrReadOrient" );
+    $order = $hf->get_value($data_prefix."PVM_SPackArrReadOrient" );
+    #if ( defined $hf->{"PVM_SPackArrReadOrient"} ) { 
+    #    $order=$hf->get_value($data_prefix."PVM_SPackArrReadOrient" );
+    if ( $order ne 'NO_KEY' ) { 
         if ( $order eq 'NO_KEY' && $matrix[0]) { 
             croak("Required field missing from bruker header:\"PVM_SPackArrReadOrient\"");
         }
@@ -260,9 +262,10 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     } 
 ### get channels
     if ($hf->get_value($data_prefix."PVM_EncActReceivers") ne 'NO_KEY') { 
+
 	$channels=$hf->get_value($data_prefix."PVM_EncNReceivers");
-	
-#	$channel_mode='integrate';
+	printd(15,"MultiChannel with PVM_EncActReceivers eq $channels\n");
+	$channel_mode='integrate';
     }
 ### get bit depth
     my $bit_depth;
@@ -311,8 +314,13 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     }
 
 ###### determine dimensions and volumes
-    if ( $order =~  m/^H_F|A_P$/x  ) { 
-        $order ='yx'; 
+    if ( $order =~  m/^H_F|A_P$/x &&  $method !~ m/RARE/x  ) { # && $extraction_mode_bool
+#         if ( ! $extraction_mode_bool ) {
+# 	    $order ='xy'; # because we're unswapping in recon mode, we dont want to report ourselves backwards
+# 	} else {
+
+# 	}
+	$order ='yx'; 
         $x=$matrix[1];
         $y=$matrix[0];
 # 	if ( ! defined $hf->{"$prefered_matrix_key"}->[0]) {
@@ -351,7 +359,8 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	$x=$y;
 	$y=$temp;
 	$vol_type='3D';
-	$order='yx'
+	$order='yx';
+	printd(15,"MDEFT order swapping due to MDEFT appearinging to be 2D Sequence");
     }
 ###### set time_pts    
     if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
@@ -515,7 +524,6 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     my $extraction_mode_bool=$hf->get_value("R_extract_mode");
     if ( $extraction_mode_bool eq 'NO_KEY') { $extraction_mode_bool=0; }
 #    my $bruker_prefix=$hf->get_value("${s_tag}prefix"); #z_Bruker_
-    my $report_order=$hf->get_value("${s_tag}axis_report_order");
     my $binary_header_size=0;
     my $block_header_size=0;
     $hf->set_value("binary_header_size",$binary_header_size);
@@ -718,7 +726,8 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 
 
     my $volinfotext=set_volume_type($hf); # only determines the output volume type, need alternate to determine the kspace data and its orientations and orders.
-    my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type);
+    my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type,$report_order);
+    
     ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type,$report_order)=split(':',$volinfotext);
 #    my $vol_type=$hf->get_value("${s_tag}vol_type");
 #    my $vol_detail=$hf->get_value("${s_tag}vol_type_detail");
@@ -730,6 +739,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     $hf->set_value("${s_tag}volumes",$vols);
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
+    $hf->set_value("${s_tag}axis_report_order",$report_order);
 
     printd(75,"echos before set_volume_type".$hf->get_value($s_tag."echos")."\n");
     if ( $hf->get_value('ne') eq 'NO_KEY') {
@@ -763,24 +773,32 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     } else { 
 	printd(35,"dim_Y encding not specified with $enc1\n");
     }
+    
     if ( $enc2 ne 'LINEAR_ENC' && ! $enc2 =~ m/NO_KEY|UNDEFINED|BLANK/x){ 
 	printd(35,"dim_Z encoding from PVM_EncSteps2($enc2)\n");
 	$hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps2'));
     } elsif( $objs ne 'Sequential' ) { 
-	if ( $hf->get_value($data_prefix.'PVM_ObjOrderList') ne '0') { 
-	    printd(35,"dim_Z encoding from PVM_ObjOrderList($objs)\n");
-	    $hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_ObjOrderList'));
-	} else { 
-	    my $string="PVM_ObjOrderScheme was not Sequential, however PVM_ObjOrderList only contained 0,".
-		" ObjOrderScheme=<$objs>\n".
-		"Reconstruction will probably fail!\n";
-	    if ( $extraction_mode_bool ) {
-		warn($string); 
+	printd(45,"EncOrder2 is $enc2");
+	#my $method = $hf->get_value($data_prefix."ACQ_method");
+	if ( $hf->get_value($data_prefix."ACQ_method") =~ m/RARE/x ) {
+	    printd(15,"RARE acq hack! setting dim_Z_encoding_order to PVM_EncSteps2\n");
+	    $hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps2'));
+	} else {
+	    if ( $objo ne '0') { 
+		printd(35,"dim_Z encoding from PVM_ObjOrderList($objs)\n");
+		$hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_ObjOrderList'));
 	    } else { 
-		confess($string);
+		my $string="PVM_ObjOrderScheme was not Sequential, however ".
+		    " ObjOrderList=<$objo>,\n".
+		    " ObjOrderScheme=<$objs>\n".
+		    "Reconstruction will probably fail!\n";
+		if ( $extraction_mode_bool ) {
+		    warn($string); 
+		} else { 
+		    confess($string);
+		}
 	    }
 	}
-	
     } else { 
 	printd(35,"dim_Z encding not specified with $enc2 or $objs\n");
     }
@@ -1114,6 +1132,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 # if 2d, dimorder is xcpzyt permute code is 1 5 4 3 2 6 
 # c is channels, p is parameter, could be te, tr or alpha
 # if 3d, dimorder is xycpzt permute code is 1 2 5 4 3 6 ( this is uncertain and needs testing)
+# must swap spatial dim 1 and 2 according to $order variable
 # RARE dimorder 1 test gives xcyz, p and t unknown
 # PVM_Isotropic,      Isotropic_None|?
 # PVM_SpatResol,      spatial resolution per spatial dimension, 2 for 2d, 3 for 3d, 
@@ -1160,12 +1179,21 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #    if ($hf->get_value("${bruker_prefix}PVM_SpatDimEnum") eq '2D' ) { 
     if ($vol_type eq '2D' ) { 
 	# tested true for MGE sequence, and 2D
-	$dim_order='xcpzyt';
+	if ( $report_order eq 'xy' ){
+	    $dim_order='xcpzyt';
+	} else {
+	    $dim_order='ycpzxt';
+	} 
+
     } else {
 # RARE dimorder 1 test gives xcyz, p and t unknown
-	$dim_order='xcpyzt';
+	if ( $report_order eq 'xy' ){	
+	    $dim_order='xcpyzt';
+	} else {
+	    $dim_order='ycpxzt';
+	}
     }
-
+	printd(45,"Using dimension_order $dim_order\n");
     $hf->set_value("${s_tag}dimension_order",$dim_order);
 #    $hf->set_value("${s_tag}channels",'');
 

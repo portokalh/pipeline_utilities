@@ -65,7 +65,13 @@ internal function doing the work of printline_to_aoa
     my @val_array=();
 #    split($printline
     ($dims, $values)=split(',',$printline);
-    
+    if ( ! defined $values || ! defined $dims ) { 
+	#printd(25,"Printline <$printline> did not split properly.\n");
+	if ( ! defined $values ) { $values="$printline"; $dims=1;}
+	if ( ! defined $dims ) { $dims="1"; }
+	carp("WARN: Printline <$printline> did not split as expected.\n\tDims will be $dims\n\tValues will be $printline");
+    }
+
     @dim_array=  ( $dims =~ m/([0-9]+[:+]?[ ]?)+/gx  );#(:?:([0-9]+)?)*
 #    @dim_array=  ( $dims =~ m/([0-9]+[:+]?[ ]?)+/gx  );#(:?:([0-9]+)?)*
 
