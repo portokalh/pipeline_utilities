@@ -375,6 +375,9 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #     if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
 #         $time_pts=$movie_frames;
     $time_pts=$hf->get_value($data_prefix."volumes");
+    if ( $time_pts == 0 ) {
+	croak("Bad number or volumes in procpar file, cannot continue");
+    }
 #         $vol_type="4D";
 #         if ( defined $n_dwi_exp ) { 
 #             printd(45,"diffusion exp with $n_dwi_exp frames\n");
@@ -470,18 +473,26 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     if ( $channels>1 ) { 
 	 $vol_detail=$vol_detail.'-channel';#."-$channel_mode";
     }
-    $vol_num=$vol_num*$channels;
-	
-
-
-    $vol_num=$time_pts*$vol_num;# not perfect
-    if ( $vol_num>1) { 
-	$vol_type="4D";
+    if ( $channels!=0 ) {
+	$vol_num=$vol_num*$channels;
+    } else {
+	carp("Bad number of channels <$channels>.");
+    }
+    if ( $time_pts!=0 ) { 
+	$vol_num=$time_pts*$vol_num;# not perfect
+    } else {
+	carp("Bad number of time_pts <$time_pts>.");
     }
 
+    if ( $vol_num>1) { 
+	$vol_type="4D";
+    } elsif ($vol_num != 1 ) 
+    {
+	carp("Bad number of volumes <$vol_num>.");
+    }
 ###### handle xy swapping
     
-
+    
     printd(45,"Set X=$x, Y=$y, Z=$z, vols=$vol_num\n");
     printd(45,"vol_type:$vol_type, $vol_detail\n");
     $debug_val=$old_debug;

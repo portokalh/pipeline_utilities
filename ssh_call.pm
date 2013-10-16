@@ -213,7 +213,8 @@ sub most_recent_directory {
   #  figure out latest file to transfer
   my ($system, $directory)  =@_;
 
-      my $lscmd = "unalias ls; ls -drt $directory/*/ | tail -1";
+  # excluding Old and Unarchiveahble is a hack that should be improved with some sort of exclusion list.
+      my $lscmd = "unalias ls; ls -drt $directory/*/ | grep -v Old| grep -v Unarchiveable | tail -1";
 
       my $cmd = "ssh -Y $system \"$lscmd\" ";
       my $last_Pno_withDir = `$cmd`;

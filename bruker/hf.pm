@@ -314,7 +314,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     }
 
 ###### determine dimensions and volumes
-    if ( $order =~  m/^H_F|A_P$/x &&  $method !~ m/RARE/x  ) { # && $extraction_mode_bool
+    if ( $order =~  m/^H_F|A_P$/x && $extraction_mode_bool ) { #   $method !~ m/RARE/x  
 #         if ( ! $extraction_mode_bool ) {
 # 	    $order ='xy'; # because we're unswapping in recon mode, we dont want to report ourselves backwards
 # 	} else {
