@@ -22,6 +22,7 @@ use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref
 use agilent qw( @knownmethods);
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 #use vars qw($debug_val $debug_locator);
+
 use Headfile;
 require Exporter;
 our @ISA = qw(Exporter);
@@ -92,7 +93,9 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # 	printd(5,"WARNING WARNING WARNING MDEFT DETECTED!\n".
 # 	       "MDEFT PRETENDS TO BE A 2D SEQUENCE WHEN IT IS IN FACT 3D!\n".
 # 	       "rad_mat will require special options to run!\n\tvol_type_override=3D\n\tU_dimension_order=xcpyzt\n");
+
 # 	sleep_with_countdown(8);
+
 #     }
 ### keys which may help
 ### multi2d
@@ -199,6 +202,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #     if ($slice_pack_size ne 'NO_KEY' ) {
 #        $slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
 #     } else { 
+
 # 	$slice_pack_size=$hf->get_value($data_prefix."NI");
 # 	carp("No ${data_prefix}PVM_SPackArrNSlices, using NI instead, could be wrong value ") ;
 # 	sleep_with_countdown(4);
@@ -211,7 +215,16 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # spatial_phase_1, either frequency or phase dimension, only defined in 2d or slab data on rare sequence, unsure for others
 # spatial_size_2, 3rd dimension size, should match $matrix[1] if its defined.;
     my @matrix; #get 2/3D matix size
+
     my $order= "UNDEFINED";  #report_order for matricies
+
+
+
+
+
+
+
+
 #     if ( $hf->get_value($data_prefix."PVM_EncMatrix") ne 'NO_KEY' ||  $hf->get_value($data_prefix."ACQ_size")ne 'NO_KEY' ) {
 
 # 	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."PVM_EncMatrix"));
@@ -232,10 +245,13 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # 	    printd(45,"Matrix=".join('|',@matrix)."\n");
 # 	}
 #     }
+
 #     if (! defined $matrix[0]) {
 #         croak "Required field missing from bruker header:\"PVM_EncMatrix|ACQ_size\" ";
 #     }
 #     # use absence of pvm variables to set the default to UNDEFINED orientation which is x=acq1, y=acq2.
+
+
 #     if ( defined $hf->{"PVM_SPackArrReadOrient"} ) { 
 #         $order=$hf->get_value($data_prefix."PVM_SPackArrReadOrient" );
 #         if ( $order eq 'NO_KEY' && $matrix[0]) { 
@@ -244,6 +260,13 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #     } else { 
 	
 #     } 
+
+
+
+
+
+
+
 ### get bit depth
     my $bit_depth=32;
     my $data_type="Real";
@@ -256,12 +279,10 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     }
 #     my $recon_type=$hf->get_value($data_prefix."RECO_wordtype");
 #     my $raw_type=$hf->get_value($data_prefix."GO_raw_data_format");
-#     if ( $recon_type ne 'NO_KEY' || $raw_type ne 'NO_KEY') {
-# 	my $input_type;
+#     if ( $recon_type ne 'NO_KEY' || $raw_type ne 'NO_KEY') { 	my $input_type;
 # 	if ( $recon_type ne 'NO_KEY' && $extraction_mode_bool) { 
 # 	    $input_type=$recon_type;
-# 	} elsif ( $raw_type ne 'NO_KEY' ) { 
-# 	    $input_type=$raw_type;
+# 	} elsif ( $raw_type ne 'NO_KEY' ) { 	    $input_type=$raw_type;
 # 	} else { 
 # 	    croak("input_type undefined, did not find either GO_raw_data_format or RECO_wordtype found. ");
 # 	}
@@ -280,7 +301,6 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #     } else { 
 # 	warn("cannot find bit depth at RECO_wordtype");
 #     }
-    
 ### if both spatial phases, slab data? use spatial_phase_1 as x?y?
 ### for 3d sequences ss2 is n slices, for 2d seqences it is dim2, thats annoying..... unsure of this
 #     my $ss2 = $hf->get_value($data_prefix."ACQ_spatial_size_2");
@@ -289,6 +309,9 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #     } elsif($#matrix==1 && $ss2 eq 'NO_KEY') { #if undefined, there is only one slice. 
 #         $ss2=1;
 #     }
+
+
+
 
 ###### determine dimensions and volumes
 #     if ( $order =~  m/^H_F|A_P$/x  ) { 
@@ -350,7 +373,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # 	printd(90,"Setting type 2D, slices are b_slices->slices\n");
 # 	#should find detail here, not sure how, could be time or could be space, if space want to set slices, if time want to set vols
 #     } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
-	$vol_type="3D";
+    $vol_type="3D";
     my $cycles=$hf->get_value($data_prefix."acqcycles");
     if ( $cycles ne 1  && $hf->get_value("ray_blocks")==1 ) { 
 #	$vol_type="2D";
@@ -635,6 +658,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 			   "ne"=>[
 			       1,
 			       'nechos',
+			       'ne',
 			   ],
 			   "EchoTimes"=>[
 			       1000,
@@ -790,7 +814,8 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
     printd(75,"echos after set_volume_type = ".$hf->get_value($s_tag."echos").".\n");
-    my $dim_order='xycpzt';
+    my $dim_order='xpyczt';#both xpyczt and xpcyzt work when we dont have channels, formerly 'xycpzt', c was in good position relative to yz for some acquisitions.
+
     $hf->set_value("${s_tag}dimension_order",$dim_order);
     printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
     if ( $vol_detail =~ /multi.*channel/x) {
@@ -893,6 +918,16 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 # 	} 
 #     }
 
+    if ( $hf->get_value('ne') ne 'NO_KEY' ) {
+	if ( $hf->get_value('ne')>1) {
+	    $hf->set_value("${s_tag}varying_parameter",'echos');
+	} elsif ($hf->get_value('ne')>1) {
+	} elsif ($hf->get_value('ne')>1) {
+	} else {
+	    #printd(35, "Doing default set of echos with $vols/".$hf->get_value('ne')."\n");
+	    #$hf->set_value("${s_tag}echos",$vols/$hf->get_value('ne'));
+	}
+    }
 
 
 
