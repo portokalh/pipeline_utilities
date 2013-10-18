@@ -343,21 +343,34 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 ### get channels
 # for diffusion arraydim is the number of diffusion experiments
 # for gems and ge3d it is the number of channels. We'll detect for acqcycles = arraydim and presume that if they're equal we're diffusion and channels =1(boy will that ever break later. 
-     if ($hf->get_value($data_prefix."arraydim") ne 'NO_KEY') { 
-	 if ( $hf->get_value($data_prefix."acqcycles") ne $hf->get_value($data_prefix."arraydim") ) {
-	     $channels=$hf->get_value($data_prefix."arraydim")/$z;
-	     printd(45,"Setting channels using arraydim|celem/z channels=$channels, z=$z arraydim=".$hf->get_value($data_prefix."arraydim")."\n");
-	     #	$channel_mode='integrate';
-	     if ($hf->get_value($data_prefix."celem") ne 'NO_KEY') { 
-		 if ($hf->get_value($data_prefix."celem")/$z != $channels ) { 
-		     printd(5,$data_prefix."celem does not equal array dim. This is a new condition.\n");
-		 }  
-		 $vol_detail='multi';
-	     }
-	 } else { 
-	     printd(45,"acqcycles are equivalent ot arraydims we think this means diffsion and single channel data, but proof was never properly looked after.\n");
-	 }
-     }
+    my @ch_strings=split(',',$hf->get_value($data_prefix."rcvrs")); #( @bd_lines) 
+    my ($ch_code, @ch_opts) = $ch_strings[1] =~ m/([yn]+)/gx ;
+    printd(45,"Channel code parsing, input is <".join(",",@ch_strings)."> parsed into ch_code <$ch_code> of possibilities <@ch_opts>\n");
+    $channels=length($ch_code);
+    if ($channels> 1) {
+	$vol_detail='multi';  
+	foreach (split('',$ch_code))
+	{
+	    if ( $_ eq 'n') { 
+		$channels--;
+	    }
+	}
+    }
+#     if ($hf->gepet_value($data_prefix."arraydim") ne 'NO_KEY') { 
+# 	if ( $hf->get_value($data_prefix."acqcycles") ne $hf->get_value($data_prefix."arraydim") ) {
+# 	    $channels=$hf->get_value($data_prefix."arraydim")/$z;
+# 	    printd(45,"Setting channels using arraydim|celem/z channels=$channels, z=$z arraydim=".$hf->get_value($data_prefix."arraydim")."\n");
+# 	    #	$channel_mode='integrate';
+# 	    if ($hf->get_value($data_prefix."celem") ne 'NO_KEY') { 
+# 		if ($hf->get_value($data_prefix."celem")/$z != $channels ) { 
+# 		    printd(5,$data_prefix."celem does not equal array dim. This is a new condition.\n");
+# 		}  
+# 		$vol_detail='multi';
+# 	    }
+# 	} else { 
+# 	    printd(45,"acqcycles are equivalent ot arraydims we think this means diffsion and single channel data, but proof was never properly looked after.\n");
+# 	}
+#     }
 
 #
 # 	if ( ! defined $hf->{"PVM_EncMatrix"}->[0]) {
