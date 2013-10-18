@@ -103,8 +103,8 @@ my $NAME = "bruker lib";
 my $VERSION = "2013/04/29";
 my $COMMENT = "Bruker meta data functions";
 use vars qw(@knownmethods);
-#@knownmethods= qw( MGE RARE MSME MDEFT UTE3D);
-@knownmethods= qw( RARE );
+@knownmethods= qw( MGE RARE MDEFT UTE3D);# MSME
+#@knownmethods= qw( RARE );
 # brukere extract tested methods are qw( DtiEpi EPI FLASH GEFC MDEFT MGE MSME PRESS RARE UTE UTE2D UTE3D ute3d_keyhole ); # tested acquisition methods for bruker extract. might be good to pull this out to configuration variables. 
 
 ###

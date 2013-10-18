@@ -345,23 +345,33 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
         $vol_type="3D";
 	if ( defined $ss2 ) { 
+	    printd(90,"\tslices<-spatial_size2\n");
 	    $slices=$ss2;
 	} else {
 	    $slices = $matrix[2];
 	}
         if ( $slices ne $matrix[2] ) {
-            croak "n slices in question, hard to determing correct number, either2 $slices or $matrix[2]\n";
+            croak "n slices in question, hard to determing correct number, either $slices or $matrix[2]\n";
         }
     }   
-###### MDEFT LAME FIX
-    if ( $method =~ m/MDEFT/x && $extraction_mode_bool ) {
-	my $temp=$x;
-	$x=$y;
-	$y=$temp;
-	$vol_type='3D';
-	$order='yx';
-	printd(15,"MDEFT order swapping due to MDEFT appearinging to be 2D Sequence");
-    }
+
+
+
+# ###### MDEFT LAME FIX
+# at some point i've managed to remove the need for this fudgery.
+#     if ( $method =~ m/MDEFT/x && $extraction_mode_bool ) {
+# 	my $temp=$x;
+# 	$x=$y;
+# 	$y=$temp;
+# 	$vol_type='3D';
+# 	$order='yx';
+# 	printd(15,"MDEFT order swapping due to MDEFT appearinging to be 2D Sequence");
+# #	$hf->set_value("vol_type_override","3D");
+# #	$hf->set_value("U_dimension_order","xcpyzt");
+#     }
+
+
+
 ###### set time_pts    
     if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
         $time_pts=$movie_frames;
@@ -377,11 +387,12 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         }
     }
 ###### set z and volume number
-    printd(45,"LIST:$list_sizeB $slice_pack_size\n");
+    printd(45,"LIST_B: SPACK_SIZE, $list_sizeB: $slice_pack_size\n");
 ### if listsize<listsizeb we're multi acquisition we hope. if list_size >1 we might be multi multi 
     if ( $list_sizeB > 1 ) { 
         $vol_detail='multi';
         if($n_slice_packs >1 ) { 
+	    printd(90,"\t mutli-slab data\n");
             $z=$slices*$n_slice_packs*$slice_pack_size; #thus far slice_pack_size has always been 1 for slab data, but we dont want to miss out on the chance to explode when itsnot 1, see below for error 
             $vol_detail='slab';
 	    if ("$n_slice_packs" ne "$b_slices") { 
@@ -439,7 +450,8 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		$vol_detail=$vol_detail.'-echo';		    
 	    }
 	} else { 
-	    #$z=1;
+	    printd(90,"\tz<-slices\n");
+	    $z=$slices;
             $vol_num=$list_sizeB;
         }
     } elsif ( $slice_pack_size>1 ) {
@@ -457,8 +469,8 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	    printd(10,"Unknown error in setting $z size");
 	}
     } else { 
-       
-        $z=$slices;
+	printd(90,"\tz<-slices\n");
+	$z=$slices;
     }
     if ( $channels>1 && ! $extraction_mode_bool) { 
 	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
@@ -750,8 +762,8 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 
     printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
     if ( $vol_detail =~ /multi.*channel/x) {
-	printd(40," setting channel data using volumes / echos ( $vols / ".$hf->get_value($data_prefix.'ne').")\n");
-	$hf->set_value($s_tag.'channels', $vols/$hf->get_value($data_prefix.'ne'));
+	printd(40," setting channel data using volumes / echos ( $vols / ".$hf->get_value('ne').")\n");
+	$hf->set_value($s_tag.'channels', $vols/$hf->get_value('ne'));
     } else {
   	$hf->set_value($s_tag.'channels', 1);
     }
@@ -792,11 +804,11 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 		    " ObjOrderList=<$objo>,\n".
 		    " ObjOrderScheme=<$objs>\n".
 		    "Reconstruction will probably fail!\n";
-		if ( $extraction_mode_bool ) {
+# 		if ( $extraction_mode_bool ) {
 		    warn($string); 
-		} else { 
-		    confess($string);
-		}
+# 		} else { 
+# 		    confess($string);
+# 		}
 	    }
 	}
     } else { 
@@ -941,14 +953,17 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     #}      
     ($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
     ($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov")); 
+    $fov_f=$fov_f*10;
+    $fov_p=$fov_p*10;
+    $fov_z=$fov_z*10;
     if ( $hf->get_value($data_prefix."PVM_SpatResol") ne 'NO_KEY') {
 #	($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
-	if ( $fov_f!=$df*$thick_f/10 )
+	if ( $fov_f!=$df*$thick_f )
 	{
 	    carp("WARNING: fov_f from acq_fov does not match thickness * dimenison, recalculating with PVM_SpatResol.");
 	    $fov_f=$df*$thick_f;
 	}
-	if ( $fov_p!=$dp*$thick_p/10 ) 
+	if ( $fov_p!=$dp*$thick_p ) 
 	{
 	    carp("WARNING: fov_p from acq_fov does not match thickness * dimenison, recalculating with PVM_SpatResol.");
 	    $fov_p=$dp*$thick_p;
@@ -956,7 +971,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	
 	if (defined $thick_z) {
 	    printd(45,"Using ${data_prefix}PVM_SpatResol for fov_z\n");
-	    if ( $fov_z!=$dz*$thick_z/10 ) 
+	    if ( $fov_z!=$dz*$thick_z ) 
 	    {
 		carp("WARNING: fov_z from acq_fov does not match thickness * dimenison");
 	    }
