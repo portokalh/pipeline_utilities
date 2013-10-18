@@ -355,6 +355,9 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 		$channels--;
 	    }
 	}
+	if ($channels== 1) {
+	    $vol_detail='single';  
+	}
     }
 #     if ($hf->gepet_value($data_prefix."arraydim") ne 'NO_KEY') { 
 # 	if ( $hf->get_value($data_prefix."acqcycles") ne $hf->get_value($data_prefix."arraydim") ) {
