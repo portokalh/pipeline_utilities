@@ -19,6 +19,7 @@ use Carp;
 #use bruker;
 use Scalar::Util qw(looks_like_number);
 use File::Find;
+#use Devel::CheckOS qw(die_unsupported os_is);
 #require Exporter;
 
 BEGIN {
@@ -103,7 +104,7 @@ sub write_array_to_file { # (path,array_ref[,debug_val]) writes text to array re
 
 =cut
 ###
-sub get_engine_constants_path { # (hostname[,debug_val])
+sub get_engine_constants_path { # (search_base,hostname[,debug_val])
 ###
 # 
     my (@input)=@_;
@@ -121,13 +122,18 @@ sub get_engine_constants_path { # (hostname[,debug_val])
 	$hostname=qx/ hostname -s/;
 	civm_simple_util::printd(5,"host was undefined.\n");
     }
-    civm_simple_util::printd(5,",using hostname=$hostname\n");
+    civm_simple_util::printd(5,"using hostname=$hostname\n");
 #find( sub { print $File::Find::name."\n" if ( $_ =~ /engine_$hostname.*dependencies/ ); } , "$search_base");
     my %files;
     find( sub { ${files{$File::Find::name}} = 1 if ($_ =~  m/^engine.*$hostname.*dependencies$/x ) ; },$search_base);
     my @fnames=sort(keys(%files));
     if ($#fnames==-1 ) { push(@fnames,""); } 
+#     if(os_is('MicrosoftWindows') ) { 
+#  	printd(55,"fixing path for windows\n\n");
+#  	$fnames[0]=~ s:\\\\:/:gx;
+#     }
     civm_simple_util::printd(30,"Found constants File $fnames[0].\n");
+
     return ($fnames[0]);
 }
 
