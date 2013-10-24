@@ -61,7 +61,14 @@ sub convert_to_nifti_util {
       $zfov_mm=($slthick+$slicespacing)*$zdim-$slicespacing;
       
   }
- 
+  my $input_specid=$Hf_in->get_value("U_specid");
+  my $out_specid=$Hf->get_value("U_specid");
+  #if (  $out_specid eq "NO_KEY" || $out_specid eq "UNDEFINED_VALUE" || $out_specid eq "EMPTY_VALUE" ) {
+  if ( $out_specid !~ m/^[0-9]{6}-[0-9]+:[0-9]+$/x ) 
+  {
+      print ("setting specid in output to $input_specid\n");
+      $Hf->set_value("U_specid",$input_specid);
+  }
   my $image_suffix   = $Hf->get_value("${data_setid}-image-suffix");
   if ($image_suffix eq 'NO_KEY') { $image_suffix   = $Hf->get_value("${data_setid}_image_suffix"); }
   if ($image_suffix !~ m/[raw|nii]/ ) { error_out("nifti_ize: image suffix $image_suffix not known to be handled by matlab nifti converter (just \.raw or \.nii)");}
@@ -71,7 +78,7 @@ sub convert_to_nifti_util {
       error_out("Could not find good value for xyz or xyz fov\n\tx=$xdim, y=$ydim, z=$zdim, xfov=$xfov_mm, yfov=$yfov_mm, zfov=$zfov_mm\n") unless(($ggo==0) || ($image_suffix =~ m/[nii]/ ));
       @voxelsize=(0,0,0);
       ($xfov_mm,$yfov_mm,$zfov_mm)=(0,0,0);
-      ($xdim,$ydim,$zdim)=(0,0,0);
+      ($xdim,$ydim,$zdim)=(1,1,1);
   } else  {
       @voxelsize=($xfov_mm/$xdim,$yfov_mm/$ydim,$zfov_mm/$zdim);
 #  my $iso_vox_mm = $xfov_mm/$xdim;
