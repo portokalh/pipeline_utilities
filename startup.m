@@ -45,11 +45,13 @@ paths={
     [ workstation_home '/shared/civm_matlab_common_utils/' ]
     [ workstation_home '/analysis/mr_relaxation_calc/' ]
     [ workstation_home '/analysis/label_measurements/' ]
-    
     };
 genpaths={
     [ workstation_home '/shared/mathworks']
     [ workstation_home '/shared/matlab_img_processing']
+    [ workstation_home '/recon/mat_recon_pipe/filter' ]
+    [ workstation_home '/recon/mat_recon_pipe/grid' ]
+    [ workstation_home '/recon/External/grid/mri_unbound']
     };
 
 for p=1:length(old_paths)
