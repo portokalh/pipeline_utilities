@@ -103,9 +103,14 @@ my $NAME = "bruker lib";
 my $VERSION = "2013/04/29";
 my $COMMENT = "Bruker meta data functions";
 use vars qw(@knownmethods);
-@knownmethods= qw( MGE RARE MDEFT UTE3D);# MSME
-#@knownmethods= qw( RARE );
-# brukere extract tested methods are qw( DtiEpi EPI FLASH GEFC MDEFT MGE MSME PRESS RARE UTE UTE2D UTE3D ute3d_keyhole ); # tested acquisition methods for bruker extract. might be good to pull this out to configuration variables. 
+
+my @cartesian_3D_methods= qw( MGE RARE MSME ); 
+my @cartesian_2D_methods= qw(MDEFT ) ;
+my @radial_methods=qw( UTE3D ute3d_keyhole);
+push(@knownmethods,@cartesian_3D_methods);
+push(@knownmethods,@cartesian_2D_methods);
+push(@knownmethods,@radial_methods);
+# brukere extract tested methods are qw( DtiEpi EPI FLASH GEFC MDEFT MGE MSME PRESS RARE UTE UTE2D UTE3D ute3d_keyhole ); # tested acquisition methods for bruker extract. might be good to pull this out to configuration variables. Many of these no longer work for various resons
 
 ###
 sub parse_header {   #( \@brukerheaderarrayoflines,$debug_valval )

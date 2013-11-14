@@ -164,7 +164,7 @@ sub most_recent_file {
 
 
 sub resolve_wildcards { 
-  #  figure out latest file to transfer
+  #  resolves a wildcard path to a single latest file
   my ($system, $wild_card_path)  =@_;
 
   my $lscmd = "unalias ls; ls -dtr $wild_card_path | tail -1";
@@ -173,9 +173,10 @@ sub resolve_wildcards {
 #  print ("$cmd\n");
   my $plain_path = `$cmd`;
   chomp $plain_path;
-  if ($plain_path eq "") {
+  if ($plain_path eq "") { #||$plain_path eq '/..') { 
+  #if ($plain_path =~ m/(\|..)/x {
       print STDERR "  Problem:\n";
-        print STDERR "  * You specified recon with wildcards in the name.\n";
+      print STDERR "  * You specified recon with wildcards in the name.\n";
       print STDERR "  * But couldn't find match.\n";
       print STDERR "  * cmd was: $cmd\n";
       return "";
@@ -187,17 +188,22 @@ sub resolve_wildcards {
 } 
 
 sub resolve_wildcards_multi { 
-  #  figure out file to transfer
+  # resolves a wildcard path to a list of files
   my ($system, $wild_card_path,$count)  =@_;
  #  ssh nmrsu@nemo find /opt/PV5.1/data/nmrsu/nmr/ -iname "20120115*" -exec 'grep Rat -H {}/subject  \;' | cut -d ':' -f1
   my $lscmd = "unalias ls; ls -drt $wild_card_path";
   my $cmd   = "ssh -Y $system \"$lscmd\" ";
-#  print ("$cmd\n");
-  my $plain_path = `$cmd`;
+  print ("$cmd\n");
+  my $plain_path = `$cmd`; #translates to blank
+#  print STDERR $plain_path."\n";
   chomp $plain_path;
+
+#  my (@paths)= $plain_path =~ m/([^[:cntrl:][:space:]]+)/gx ;
+#  $plain_path=join(@paths," ");
+
   if ($plain_path eq "") {
       print STDERR "  Problem:\n";
-        print STDERR "  * You specified recon with wildcards in the name.\n";
+      print STDERR "  * You specified recon with wildcards in the name.\n";
       print STDERR "  * But couldn't find match.\n";
       print STDERR "  * cmd was: $cmd\n";
       return "";

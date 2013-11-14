@@ -84,11 +84,6 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	croak "Required field missing from bruker header:\"${data_prefix}ACQ_method\" ";
     }
     printd(45, "Method:$method\n");
-    my $method_ex="<(".join("|",@knownmethods).")>";
-    if ( $method !~ m/^$method_ex$/x ) { 
-        croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
-#\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
-    }
     if ( $method =~ m/MDEFT/x ) {
 	printd(5,"WARNING WARNING WARNING MDEFT DETECTED!\n".
 	       "MDEFT PRETENDS TO BE A 2D SEQUENCE WHEN IT IS IN FACT 3D!\n".
@@ -353,7 +348,15 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         if ( $slices ne $matrix[2] ) {
             croak "n slices in question, hard to determing correct number, either $slices or $matrix[2]\n";
         }
-    }   
+    } elsif ($#matrix == 0 ) { 
+	$vol_type="radial";
+	$y=$matrix[0];
+	if ( $hf->get_value($data_prefix."PVM_Isotropic") eq "Isotropic_Matrix") {
+	    $slices=$matrix[0];
+	} else { 
+	    printd(45, "\tNot isotropic with ".$hf->get_value($data_prefix."PVM_Isotropic") ."\n");
+	}
+    }
 
 
 
@@ -437,7 +440,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		$z=$slices;
 		$vol_num=$list_sizeB;
 	    } elsif ( $list_sizeB == $slice_pack_size) { 
-		printd(45,"list b and slice_pack size equal, z using b_slices ");
+		printd(45,"list b and slice_pack size equal,\n\tz<-slices\n\tvol_num=list_sizeB/list_size");
 		#list_sizeB seems to be number of slices in total, 
 		$vol_num=$list_sizeB/$list_size;
 		$z=$slices;
@@ -446,13 +449,21 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	    if ($z > 1 ){
 		$vol_detail=$vol_detail.'-vol';
 	    } 
-	    if ($n_echos >1 ) {
-		$vol_detail=$vol_detail.'-echo';		    
-	    }
 	} else { 
 	    printd(90,"\tz<-slices\n");
 	    $z=$slices;
-            $vol_num=$list_sizeB;
+	    if ( $vol_type =~ m/3D/x  ) { 
+		printd(90,"\tvol_num=list_sizeB/n_echos\n");
+		$vol_num=$list_sizeB/$n_echos; # this was the behavior until mge multi-slice multi-echo proved it wrong with MGE
+	    } elsif( $vol_type =~ m/2D/x ){ 
+		printd(90,"\tvol_num=list_sizeB/slices/n_echos\n");
+		$vol_num=$list_sizeB/$slices/$n_echos; 
+# in 2D multi_echo and multi Slice data list_sizeB is nslices nechos,
+# the n_echos as it effects output volumes are accounted for later
+# in a  piece of code shared by different acquisitions.
+	    } else {
+		printd(5,"vol_num not adjusted when setting slices for odd vol_type $vol_type\n");
+	    }
         }
     } elsif ( $slice_pack_size>1 ) {
 	if ( $list_sizeB == $slice_pack_size) { 
@@ -472,13 +483,23 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	printd(90,"\tz<-slices\n");
 	$z=$slices;
     }
-    if ( $channels>1 && ! $extraction_mode_bool) { 
+    if ( $hf->get_value($data_prefix."KeyHole") ne 'NO_KEY') {
+	$vol_detail=$vol_detail.'-keyhole';
+    }
+    if ($n_echos >1 ) {
+	$vol_detail=$vol_detail.'-echo';
+	printd(90,"\tvol_num=vol_num*n_echos\n");
+	$vol_num=$vol_num*$n_echos;
+    }
+    if ( $channels>1) { 
+    #if ( $channels>1 && ! $extraction_mode_bool) { 
 	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
+	printd(90,"\tvol_num=vol_num*channels\n");
 	$vol_num=$vol_num*$channels;
 	
     }
-
-    $vol_num=$time_pts*$vol_num;# not perfect
+    printd(90,"\tvol_num=vol_num*time_pts\n");
+    $vol_num=$vol_num*$time_pts;# not perfect
 
 
 ###### handle xy swapping
@@ -487,6 +508,11 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     printd(45,"Set X=$x, Y=$y, Z=$z, vols=$vol_num\n");
     printd(45,"vol_type:$vol_type, $vol_detail\n");
     $debug_val=$old_debug;
+    my $method_ex="<(".join("|",@knownmethods).")>";
+    if ( $method !~ m/^$method_ex$/x ) { 
+        croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
+#\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
+    }
     return "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth}:${data_type}:${order}";
 }
 
@@ -582,6 +608,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			       'NR',                      # repetitions, from ACQ
 			       'PVM_NRepetitions',        # repetitions, from method, not always the same thing as acq, notably for dti sets. # might be number of tr's in multi tr set...
 			   ],
+			   "rays_acquired_in_total"=>[             # number of rays acquried in a scan. 
+			       1,                         # used when a ute3d_keyhole sequence has been acquired,
+			       'NPro',                    # might be used for any radial, including UTE3D
+			   ],
 			   "${s_tag}rare_factor"=>[
 			       1,
 			       'ACQ_rare_factor',          # rare factor from ACQ, seems to be 1 if no rare factor.
@@ -612,6 +642,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			   "S_PSDname"=>[
 				1,
 			       'Method',                  # acquisition(sequence) type 
+			   ],
+			   "ray_blocks_per_volume"=>[
+			       1,
+			       'KeyHole'
 			   ],
 #"dim_X","dim_Y","dim_Z"
 #       'PVM_Matrix',              # frequency, phase, encodes(only for 3d sequences, guessing on name encodes)
@@ -762,7 +796,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 
     printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
     if ( $vol_detail =~ /multi.*channel/x) {
-	printd(40," setting channel data using volumes / echos ( $vols / ".$hf->get_value('ne').")\n");
+	printd(40," setting channel data using volumes / echos = ( $vols / ".$hf->get_value('ne').")\n");
 	$hf->set_value($s_tag.'channels', $vols/$hf->get_value('ne'));
     } else {
   	$hf->set_value($s_tag.'channels', 1);
@@ -930,26 +964,42 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     my $prefered_matrix_key="PVM_EncMatrix";
     if ( $extraction_mode_bool ) {
 	$prefered_matrix_key="PVM_Matrix";
+    } else { 
     }
+    # UTE3D SEQUENCE EncMatrix HAS ONLY ONE VALUE
     ($df, $dp, $dz) = printline_to_aoa($hf->get_value($data_prefix."$prefered_matrix_key"));
 
+    if (! defined($dp)  )
+    {
+	if($vol_type eq 'radial' ) {
+	    printd(45,"Radial acq, checking for isotropic\n");
+	    $dp=$df;
+	    if ( $hf->get_value($data_prefix."PVM_Isotropic") eq "Isotropic_Matrix") {
+		$dz=$df;   
+	    } else { 
+		printd(45, "\tNot isotropic with ".$hf->get_value($data_prefix."PVM_Isotropic") ."\n");
+	    }
+	} else {
+	    warn("WARNING: dim_p undefined, but not radial sequence.");
+	}
+    }
 #    printd(90,"dims are ".join('|',@dims)."\n");
 #    ($df, $dp, $dz)=@dims;
-	if ( ! defined $dz ) { 
-	    printd(45,$data_prefix."$prefered_matrix_key did not specify 3rd Dimension!\n");
-	    
-	    $dz = $hf->get_value($data_prefix."NSLICES");
-	    if (  $dz == 1) {
-		$dz=$hf->get_value('dim_Z');
-	    }
-	    if ( $dz ne 'NO_KEY' && $dz !=1) { 
-		printd(45,"Uncertain of dim_Z! used value previously placed in dim_Z. \n");
-	    } elsif ( $dz == 1)  {
-		printd(45,"Using NSLCIES($dz) for dz in fov calcs, will grab dim_Z after \n");		
-	    } else {
-		printd(25,"ERROR: no slices\n" );
-	    } 
+    if ( ! defined $dz ) { 
+	printd(45,$data_prefix."$prefered_matrix_key did not specify 3rd Dimension!\n");
+	
+	$dz = $hf->get_value($data_prefix."NSLICES");
+	if (  $dz == 1) {
+	    $dz=$hf->get_value('dim_Z');
 	}
+	if ( $dz ne 'NO_KEY' && $dz !=1) { 
+	    printd(45,"Uncertain of dim_Z! used value previously placed in dim_Z. \n");
+	} elsif ( $dz == 1)  {
+	    printd(45,"Using NSLCIES($dz) for dz in fov calcs, will grab dim_Z after \n");		
+	} else {
+	    printd(25,"ERROR: no slices\n" );
+	} 
+    }
     #}      
     ($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
     ($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov")); 
@@ -967,8 +1017,8 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	{
 	    carp("WARNING: fov_p from acq_fov does not match thickness * dimenison, recalculating with PVM_SpatResol.");
 	    $fov_p=$dp*$thick_p;
-	}
-	
+	} 
+
 	if (defined $thick_z) {
 	    printd(45,"Using ${data_prefix}PVM_SpatResol for fov_z\n");
 	    if ( $fov_z!=$dz*$thick_z ) 
@@ -1041,9 +1091,36 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    my $ntr=1; # number of tr's 
 	    $hf->set_value("rays_per_block",$dp*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
 	    $hf->set_value("ray_blocks",1);
-	} else  {
+	} elsif($vol_type eq '3D')  {
 	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
 	    $hf->set_value("ray_blocks",$dz);
+	} elsif($vol_type eq 'radial' ) {
+	    printd(5,"radial acquisition, THESE ARE VERY EXPERIMENTAL\n");
+	    my $NPro=$hf->get_value("rays_acquired_in_total");
+
+	    my $KeyHole=$hf->get_value("ray_blocks_per_volume");
+	    my $NRepetitions=$hf->get_value(${s_tag}."NRepetitions");
+	    if ($NPro eq "NO_KEY") { 
+		printd(5,"Error finding NPro in hf using ${s_tag}NPro\n");
+	    }
+	    if ($KeyHole eq "NO_KEY") { 
+		printd(5,"Error finding NPro in hf using ${s_tag}KeyHole\n");
+	    }
+	    if ($NRepetitions eq "NO_KEY") { 
+		printd(5,"Error finding NRepetitions in hf using ${s_tag}NRepetitions\n");
+	    }
+	    # NOTE: in radial sequences the ray_length is 1/2 the expected image
+	    # dimension due to being a ray of kspace and NOT a line. 
+	    $hf->set_value("ray_length",$df/2);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing.
+	    $hf->set_value("ray_blocks",$NRepetitions*$KeyHole);
+	    #NPro/KeyHole=acqs(ray_blocks).
+	    #NPro/ray_blocks=rays_per_block
+	    # should set this to $rays/($acq_size*$acqs)
+#	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	    $hf->set_value("rays_per_block",$NPro/$NRepetitions/$KeyHole);#$NPro/
+	    
+	    printd(25,"rays_acquired_in_total:".$hf->get_value("rays_acquired_in_total").
+		", ray_blocks_per_volume:".$hf->get_value('ray_blocks_per_volume').", ");
 	}
 	printd(25,"ray_length:".$hf->get_value('ray_length').
 	       ", rays_per_block:".$hf->get_value('rays_per_block').

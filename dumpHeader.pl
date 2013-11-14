@@ -218,6 +218,8 @@ our $verbose=0;
     my $hfhashref = parse_header(\@header_lines,$debug_val ); # loads mr scanner header to a hash.
     my %hfhash=%{$hfhashref};
     $Hfile->set_value("kspace_data_path",glob($directory.'/'.$data_filename)); # glob resolves the * in aspectnames  : )
+# set traj path.
+#    $Hfile->set_value("kspace_data_path",glob($directory.'/'.$data_filename)); # glob resolves the * in aspectnames  : )
     $Hfile->set_value("S_scanner_tag","${hf_short_prefix}");
 # i feel like this could be improved. better to dive back into the  header and look up what kind of repetitions if that is relevent, then set mutli scan appropriately.
 
