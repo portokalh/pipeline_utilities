@@ -389,6 +389,9 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
             $vol_detail="MOV";
         }
     }
+    if ( $vol_type =~ /radial/x) {
+	$time_pts=$hf->get_value(${data_prefix}."PVM_NRepetitions")*$hf->get_value(${data_prefix}."KeyHole")-($hf->get_value(${data_prefix}."KeyHole")-1);
+    }
 ###### set z and volume number
     printd(45,"LIST_B: SPACK_SIZE, $list_sizeB: $slice_pack_size\n");
 ### if listsize<listsizeb we're multi acquisition we hope. if list_size >1 we might be multi multi 
@@ -608,9 +611,17 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			       'NR',                      # repetitions, from ACQ
 			       'PVM_NRepetitions',        # repetitions, from method, not always the same thing as acq, notably for dti sets. # might be number of tr's in multi tr set...
 			   ],
-			   "rays_acquired_in_total"=>[             # number of rays acquried in a scan. 
-			       1,                         # used when a ute3d_keyhole sequence has been acquired,
-			       'NPro',                    # might be used for any radial, including UTE3D
+ 			   "rays_per_volume"=>[    # number of rays acquried in a scan. NOT the length of fid
+ 			       1,                         # used when a ute3d_keyhole sequence has been acquired,
+ 			       'NPro',                    # might be used for any radial, including UTE3D
+			   ],
+			   "radial_undersampling"=>[      # polar undersampling?
+			       1,
+			       'ProUndersampling',
+			   ],
+			   "traj_matrix"=>[
+			       1,
+			       'traj_matrix',
 			   ],
 			   "${s_tag}rare_factor"=>[
 			       1,
@@ -975,9 +986,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    printd(45,"Radial acq, checking for isotropic\n");
 	    $dp=$df;
 	    if ( $hf->get_value($data_prefix."PVM_Isotropic") eq "Isotropic_Matrix") {
-		$dz=$df;   
+		$dz=$df;
+#		$hf->set_value("radial_matrix",$df);
 	    } else { 
-		printd(45, "\tNot isotropic with ".$hf->get_value($data_prefix."PVM_Isotropic") ."\n");
+		printd(5, "\tNot isotropic with ".$hf->get_value($data_prefix."PVM_Isotropic") ."\nDont know what to do!\n");
 	    }
 	} else {
 	    warn("WARNING: dim_p undefined, but not radial sequence.");
@@ -1096,10 +1108,11 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    $hf->set_value("ray_blocks",$dz);
 	} elsif($vol_type eq 'radial' ) {
 	    printd(5,"radial acquisition, THESE ARE VERY EXPERIMENTAL\n");
-	    my $NPro=$hf->get_value("rays_acquired_in_total");
-
+	    my $NPro=$hf->get_value("rays_per_volume");
 	    my $KeyHole=$hf->get_value("ray_blocks_per_volume");
+
 	    my $NRepetitions=$hf->get_value(${s_tag}."NRepetitions");
+	    $hf->set_value("rays_acquired_in_total",$NPro*$NRepetitions);
 	    if ($NPro eq "NO_KEY") { 
 		printd(5,"Error finding NPro in hf using ${s_tag}NPro\n");
 	    }
@@ -1117,7 +1130,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    #NPro/ray_blocks=rays_per_block
 	    # should set this to $rays/($acq_size*$acqs)
 #	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
-	    $hf->set_value("rays_per_block",$NPro/$NRepetitions/$KeyHole);#$NPro/
+	    $hf->set_value("rays_per_block",$NPro/$KeyHole);#$NPro/
 	    
 	    printd(25,"rays_acquired_in_total:".$hf->get_value("rays_acquired_in_total").
 		", ray_blocks_per_volume:".$hf->get_value('ray_blocks_per_volume').", ");
