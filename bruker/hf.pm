@@ -1104,7 +1104,9 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    $hf->set_value("rays_per_block",$dp*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
 	    $hf->set_value("ray_blocks",1);
 	} elsif($vol_type eq '3D')  {
-	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+#	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	    $hf->set_value("rays_per_block",$dp*$hf->get_value('ne')*$ntr);#*$hf->get_value("${s_tag}channels") 
+# removed channels, as i'm pretty sure i've handled that else where
 	    $hf->set_value("ray_blocks",$dz);
 	} elsif($vol_type eq 'radial' ) {
 	    printd(5,"radial acquisition, THESE ARE VERY EXPERIMENTAL\n");
@@ -1117,7 +1119,9 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 		printd(5,"Error finding NPro in hf using ${s_tag}NPro\n");
 	    }
 	    if ($KeyHole eq "NO_KEY") { 
-		printd(5,"Error finding NPro in hf using ${s_tag}KeyHole\n");
+		printd(5,"Error finding KeyHole in hf using ${s_tag}KeyHole\n");
+		$KeyHole=1;
+		$hf->set_value("ray_blocks_per_volume",$KeyHole);
 	    }
 	    if ($NRepetitions eq "NO_KEY") { 
 		printd(5,"Error finding NRepetitions in hf using ${s_tag}NRepetitions\n");
