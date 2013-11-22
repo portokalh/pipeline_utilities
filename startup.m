@@ -47,6 +47,7 @@ paths={
     [ workstation_home '/analysis/label_measurements/' ]
     };
 genpaths={
+    [ workstation_home '/recon/DCE' ]
     [ workstation_home '/shared/mathworks']
     [ workstation_home '/shared/matlab_img_processing']
     [ workstation_home '/recon/mat_recon_pipe/filter' ]
