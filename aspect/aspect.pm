@@ -62,9 +62,12 @@ my $Hfile = 0;
 my $NAME = "aspect lib";
 my $VERSION = "2013/05/29";
 my $COMMENT = "Aspect meta data functions";
+#SE_CLASSIC_
+#(AA)SE3D_DWI_
+
 use vars qw(@knownsequences @TwoDsequences @ThreeDsequences @FourDsequences);
-@TwoDsequences=qw(SE_ ME_SE_);
-@ThreeDsequences=qw(GRE_EXT_  gre_sp_ GRE_SP_ GRE_SS_ );
+@TwoDsequences=qw(SE_ ME_SE_ SE_CLASSIC_);
+@ThreeDsequences=qw(GRE_EXT_  gre_sp_ GRE_SP_ GRE_SS_ (AA)SE3D_DWI_ );
 @FourDsequences=qw();
 push(@knownsequences,@TwoDsequences);
 push(@knownsequences,@ThreeDsequences);
