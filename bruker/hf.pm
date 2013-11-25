@@ -494,8 +494,9 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	printd(90,"\tvol_num=vol_num*n_echos\n");
 	$vol_num=$vol_num*$n_echos;
     }
-    if ( $channels>1) { 
-    #if ( $channels>1 && ! $extraction_mode_bool) { 
+    #if ( $channels>1) { 
+    if ( $channels>1 && ! $extraction_mode_bool) { 
+	# In extraction mode there is no channel data from bruker, this may change in the future however for now its accurate!.
 	$vol_detail=$vol_detail.'-channel'."-$channel_mode";
 	printd(90,"\tvol_num=vol_num*channels\n");
 	$vol_num=$vol_num*$channels;

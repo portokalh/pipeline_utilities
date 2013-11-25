@@ -104,9 +104,9 @@ my $VERSION = "2013/04/29";
 my $COMMENT = "Bruker meta data functions";
 use vars qw(@knownmethods);
 
-my @cartesian_3D_methods= qw( MGE RARE MSME ); 
+my @cartesian_3D_methods= qw( MGE RARE MSME DtiStandard); 
 my @cartesian_2D_methods= qw(MDEFT ) ;
-my @radial_methods=qw( UTE3D ute3d_keyhole);
+my @radial_methods=qw( UTE UTE3D ute3d_keyhole);
 push(@knownmethods,@cartesian_3D_methods);
 push(@knownmethods,@cartesian_2D_methods);
 push(@knownmethods,@radial_methods);
