@@ -259,8 +259,15 @@ sub aoaref_get_subarray { # ( $ref_to_AoA )
     my $err_cause;
     my @data;
     my @subarrays;
+#defined  $bruker_header_ref->{$key} 
+#    if ( $#{$dataarray_ref} >=1 ){
     if ( $dataarray_ref ne "" && $reftype eq 'ARRAY' ) {
-        @data=@{$dataarray_ref->[($n-1)]};
+	if ( defined @{$dataarray_ref->[($n-1)]} )
+	{
+	    @data=@{$dataarray_ref->[($n-1)]};
+	} else {
+	    @data="ERROR";
+	}
 #	my $temp=shift(@data); # not sure this is a good idea.
 # 	my $line=aoa_to_singleline(@$dataarray_ref,'whole');
 # 	@subarrays=split(':',$line);
@@ -274,7 +281,9 @@ sub aoaref_get_subarray { # ( $ref_to_AoA )
         printd(35, "wierd problem with array ref in aoaref_get_subarray\n");
         $data[0]="ERROR";
     }
-
+#    } else {
+#	$data[0]="ERROR";
+#    }
     return @data;    
 }
 
@@ -368,7 +377,7 @@ internal function doing the work of aoaref_to_printline
 =cut
     my (@dataarray)=@_;
     debugloc();
-    printd(90,"@dataarray\n");
+    printd(90,"@dataarray[0]\n");
     my @text_array; #array containing the text for each sub array, 
     #my $subarrayelements; #=$#{$dataarray[0]};
     my @dims=();

@@ -1221,6 +1221,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #	    ##$PVM_DwBMat=( 7, 3, 3 )
 	    my $diffusion_scans;
 	    $diffusion_scans=aoaref_get_single($bruker_header_ref->{"DE"}); # $diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    printd(75,"adding hf keys for $diffusion_scans diffusion scans\n");
 	    for my $bval (1..$diffusion_scans) {
 		my @subarray=aoaref_get_subarray($bval,$bruker_header_ref->{$key});
 		my $text=$subarray[0].','.join(' ',@subarray[1..$#subarray]);
