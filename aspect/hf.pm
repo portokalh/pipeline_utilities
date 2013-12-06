@@ -992,9 +992,9 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
     my $dim_order;
 #    if ($hf->get_value("${aspect_prefix}PVM_SpatDimEnum") eq '2D' ) { 
     if ($vol_type eq '2D' ) { 
-	$dim_order='xcpzyt';
+	$dim_order='xpczyt';
     } else {
-	$dim_order='xycpzt';
+	$dim_order='xpyczt';
     }
     $hf->set_value($s_tag."dimension_order",$dim_order);
 #    $hf->set_value("${s_tag}channels",'');
