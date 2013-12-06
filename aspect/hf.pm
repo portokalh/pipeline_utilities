@@ -670,7 +670,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 #    my $vol_type=$hf->get_value("${s_tag}vol_type");
 #    my $vol_detail=$hf->get_value("${s_tag}vol_type_detail");
     #GRE_SP_ has extra z slice for unknown reason? must be freq correct slice.
-    if ( $sname =~ m/^GRE_SP_$/x  )  { 
+    if ( $sname =~ m/^GRE_(SP_|EXT_)$/x  )  { 
 	printd(25,"ASPECT GRE_SP fix variables!\n");
 	$hf->set_value('aspect_remove_slice',1);
 	$z=$z+1;
