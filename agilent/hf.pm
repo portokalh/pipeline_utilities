@@ -270,6 +270,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 ### get bit depth
     my $bit_depth=32;
     my $data_type="Real";
+    #my $data_type="Unsigned";
     my @bd_strings=split(',',$hf->get_value($data_prefix."dp")); #( @bd_lines) 
     my ($bd_code, @bd_opts) = $bd_strings[1] =~ m/([yn])/gx ;
     printd(45,"BitDepth code parsing, input is <".join(",",@bd_strings)."> parsed into bd_code <$bd_code> of possibilities <@bd_opts>\n");

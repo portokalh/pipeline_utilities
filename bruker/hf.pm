@@ -390,7 +390,9 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         }
     }
     if ( $vol_type =~ /radial/x) {
-	$time_pts=$hf->get_value(${data_prefix}."PVM_NRepetitions")*$hf->get_value(${data_prefix}."KeyHole")-($hf->get_value(${data_prefix}."KeyHole")-1);
+	#$time_pts=$hf->get_value(${data_prefix}."PVM_NRepetitions")*$hf->get_value(${data_prefix}."KeyHole")-($hf->get_value(${data_prefix}."KeyHole")-1);
+	$time_pts=$hf->get_value(${data_prefix}."PVM_NRepetitions")*$hf->get_value(${data_prefix}."KeyHole"); 
+	#-($hf->get_value(${data_prefix}."KeyHole")-1)
     }
 ###### set z and volume number
     printd(45,"LIST_B: SPACK_SIZE, $list_sizeB: $slice_pack_size\n");
