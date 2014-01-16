@@ -45,6 +45,7 @@ paths={
     [ workstation_home '/shared/civm_matlab_common_utils/' ]
     [ workstation_home '/analysis/mr_relaxation_calc/' ]
     [ workstation_home '/analysis/label_measurements/' ]
+    [ workstation_home '/analysis/volume_measurements/' ]
     };
 genpaths={
     [ workstation_home '/recon/DCE' ]
