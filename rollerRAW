@@ -21,8 +21,8 @@
 #          7/17/09 slg get iroll from shadow:~slg/SUN.veryimportant into radish source dir
 #                      now find iroll_mine program in arch bin dir setup, on macs.
 #
-#                
-set version = "20130725"
+#          01/15/14 james added convenience prompts for rm and archive at end.      
+set version = "20140115"
 #set verbose
 #
 # should be 1 for real use:
@@ -206,7 +206,13 @@ case 1:
        # ok 
        set onebase = 1 
        set basename = $flist[1]:r 
-       echo "  basename $basename."
+       set input_suffix = $basename:r
+       set nchar = `echo $runno | awk '{print length($0)}'`
+       #set cind = `echo $basename | awk '{print index($0,"imx")}'` 
+       #set cind = `awk "BEGIN{ print $cind-2 }"`
+       
+       set suffix = `echo $input_suffix | awk -v start=${nchar} '{ print substr($0,start+1,2) }'`
+       echo "  basename $basename. input suffix:$input_suffix, substring start $nchar just the suffix $suffix"
        breaksw
 default:
        echo "WARNING: There is more than one image set in $image_dir"
@@ -372,6 +378,7 @@ foreach hundred ($hundreds)
 end
 end
 
+# 
 #
 #
 # ========== successful completion 
@@ -389,6 +396,17 @@ echo "     Roll newCornerX, newCornerY used: $cornerX $cornerY"
 echo "   Remember, archive will archive just one image set from this directory."
 echo "     Delete any redundant image sets before archiving."
 if ($do_it == 0) echo ">>> do_it = 0, so no creates were performed"
+# 
+    
+#echo  rm $image_dir/$runno
+echo "to remove extra set use "
+echo "      rm $image_dir/$runno${suffix}imx.*.raw"
+echo "to archive, use, (please input your civm id )"
+echo "      archiveme civmid $runno"
+echo "to recreate input images in case of error use "
+echo "      reform_group $runno"
+echo "WARNING, if this was scaled as a group you need to re-run the entire group, not just this image"
+
 exit 0 
 #
 #
