@@ -52,7 +52,7 @@ sub locate_data_util {
   if ( $ch_id =~ m/(T1)|(T2W)|(T2star)|(DW[0-9]+)/ ) { # should move this to global options, as archivechannels
 #elsif ( $ch_id =~ m/DW[0-9]+/) {
     $ret_set_dir = retrieve_archive_dir_util($pull_images, $subproject, $runno, $dest);  
-    my $first_image_name = first_image_name($ret_set_dir, $runno);
+    my $first_image_name = first_image_name($ret_set_dir, $runno,1); # the 1 ignores missing first image
     ($image_name, $digits, $suffix) = split ('\.', "$first_image_name");
     $Hf->set_value("$ch_id\-image-padded-digits", $digits);
   } elsif ( $ch_id =~ m/(adc)|(dwi)|(e1)|(e2)|(e3)|(fa)/){ # should move this to global options, dtiresearchchannels
@@ -103,14 +103,14 @@ sub retrieve_archive_dir_util {
   }
   # add -q for quiet
   my $final_dir = "$local_dest_dir/$runno";
-  my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno/  $local_dest_dir/$runno";
+  my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno/  $final_dir";
 
   #print ("DO_PULL = $do_pull\n");
   my $ok =0;
-  if ( ! -d "$local_dest_dir/$runno" ) { 
+  if ( ! -d "$final_dir" ) { 
       $ok = execute($do_pull, "archive retrieve", $cmd);
   } else { 
-      print STDERR "Found $local_dest_dir/$runno, assuming complete, and not pulling\n";
+      print STDERR "Found $final_dir, assuming complete, and not pulling. \n\tErrors will occur if nifti-creation is attempted with incomplete copies.\n";
       $ok=1;
       
   }
@@ -166,7 +166,10 @@ sub first_image_name {
 # you may parse this to figure out base image name (e.g. N12345fsimx, etc)
 # padding, etc.
 
-  my ($image_set_dir, $runno) = @_;
+  my ($image_set_dir, $runno,$ignore_error) = @_;
+  if ( ! defined $ignore_error) {
+      $ignore_error=0;
+  }
   my $template = "^$runno\\w*\\.0+1\\.\\w+\$";  # note perl eats many of the \
   #print "TEMPLATE: $template\n";
   my @list = make_list_of_files ($image_set_dir, $template);
@@ -175,7 +178,7 @@ sub first_image_name {
     foreach my $l (@list) {
        print "Found image: $l\n";
      }
-     error_out ("Couldn't find unique first image in $image_set_dir (found $count_found, template $template)"); 
+     error_out ("Couldn't find unique first image in $image_set_dir (found $count_found, template $template)") unless $ignore_error; 
   }
   my $image = pop @list;
   return ($image);
