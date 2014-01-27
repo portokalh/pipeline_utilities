@@ -377,7 +377,7 @@ internal function doing the work of aoaref_to_printline
 =cut
     my (@dataarray)=@_;
     debugloc();
-    printd(90,"@dataarray[0]\n");
+    printd(90,"$ dataarray[0]\n");
     my @text_array; #array containing the text for each sub array, 
     #my $subarrayelements; #=$#{$dataarray[0]};
     my @dims=();

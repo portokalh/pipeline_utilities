@@ -1091,7 +1091,11 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    }
 	}	    
     }
-    
+    if ( ! defined $fov_z || $fov_z == 0 )   { 
+	if ( ! defined $dz ) { $dz=1; }
+	$fov_z=$dz*$hf->get_value('slthick');
+    }    
+
     $hf->set_value("fovx","$fov_x");
     $hf->set_value("fovy","$fov_y");
     $hf->set_value("fovz","$fov_z");
