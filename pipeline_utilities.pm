@@ -8,7 +8,7 @@
 # created 09/10/15  Sally Gewalt CIVM
 #                   based on t2w pipeline  
 # 110308 slg open_log returns log path
-# 130731 james, added new function new_get_engine_dependenceis, to replace that chunk of code used all the damn time.
+# 130731 james, added new function new_get_engine_dependencies, to replace that chunk of code used all the damn time.
 #               takes an output identifier, and an array of required values in the constants file to be checked. 
 #               should add a standard headfile settings file for the required values in an engine_dependencie headfile 
 #               returns the three directories  in work result, outhf_path, and the engine_constants headfile.
@@ -22,12 +22,14 @@ my @outheadfile_comments = ();  # this added to by log_pipeline_info so define e
 #my $BADEXIT = 1;
 my $debug_val = 5;
 use File::Path;
+
 use strict;
 use English;
 #use seg_pipe;
 
 use vars qw($HfResult $BADEXIT $GOODEXIT);
 my $PM="pipeline_utilities";
+use civm_simple_util qw(load_file_to_array write_array_to_file);
 
 # -------------
 sub open_log {
@@ -149,7 +151,7 @@ sub error_out
 sub make_matlab_m_file {
 # -------------
 #simple utility to save an mfile with a contents of function_call at mfile_path
-# logs the information to the log file, and calls make_matalb_m_file_quiet to do work
+# logs the information to the log file, and calls make_matlab_m_file_quiet to do work
    my ($mfile_path, $function_call) = @_;
    log_info("Matlab function call mfile created: $mfile_path");
    log_info("  mfile contains: $function_call");
@@ -164,20 +166,22 @@ sub make_matlab_m_file_quiet {
    open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path";
    # insert startup.m call here.
    use Env qw(WKS_SHARED);
-
+   print MATLAB_M 'fprintf([datestr(now, \'HH:MM:SS\'),\'\n\']);'."\n";
    if ( defined $WKS_SHARED) { 
        if ( -e "$WKS_SHARED/pipeline_utilities/startup.m") 
        {
 	   print MATLAB_M "run('$WKS_SHARED/pipeline_utilities/startup.m');\n";
        }
    }
-   print MATLAB_M "$function_call";
+   print MATLAB_M "$function_call\;"."\n";
+   print MATLAB_M 'fprintf(['."\'${mfile_path}_DONE\'".' \'\n\']);'."\n";
    close MATLAB_M;
 }
 
 # -------------
 sub make_matlab_command {
 # -------------
+# this calls the nohf version so we can control how matlab is launched at all times through just that function.
    my ($function_m_name, $args, $short_unique_purpose, $Hf) = @_;
 # short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
    my $work_dir   = $Hf->get_value('dir_work');
@@ -195,8 +199,14 @@ sub make_matlab_command {
    my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}";
    my $function_call = "$function_m_name ( $args )";
    make_matlab_m_file ($mfile_path, $function_call);
+
+
    my $logpath="$work_dir/matlab_${function_m_name}";
-   my $cmd_to_execute = "$matlab_app $matlab_opts < $mfile_path > $logpath";
+
+
+   #my $cmd_to_execute = "$matlab_app $matlab_opts < $mfile_path > $logpath";
+   my $cmd_to_execute = make_matlab_command_nohf($function_m_name,$args,$short_unique_purpose,$work_dir,$matlab_app,$logpath,$matlab_opts);
+
    return ($cmd_to_execute);
 }
 
@@ -204,11 +214,13 @@ sub make_matlab_command {
 sub make_matlab_command_nohf {
 # -------------
 #  my $matlab_cmd=make_matlab_command_nohf($mfilename, $mat_args, $purpose, $local_dest_dir, $Engine_matlab_path);
-   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,$logpath) = @_;
+   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,$logpath,$matlab_opts) = @_;
    print("make_matlab_command:\n\tengine_matlab_path:${matlab_app}\n\twork_dir:$work_dir\n") if($debug_val>=25);
-   my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}";
+   my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}".".m";
    my $function_call = "$function_m_name ( $args )";
-
+   if (! defined $matlab_opts) { 
+       $matlab_opts="";
+   }
    if (! defined $logpath) { 
 #       $logpath = '> /tmp/matlab_pipe_stuff';
 #   } else {  
@@ -216,8 +228,449 @@ sub make_matlab_command_nohf {
    }
 
    make_matlab_m_file_quiet ($mfile_path, $function_call);
-   my $cmd_to_execute = "$matlab_app < $mfile_path $logpath"; 
+   #my $cmd_to_execute = "$matlab_app < $mfile_path $logpath"; 
+    
+   my $cmd_to_execute = "$matlab_app $matlab_opts < $mfile_path > $logpath "; #; echo 'Matlab_Done' > $logpath 
+   # we want to weave in our fifo support here, in doing that the returned command HAS 
+   # to block until the current function finishes
+   # To accomplish this we write a dynamic shell script that blocks until the logpath
+   # prints a mfile_DONE
+   # I THINK this breaks execute independent forks for matlab calls, however that shouldnt be terribly necessary any longer.
+
+   #$PID
+   my $fifo_mode=1;
+   if ( $fifo_mode ) { 
+       my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$logpath);
+       print STDERR ( "FIFO Log set to $fifo_log\n");
+       my $fifo_start = start_fifo_program($matlab_app,$matlab_opts,$fifo_path,$fifo_log);
+       $logpath=$fifo_log;
+       my $n_closed = matlab_fifo_cleanup();
+       print STDERR ( "FIFO cleanup closed $n_closed.\n");
+       my $shell_file = "$work_dir/${short_unique_purpose}${function_m_name}"."_fifo_bash_wrapper.bash";
+       my @fifo_cmd_wrapper=();
+       push (@fifo_cmd_wrapper, "#!/bin/bash\n") ;
+       push (@fifo_cmd_wrapper, "echo \"MATLAB_FIFO_PASS_STUB\"\n");
+       push (@fifo_cmd_wrapper, "echo \"run\(\'$mfile_path\'\)\;\" >> $fifo_path\n") ;
+       push (@fifo_cmd_wrapper, "lastline=`tail -n1 $logpath`\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
+       push (@fifo_cmd_wrapper, "mat_done=`tail -n1 $logpath|grep -c ${mfile_path}_DONE `\n");#$logpath
+       #push (@fifo_cmd_wrapper, "mat_err=`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
+       push (@fifo_cmd_wrapper, "mat_err=0\n"); #`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
+       push (@fifo_cmd_wrapper, "echo \"\tWait for completion line:${mfile_path}_DONE in log $logpath\"\n");
+       push (@fifo_cmd_wrapper, "while [ \"\$mat_done\" -ne \"1\" -a \"\$mat_err\" -lt \"1\" ]\n");
+       push (@fifo_cmd_wrapper, "do \n");
+       push (@fifo_cmd_wrapper, "\tline=\$lastline\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
+       push (@fifo_cmd_wrapper, "\tlastline=`tail -n1 $logpath`\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
+       push (@fifo_cmd_wrapper, "\tif [ \"\$line\" != \"\$lastline\" ] \n");
+       push (@fifo_cmd_wrapper, "\tthen\n");
+       push (@fifo_cmd_wrapper, "\t\techo \"\tMATLAB:\$lastline\"\n");
+       push (@fifo_cmd_wrapper, "\tfi\n");
+       push (@fifo_cmd_wrapper, "\tmat_done=`tail -n20 $logpath|grep -c ${mfile_path}_DONE `\n");#$logpath
+       push (@fifo_cmd_wrapper, "\tmat_err=`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
+#        push (@fifo_cmd_wrapper, "\n");
+#        push (@fifo_cmd_wrapper, "\n");
+#        push (@fifo_cmd_wrapper, "\n");
+#        push (@fifo_cmd_wrapper, "\n");
+       push (@fifo_cmd_wrapper, "done \n");
+       push (@fifo_cmd_wrapper, "if [ \"\$mat_err\" -ge \"1\" ] \n");
+       push (@fifo_cmd_wrapper, "then\n");
+       push (@fifo_cmd_wrapper, "\techo \"MATLAB_ERRORS:\$mat_err\"\n");
+      push (@fifo_cmd_wrapper, "\ttail -n20 $logpath|grep \"Error\" \n");#$logpath
+       push (@fifo_cmd_wrapper, "fi\n");
+       write_array_to_file($shell_file,\@fifo_cmd_wrapper);
+       chmod( 0755, $shell_file );
+       $cmd_to_execute=("bash","-c","$shell_file");
+#       exit(0);
+   }
    return ($cmd_to_execute);
+}
+# -------------
+sub get_matlab_fifo {
+# -------------
+# calculates the name and path a fifo should use,
+# checks against a registry of fifo names in the /matlab_fifo dir in worstation_home
+# We do this to better allow fifo sharing on non fifo optimized pipeline processes
+# if that fifo name is registered it gets the path from there instead of using the
+# calculated path. 
+# If the fito name is registered this function registers it and then returns the path
+    my ( $work_dir,$logpath ) = @_;
+    use Env qw(WORKSTATION_HOME WORKSTATION_HOSTNAME FIFO_NAME);
+    my $fifo_registry=$WORKSTATION_HOME."/../matlab_fifos/";
+    my $fifo_dir=$work_dir."";
+    if ( $fifo_dir !~ m/^.*[\/]$/x ) {
+	#print STDERR ("FIFO Dir check added a slash\n");
+	$fifo_dir=$fifo_dir."/";
+    } else {
+	#print STDERR ("FIFO Dir check found trailing slash\n");
+    }
+###
+#   get FIFO_NAME
+###
+    if (! defined($FIFO_NAME)) {
+	my ($path,$name,$suffix);
+	my @w_p;
+
+	    @w_p=split('/',$work_dir);
+	    do {
+		my $temp=pop @w_p;
+		if ( $temp ne '' ) {
+		    $name=$temp;
+		} else {
+		    print STDERR ("FIFO_NAME: Skipped assigning <$temp> to name\n");
+		}
+		#print STDERR ("name:$name\n");
+	    } while( ($name !~ m/^.*\work/x ) && $#w_p>0);
+	    ($name,$suffix)=split('\.',$name);
+
+#	print STDERR ("name:$name");
+#	print STDERR (":$suffix\n");
+	
+	my $runno_regex="[A-Z][0-9]{5,}[^-]*"; 
+	# match Letter followed by at least 5 digits followed by anything
+	
+	my $multi_suffix="_m[0-9]+.*";
+	# match _m followed by at least 1 digit followed by anything
+	# if name matches an _m runno use the base runno for name
+	if ( $name =~ m/${runno_regex}${multi_suffix}/x ) {
+	    $name =~ m/^(.*)(${runno_regex}${multi_suffix})(.*)$/x ;
+	    ($FIFO_NAME,@w_p)=split("_",$2);
+	}
+	# if name matches a standard runno use it as name
+	elsif ( $name =~ m/$runno_regex/x ) {
+	    $name =~ m/^(.*)($runno_regex)(.*)$/x;
+	    $FIFO_NAME=$2;
+	} else { 
+	    $FIFO_NAME=$name;
+	    #$fifo_dir=$WORKSTATION_HOME."/../matlab_fifos/";
+	}
+#	print STDERR ("name:$name");
+#	print STDERR (":$suffix\n");
+	if ($FIFO_NAME ne '' ) {
+	    $FIFO_NAME=$FIFO_NAME."_fifo";
+	    print STDERR ("FIFO_NAME: undefined. NOW defined using work_dir singular default <$FIFO_NAME>\n");
+	} else { 
+	    print STDERR ("FIFO_NAME: undefined, and <$work_dir> failed to generate a new one\n");
+	}
+
+    } else { 
+	print STDERR ("FIFO_NAME: Found! $FIFO_NAME\n");
+	#$fifo_dir=$WORKSTATION_HOME."/../matlab_fifos/";
+    }
+    if ( $FIFO_NAME eq "") {
+	print STDERR ("Adding stuff to fifo name\n");
+	$FIFO_NAME="matlab".$WORKSTATION_HOSTNAME."_fifo";
+	$fifo_dir=$WORKSTATION_HOME."/../matlab_fifos/";
+    }
+###
+#   See that FIFO is REGISTERED or get FIFO from registry
+###
+    #my $name=
+    my $matlab_fifo=$fifo_dir.$FIFO_NAME;
+    my $fifo_log;#=$logpath;
+    if ( ! defined ($fifo_log) ) { 
+	$fifo_log=$matlab_fifo.".log";    
+    }
+    my @fifo_reg_path;
+    my $lines=0;
+    if ( -e $fifo_registry.$FIFO_NAME && ! -p $fifo_registry.$FIFO_NAME ) { 
+	$lines=load_file_to_array($fifo_registry.$FIFO_NAME,\@fifo_reg_path);
+	chomp(@fifo_reg_path);
+    } elsif ( -p $fifo_registry.$FIFO_NAME ) {
+	# should check for a running matlab and pass it an exit, and then unlink.
+	print STDERR "Warning: FIFO in registry, but registry is a fifo. Unlinked before proceding.\n";
+	unlink $fifo_registry.$FIFO_NAME;
+    }
+    if ( $lines ) { 
+	#print STDERR "Get_matlab_fifo fifo load location true\n";
+	$matlab_fifo=$fifo_reg_path[0]; # get first line of the reg file and put return that instead of the calculated file.
+	$fifo_log=$fifo_reg_path[1];
+    } else { 
+	#print STDERR "Get_matlab_fifo fifo load location false\n";
+	push(@fifo_reg_path,$matlab_fifo."\n");
+	push(@fifo_reg_path,$fifo_log."\n");
+	write_array_to_file($fifo_registry.$FIFO_NAME,\@fifo_reg_path);
+    }
+    print("get_matlab_fifo:<~$matlab_fifo\n");
+    return $matlab_fifo,$fifo_log;
+
+}
+# -------------
+sub start_fifo_program {
+# -------------
+# created to run a copy of matlab all the time and pass it commands via fifo special file
+# some portions are matlab explicit, (the usage options mostly,) and therfore could use work.    
+    my ($app,$opts,$stdin_fifo,$logpath) = @_;
+    my $retval=0;
+    if ( ! -p $stdin_fifo ) {
+	print STDERR ("FIFO not found at $stdin_fifo, creating. \n");
+	my $cmd="mkfifo $stdin_fifo";
+	execute(1,'FIFO_create',$cmd);
+    } else {
+	$retval=isopen_fifo_program($app,$opts,$stdin_fifo,$logpath);
+	#print STDERR ( "RET from is open is <$retval>\n");
+	my $cmd="touch -m $stdin_fifo";
+	execute(1,'FIFO_reset_ttl',$cmd);
+    }
+    #my $logpath=$stdin_fifo.".log";
+    if ( ! -e $logpath ) {
+	my $cmd="touch $logpath";
+	execute(1,'FIFO_Log_create',$cmd);
+    }
+    if ( ( -e $stdin_fifo && -e $logpath  ) && $retval==0  ) {
+	print STDERR ("FIFO starting attached to $stdin_fifo\n");
+        #my $cmd="( $app $opts -logfile $logpath <> $stdin_fifo 2>&1 >> $logpath ) 2>&1 > /dev/null & ";
+	# should not double into logpath here because -logfile does nearly the same thing as >> $logpath
+	my $cmd="( $app $opts -logfile $logpath <> $stdin_fifo 2>&1 > /dev/null ) 2>&1 > /dev/null & ";
+	#system(1,"$cmd");
+	#my $PID_CHECK;
+	if (! defined( my $PID_CHECK=fork) ) { #fork fail
+	    print STDERR ("ERROR: could not start fifo progrm $cmd\n");
+	} elsif ( $PID_CHECK == 0 ) { # child process
+	    close STDIN;
+	    close STDERR;
+	    close STDOUT;
+	    #setsid or die "Cant start new session : $!";
+	    umask(0027);
+	    chdir '/' or die "fifo start couldnt chdir to / : $!";
+	    open STDIN, '<', '/dev/null' or die $!; 
+	    open STDERR, '>', '/dev/null' or die $!; 
+	    open STDOUT, '>>', $logpath or die $!; 
+	    my $fifo_parent;
+	    defined ( $fifo_parent = fork ) or die "Failed to start fifo program: $!\n";
+	    if ( $fifo_parent) { # childs fork which we exit right away.
+		exit(0);
+	    } else { # child's child, which turns itself into our fifo command
+		exec($cmd);
+		exit;
+	    }
+	} else { #parent process
+	    print STDERR ("FIFO forked off as background daemon with $cmd\n");
+	}
+	#my $retval=execute(1,'',$cmd);
+    } else {
+	print STDERR ("FIFO program running\n");
+    }
+    return $retval;
+}
+# -------------
+sub stop_fifo_program {
+# -------------
+    my ( $app,$stdin_fifo,$logpath) = @_;
+    # find app that is running, with stdin_fifo, and logpath, these should all show up in a ps call.
+    my $stopped=-1;
+    my $cmd="fuser $logpath 2>&1"; # may work as a way to find the process attached to a given log, which should work well.
+    print STDERR ("FIFO_Stop: $stdin_fifo...\n");
+    #print STDERR ($cmd."\n" );
+    my $o_string = `$cmd `;
+    chomp($o_string);
+    #print STDERR ( "\tfuser_string:$o_string\n");
+    my @out=split("\n",$o_string);
+    chomp(@out);
+    @out=split(':',$out[0]);
+    #print STDERR ("\tfuser_out = ".join(',', @out)."\n");
+
+    my $file_path=shift(@out);
+    @out = split(' ',@out[0]);
+    print STDERR ("\twatched_file = $file_path\n");
+    for (my $on=0;$on<$#out;$on++){ 
+	if ($out[$on]!~ m/[0-9]+/x ) {
+	    shift(@out);
+	    $on--;
+	}
+    }
+    if ($#out>=0) {
+	print STDERR ("PID's to kill.\n\t".join("\n\t",@out)."\n");
+	if ( $#out>0 ) {
+	    print STDERR ( "WARNING: More than one process attached to the watched file!\n NOTIFY JAMES \n");
+	}
+	$stopped=kill 'KILL',@out;
+    } else {
+	print STDERR ("No process open for $file_path.\n");
+	$stopped=0;
+    }
+    return $stopped;
+}
+# -------------
+sub restart_fifo_program {
+# -------------
+    my ( $app,$opts,$stdin_fifo,$logpath) = @_;
+    if (  ! stop_fifo_program($app,$stdin_fifo,$logpath) ){
+	print("error stopping program $app attached to $stdin_fifo.\n");
+    } elsif ( ! start_fifo_program($app,$opts,$stdin_fifo,$logpath) ){
+	print("error starting program $app with opts $opts, attached to $stdin_fifo\n\tMaybe the permissions on $stdin_fifo or $logpath are incorrect?");
+    } else {
+	# fifo restart successfully.
+    }
+    return 0;
+}
+# -------------
+sub isopen_fifo_program {
+# -------------
+    my ( $app,$opts,$stdin_fifo,$logpath) = @_;
+    my $is_running=0;
+    my $shell_method=1;
+    if ( ! $shell_method ) {
+	# "correct" code to check process table
+# 	use Proc::ProcessTable;
+# 	my $t = Proc::ProcessTable->new;
+# 	$is_running = grep { $_->{cmndline} =~ /^dtllst $myNode/ } @{$t->table};
+    } else { 
+	my @app_p = split(' ', $app) ;
+	$app=$app_p[0];
+	#print STDERR ( "$app\n");
+	@app_p = split('/',$app);
+	$app=$app_p[$#app_p];
+	#print STDERR ( "$app\n");
+
+	my $cmd="ps -ax ";
+	#$cmd = $opts eq "" ? $cmd : "$cmd | grep \'$opts\' ";
+	$cmd = $stdin_fifo  eq "" ? $cmd : "$cmd | grep \'$stdin_fifo\' ";
+	#$cmd = $logpath  eq "" ? $cmd : "$cmd | grep \'$logpath\' ";
+	my $cmd2 = "$cmd | grep -i \'$app\' ";
+	$cmd = "$cmd | grep -ci \'$app\' ";
+	#print STDERR ("$cmd\n");
+	my $out=`$cmd`;
+	#`$cmd`;
+	if ( $out>=2 ) { 
+	    $is_running=1; } 
+	#my $check_text=`$cmd2`;
+	#print STDERR (" fifo check grep_ret:$! output:$out check_status:$is_running\ncheck_output:$check_text\n");
+	
+    }
+    
+    return $is_running;
+}
+# -------------
+sub matlab_fifo_cleanup {
+# -------------
+    use Env qw(WORKSTATION_HOME WORKSTATION_HOSTNAME FIFO_TTL);
+    # fifo time to live in minutes, default here is 30 minutes
+
+    if (! defined($FIFO_TTL)) {
+	$FIFO_TTL=30;
+    }
+
+#    my $fifo_log;
+    my $fifo_registry=$WORKSTATION_HOME."/../matlab_fifos/";
+    my $n_removed=0;
+    if ( ! -d $fifo_registry ) { 
+	print STDERR ("SETUP NOT COMPLETE FOR FIFO MODE\n NOTIFY JAMES!\n");
+	exit();
+    } else { 
+	print STDERR "FIFO Cleanup Running on dir, $fifo_registry\n";
+	my @fifo_registry_contents = <$fifo_registry/*>;
+	for(my $fnum=0;$fnum<$#fifo_registry_contents;$fnum++) {
+	    my $FIFO_regfile =$fifo_registry_contents[$fnum];
+	    if ( $FIFO_regfile =~ m/^.*_fifo$/x ) {
+		my @fifo_reg_path;
+		my $lines=0;
+		my $stdin_fifo;
+		if ( -e $FIFO_regfile && ! -p $FIFO_regfile ) { 
+		    $lines=load_file_to_array($FIFO_regfile,\@fifo_reg_path);
+		    chomp(@fifo_reg_path);
+		} elsif ( -p $FIFO_regfile ) {
+		    # should check for a running matlab and pass it an exit, and then unlink.
+		    print STDERR "Warning: FIFO in registry, but registry is a fifo. Unlinked before proceding.\n";
+		    unlink $FIFO_regfile;
+		}
+
+		if ( $lines ) { 
+		    #print STDERR "Get_matlab_fifo fifo load location true\n";
+		    $stdin_fifo=$fifo_reg_path[0]; # get first line of the reg file and put return that instead of the calculated file.
+		} else { 
+		    print STDERR "Get_matlab_fifo fifo load location false\n";
+		    #push(@fifo_reg_path,$stdin_fifo."\n");
+		    #write_array_to_file($FIFO_regfile,\@fifo_reg_path);
+		}
+		
+		if ( defined( $stdin_fifo) && ! -e $stdin_fifo ){ 
+		    # this will occur when a new fifo is checked before its created.
+		    print STDERR ("FIFO registered in $FIFO_regfile -> $stdin_fifo but the fifo doens't exit\n");
+		    my $FIFO_reg_ttl=(($FIFO_TTL / 2 ) * 60 );
+		    if ( file_over_ttl($FIFO_regfile, $FIFO_reg_ttl) ) {
+			print STDERR ("\tUnlinking old reg file $FIFO_regfile\n");
+			unlink $FIFO_regfile;
+		    }
+		    
+		} elsif ( ! defined ($stdin_fifo) ){ 
+		    print STDER ("");
+		} elsif( -e $stdin_fifo ) { 
+		    ### peel off for function
+		    #if( file_over_ttl($file,$ttl) )
+		    
+#     my $file_timestamp=0;
+#     $file_timestamp = (stat($stdin_fifo))[9];
+#     if ( "<$file_timestamp>" eq "<>" ) { 
+# 	#print STDERR ( $stdin_fifo." FAILED TO GET TIMESTAMP< using method 1, trying method2\n");
+# 	$file_timestamp= stat($stdin_fifo)->mtime;
+# 		    }
+#     #my $difference     = $^T - $file_timestamp;
+#     my $difference     = time - $file_timestamp;
+#     if ( "<$file_timestamp>" eq "<>" ) {
+# 	$difference = 0 ;
+# 	print STDERR ( $stdin_fifo." FAILED TO GET TIMESTAMP< ALLOWING TO STAY ALIVE\n");
+#     }
+#     my @n_p=split('/',$stdin_fifo);
+#     my $n=$n_p[-1] unless $#n_p<0;
+#     print STDERR ("\t$n, Epoc timestamp(s):$file_timestamp Current age(s):$difference, ");
+
+		    if ( file_over_ttl($stdin_fifo,$FIFO_TTL * 60 ) ) { 
+			print STDERR ( " >= ". $FIFO_TTL * 60 ." (max age) cleaning...\n");
+			my $fifo_log=$stdin_fifo.".log";    
+			my $stop_status=-1;
+			if ( -e $fifo_log ){
+			    $stop_status=stop_fifo_program('matlab',$stdin_fifo,$fifo_log) ;
+			} else { 
+			    $stop_status=0;
+			}
+			if ( $stop_status >=0) { 
+			    #unlink $fifo_log;
+			    unlink $stdin_fifo; #the actual fifo to remove ( so long as its not opened by anyone)
+			    unlink $FIFO_regfile;  #the registry of the fifo to remove
+			    $n_removed++;
+			} else { 
+			    print STDERR ( "WARNING: Stop failed for fifo $stdin_fifo at reg $FIFO_regfile\n");
+			}
+		    } else {
+			print STDERR ( " < ". $FIFO_TTL * 60 ." (max age).\n");
+		    }
+		}
+	    }
+	    
+	}
+    }
+    
+    return $n_removed;
+}
+# -------------
+sub file_over_ttl { # ( $path,$ttl )
+# -------------
+    my ($path,$ttl) = @_;
+    my $isold=0;
+    use File::stat;
+#    use Time::localtime;
+#    my $timestamp = ctime(stat($fh)->mtime);
+#    my $epoch_timestamp = (stat($fh))[9];
+#    my $timestamp       = localtime($epoch_timestamp)
+
+    my $file_timestamp=0;
+    $file_timestamp = (stat($path))[9];
+    if ( "<$file_timestamp>" eq "<>" ) { 
+	#print STDERR ( $path." FAILED TO GET TIMESTAMP< using method 1, trying method2\n");
+	$file_timestamp= stat($path)->mtime;
+    }
+    #my $difference     = $^T - $file_timestamp;
+    my $difference     = time - $file_timestamp;
+    if ( "<$file_timestamp>" eq "<>" ) {
+	$difference = 0 ;
+	print STDERR ( $path." FAILED TO GET TIMESTAMP.\n");
+    }
+    my @n_p=split('/',$path);
+    my $n=$n_p[-1] unless $#n_p<0;
+    print STDERR ("\t$n, Epoc timestamp(s):$file_timestamp Current age(s):$difference, ");
+    if ( $difference >= ( $ttl ) ) { 
+	$isold=1;
+    }
+    return $isold;
 }
 
 # -------------
@@ -229,6 +682,7 @@ sub make_matlab_command_V2 {
     my $cmd_to_execute = make_matlab_command(@_);
     return ($cmd_to_execute);
 }
+
 
 # -------------
 sub rp_key_insert { 
@@ -660,7 +1114,6 @@ sub writeTextFile {
   if (! -e $filepath) { return 0; }
   else { return 1; }  # OK
 }
-
 # -------------
 sub remove_dot_suffix {
 # -------------
