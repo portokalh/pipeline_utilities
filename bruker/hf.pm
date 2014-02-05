@@ -398,7 +398,11 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     printd(45,"LIST_B: SPACK_SIZE, $list_sizeB: $slice_pack_size\n");
 ### if listsize<listsizeb we're multi acquisition we hope. if list_size >1 we might be multi multi 
     if ( $list_sizeB > 1 ) { 
-        $vol_detail='multi';
+	if($vol_detail eq 'single') {
+	    $vol_detail='multi';
+	} else {
+	    $vol_detail=$vol_detail.'-multi';
+	}
         if($n_slice_packs >1 ) { 
 	    printd(90,"\t mutli-slab data\n");
             $z=$slices*$n_slice_packs*$slice_pack_size; #thus far slice_pack_size has always been 1 for slab data, but we dont want to miss out on the chance to explode when itsnot 1, see below for error 
@@ -924,8 +928,9 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     if($vol_type eq "2D") {
         my $temp=pop(@{$hfkey_baliaslist{"nex"}});
     }
-
-     if( $vol_detail eq "DTI" ) {
+    
+    if( $vol_detail =~ m/DTI/x ) {
+	printd(25,"Setting diffusion_scans in header\n");
 	 $hf->set_value("${s_tag}diffusion_scans",$hf->get_value("${s_tag}volumes"));
  	#$multiscan{"diffusion"}=$vols; 
      } #elsif ( $vol_detail =~ /.*?echo.*?/x    ) { 
@@ -938,7 +943,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 # 	#$multiscan{"volumes"}=$vols; 
 #     }
 
-    if($vol_type eq "4D" && $vol_detail eq "DTI") { 
+    if($vol_type eq "4D" && $vol_detail  =~ m/DTI/x ) { 
 	my $temp=pop(@{$hfkey_baliaslist{"${s_tag}NRepetitions"}});
     }
     my $channels=$hf->get_value($data_prefix."PVM_EncNReceivers");
