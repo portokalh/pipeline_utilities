@@ -595,6 +595,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			       1,
 			       'ACQ_time',                # starting or ending acquision time , but its bad, it is  listed as an array but it only has one value, so the bruker parsecolonecomma function breaks on this one, should ignore and just abs time 
 			   ],
+			   "B_max_bval"=>[
+			       1,
+			       'PVM_DwMaxBval',           # max reported bvalue PVM_DwEffBval might also be relevent, it is the effective bvalue for each scan.
+			   ],
 			   "navgs"=>[
 			       1,
 			       'NA',                      # navgs? its just a guesss for now, so far always 1 except for 2d acquisitions.

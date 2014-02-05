@@ -382,15 +382,15 @@ internal function doing the work of aoaref_to_printline
     #my $subarrayelements; #=$#{$dataarray[0]};
     my @dims=();
     my $dim_string=""; 
-    my $inconsistent_bool=1;
+    my $inconsistent_bool=0;
     for my $aref ( @dataarray) {
         my @subarray=@{$aref}; 
 	push(@dims,$subarray[0]);
 	if ( $dims[$#dims] ne $subarray[0] ) {
-	    $inconsistent_bool=0;
+	    $inconsistent_bool=1;
 ###
 # why was ita  requirement for subarrays to match in length? because of how we layed things out.
-#confess "Inconsistent subarray dims current $dims, next $subarray[0]\n" ;
+	    #carp "Inconsistent subarray dims current $dims[$#dims], next $subarray[0]\n" ;
          } elsif ( $dims[$#dims] eq "" ) { 
              confess "No dims found \n";
 	}
