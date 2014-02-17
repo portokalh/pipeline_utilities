@@ -112,6 +112,10 @@ sub check {
 	if ($exists && $writeable && $readable) {$ok = 1;}
 	else {print STDERR "check: headfile not ok for pfile\n";};
     }
+    elsif ($mode eq 'nii') {
+	if ($exists && $writeable && $readable) {$ok = 1;}
+	else {print STDERR "check: headfile not ok for pfile\n";};
+    }
     elsif ($mode eq 'nf') {
 	# No headfile to start with,
 	# but you can write to a new file, later.
@@ -409,6 +413,63 @@ sub read_pfile_header {
     }
 
     private_set_value($self, "S_header_source", $pfile_version);
+
+    return (1);
+
+}
+#------------
+sub read_nii_header {
+#------------
+    my ($self, $nii_header_reader_app, $nii_version) = @_;
+# read nii header into hash using streaming reader app you specify
+
+    if ($self->{'__mode'} eq "nii") {
+	if (! -e $nii_header_reader_app) {
+	    # the headfile reader lookup in nii_header.pm prefixes error results as shown above 
+	    print STDERR "Headfile::read_nii_header Problem finding nii header app supplied:  $nii_header_reader_app\n"; 
+	    return 0;
+	}
+
+	my @all_lines=`$nii_header_reader_app $self->{'__in_path'}  | sed -e's/  */ /g' | sed -e's/ /=/'`;
+	# assume this reader app program dumps to standard output
+	# stream to list
+# 	if (open SESAME, "$nii_header_reader_app $self->{'__in_path'} |") {
+# 	    @all_lines = <SESAME>;
+# 	    close SESAME;
+# 	} else {
+# 	    print STDERR "Unable to open nii to read\n";
+# 	    return (0);
+# 	}
+
+	#--- convert list form to hash
+
+	my $l;
+	my @header_comments = ();
+	my %header_hash = (); # local
+	foreach $l (@all_lines) {
+	    #print STDERR "parsing $l\n";
+	    my ($is_empty, $field, $value, $is_comment, $the_comment, $error) =
+		private_parse_line($l);
+	    if ($error) {
+		print STDERR "Unable to parse headfile $self->{'__in_path'}\n problem line: $l\n";
+		return 0;
+	    }
+	    if (! $is_empty) {
+		if ($is_comment) {
+		    private_set_comment($self, $the_comment);
+		}
+		else {
+		    private_set_value($self, $field, $value);
+		}
+	    }
+	}
+    }
+    else {
+	print STDERR "Attempt to read headfile as a nii\n";
+	return (0);
+    }
+
+    private_set_value($self, "S_header_source", $nii_version);
 
     return (1);
 

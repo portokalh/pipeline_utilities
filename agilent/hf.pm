@@ -602,7 +602,7 @@ output: status maybe?
 sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 ###
 # array sizes are mentioned for the test data, may break for other data
-# array dimensions are not frequcney,phase,slices(encodes), which is x any y must be figure out through the orietnation codeds and others.
+# array dimensions are not frequcney,phase,slices(encodes), which is x any y must be figured out through the orietnation codeds and others.
     my (@input)=@_;
     my $old_debug=$debug_val;
     my $agilent_header_hash_ref=shift @input;
