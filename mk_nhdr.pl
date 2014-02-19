@@ -43,6 +43,30 @@ if ($ants_dir =~ m/NO_KEY/x ){
     exit;
 }
 
+
+# type min:maxes, 
+# adc 0.0 : 0.002 
+# fa  0.0 : 0.7  ( max theoretical of 1, often ceil'd at 1.22)
+# rd  # same as adc maybe?
+# e1
+# e2
+# e3
+my %data_ranges=(
+    'AD'=> [0.0, 0.002], 
+    'adc'=> [0.0, 0.002], 
+    'b0' => [1500, 20000 ],
+    'dwi' => [1500, 20000 ],
+    'fa' => [0.1, 0.7],
+    'fa_color' => [0, 126],
+    'gre' => [1500, 20000 ],
+    'GRE' => [1500, 20000 ],
+    'T2Star' => [1500, 20000 ],
+    'rd' => [0.0, 0.002],
+#    'e1' => [ 0.0, 0.0],
+#    'e2' => [ 0.0, 0.0],
+#    'e3' => [ 0.0,  0.0],
+);
+
 #print "received ". ($#ARGV+1) ." args <".join(" ",@ARGV).">\n";
 
 if ($#ARGV < 0 ) {
@@ -52,6 +76,12 @@ if ($#ARGV < 0 ) {
     foreach ( @ARGV ) {
 	my $fullname=$_;
 	my $data_type;
+	my $data_type_k0="";
+	my $data_type_dir0="";
+	my $data_type_dim0="";
+	my $ndims=3;
+	my $data_min; 
+	my $data_max;
 	my $encoding='raw';
 	# figureout input
 	my ($name,$path,$suffix) = fileparse($fullname,qr/.[^.]*$/);
@@ -137,15 +167,52 @@ if ($#ARGV < 0 ) {
 
 	    $hf->write_headfile($hfpath); # this should be enabled once we figure out our orientation bits
 
+	    
+	    
 	    if ( $hf->get_value("nifti_type") =~ m/^[fF][lL][oO][aA][tT]/x ) {
 		$data_type="float";
+		$data_min=1500;
+		$data_max=32767;
 	    } elsif ( $hf->get_value("nifti_type") =~ m/[iI][nN][tT]/x ) {
-		if ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]/x ) {
+		if ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]8/x ) {
+		    $data_type="uchar";
+		    $data_min=0;
+		    $data_max=255;
+		} elsif ( $hf->get_value("nifti_type") =~ m/^[iI][nN][tT]8/x ) {
+		    $data_type="char";
+		    $data_min=0;
+		    $data_max=126;
+		} elsif ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]16/x ) {
+		    $data_type="ushort";
+		    $data_min=0;
+		    $data_max=40000;
+		} elsif ( $hf->get_value("nifti_type") =~ m/^[iI][nN][tT]16/x ) {
+		    $data_type="short";
+		    $data_min=0;
+		    $data_max=20000;
+		} elsif ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]32/x ) {
+		    $data_type="uint";
+		    $data_min=0;
+		    $data_max=65535;
+		} elsif ( $hf->get_value("nifti_type") =~ m/^[iI][nN][tT]32/x ) {
+		    $data_type="uint";
+		    $data_min=0;
+		    $data_max=65535;
 		} else {
 		    $data_type="int";
+		    $data_min=0;
+		    $data_max=32767;
 		}
+	    } elsif ( $hf->get_value("nifti_type") =~ m/^[Rr][Gg][Bb]24$/x ) {
+		$data_type="uchar";
+		$data_type_k0="\"vector\"" ;
+		$data_type_dir0="none ";
+		$data_type_dim0=3;
+		$data_min=0;
+		$data_max=127;
+		#$ndims=4;
 	    } else {
-		exit "error with hf";
+		exit "error with generated hf, unrecognized data type in nifti_type field";
 	    }
 	    if ( $hf->get_value("fov_dim") =~ m/Unknown/x ) {
 		print STDERR "WARNING:unknown dimension units, ASSUMING mm!\n";
@@ -163,9 +230,9 @@ if ($#ARGV < 0 ) {
 #####
 # convert using some kinda alias thingy.
 #####
-	    {
-		$hf->print_headfile("$name");
-	    }
+	    #{
+		#$hf->print_headfile("$name");
+	    #}
 	} else {
 	    undef $hf;
 	    print "Opening headfile\n";
@@ -173,7 +240,22 @@ if ($#ARGV < 0 ) {
 	    $hf->read_headfile();
 	    
 	}
-	
+# 	#name type matches for max min
+# 	if ( $name =~ m/.*adc/x ) { 
+# 	} elsif ( $name =~ m/.*_fa/) {
+# 	}
+	print("Checking keys for real_world minmax settings".join(':',keys( %data_ranges))."\n") ;
+	#sleep_with_countdown( 3);
+	for my $key ( keys(%data_ranges) ) {
+	    if ( $name =~ m/.*$key/x ) {
+		print ( "Key $key max setting via standard ranges\n");
+		$data_min=$data_ranges{$key}[0];
+		$data_max=$data_ranges{$key}[1];
+		#sleep_with_countdown( 2);
+	    }
+	}
+
+
 	my $out_nhdr=$path.$name.".nhdr";
 	`echo '' > $out_nhdr`;
 	#print "$name:$path:$suffix\n";
@@ -205,9 +287,18 @@ if ($#ARGV < 0 ) {
 	my @t1=(split / /,$hf->get_value("transform1") )[0, 1, 2];
 	my @t2=(split / /,$hf->get_value("transform2") )[0, 1, 2];
 	my @t3=(split / /,$hf->get_value("transform3") )[0, 1, 2];
-	$t1[0]=-$t1[0];
-	$t2[1]=-$t2[1];
-	#$t3[2]=-$t3[2];
+	
+
+	if ( 1 ) {
+	    # orientaiton correction for rat/mouse/mulatta data... 
+	    @t2=(split / /,$hf->get_value("transform1") )[0, 1, 2];
+	    @t1=(split / /,$hf->get_value("transform2") )[0, 1, 2];
+	    @t3=(split / /,$hf->get_value("transform3") )[0, 1, 2];
+	    $t1[1]=-$t1[1];
+	    $t2[0]=-$t2[0];
+	    #$t3[1]=-$t3[1];
+	}
+
 	$center_volume_string=" -orig  '(".join(',',@origin).")'";
 	
 	my $cmd="unu make -bs ".
@@ -215,6 +306,7 @@ if ($#ARGV < 0 ) {
 	    " -h -i ".$name.$suffix.
 	    " -t ".$data_type.
 	    " -s ".
+	    $data_type_dim0." ".
 	    $hf->get_value('dim_X')." ".
 	    $hf->get_value('dim_Y')." ".
 	    $hf->get_value('dim_Z')." ".
@@ -227,14 +319,15 @@ if ($#ARGV < 0 ) {
 	    #" -spc RAS". # what slicer wants me to tell them,
 	    #" -spc ARS". # our general reality, tottally fails
 	    # " -spc anterior-right-superior". # our general reality, totally fails
-	    " -spc 3".
+	    " -spc $ndims".
 	    $center_volume_string.
 	    " -spu \"".$hf->get_value("fov_dim")."\" \"".
 	    $hf->get_value("fov_dim")."\" \"".
 	    $hf->get_value("fov_dim")."\" ".
-	    " -k \"domain\" \"domain\" \"domain\"".
+	    " -k $data_type_k0 \"domain\" \"domain\" \"domain\"".
 	     " -dirs ".
  	    "'".
+	    "$data_type_dir0".
  	    "(".join(",", @t1).") ".
  	    "(".join(",", @t2).") ".
  	    "(".join(",", @t3).") ".
@@ -258,8 +351,10 @@ if ($#ARGV < 0 ) {
 	    load_file_to_array($out_nhdr,\@all_lines);
 	    #chomp(@all_lines);
 	    print(@all_lines."\n");
-# 	    push (@all_lines,"min: 0\n");
-# 	    push (@all_lines,"max: 1.22\n");
+	    if ( defined $data_min && defined $data_max ) { 
+		push (@all_lines,"min: $data_min\n");
+		push (@all_lines,"max: $data_max\n");
+	    }
 	    #push (@all_lines,'space units: "mm" "mm" "mm"'."\n");
 	    #push (@all_lines,"space directions: ".$dir_vectors."\n");
 	    print(@all_lines);
