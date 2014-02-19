@@ -462,7 +462,7 @@ sub parse_array { # ( $elementsstring)
 		printd(99, "INFO: no elements to array\n");
 	    }
 	    if ($subarraysize != $#parts+1) {
-		croak "Subarraysize did not match expected length $subarraysize != $#parts";
+		carp "Subarraysize did not match expected length $subarraysize != $#parts, there may be some unexpected behavior in our output.";
 	    } else { 
 	    }
 
