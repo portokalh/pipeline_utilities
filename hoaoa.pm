@@ -345,7 +345,7 @@ mode 'single' get single, (first element of first subarray)
              if ($dims eq "0" ) {
                  $dims=$subarray[0];
 	     } elsif ( $dims ne $subarray[0] ) { 
-                 carp "\tINFO:Inconsistent subarray dims current $dims, next $subarray[0]\n" unless $debug_val < 45;
+                 carp "\tINFO:Inconsistent subarray dims current $dims, next $subarray[0]\n" unless $debug_val < 75;
 		     $inconsistent_bool=1;
 	     }
             @subarray=@subarray[1..$#subarray];
@@ -396,7 +396,7 @@ internal function doing the work of aoaref_to_printline
 	    $inconsistent_bool=1;
 ###
 # why was ita  requirement for subarrays to match in length? because of how we layed things out.
-	    carp "\tINFO:Inconsistent subarray dims current $dims[$#dims], next $subarray[0]\n" unless $debug_val < 45;
+	    carp "\tINFO:Inconsistent subarray dims current $dims[$#dims], next $subarray[0]\n" unless $debug_val < 75;
          } elsif ( $dims[$#dims] eq "" ) { 
              confess "No dims found \n";
 	}

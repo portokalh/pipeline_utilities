@@ -18,7 +18,7 @@ use strict;
 use warnings;
 use Carp;
 use List::MoreUtils qw(uniq);
-use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa);
+use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa );
 use agilent qw( @knownmethods);
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 #use vars qw($debug_val $debug_locator);
@@ -62,7 +62,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     my $hf = shift @input;
     my $old_debug=$debug_val;
     $debug_val = shift @input or $debug_val=$old_debug;
-    my $vol_type=1;
+    my $vol_type="3D";
     my $vol_detail="single";
     my $vol_num=1; # total number of volumes, 
     my $time_pts=1; # number timepoints
@@ -338,6 +338,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     }
     if ( $z==0 || $z eq 'NO_KEY') { 
 	printd(5,"Z dimension reading zero in variable nv2, or ns, using 1 instead\n");
+	$vol_type='2D';
 	$z=1;
     }
     
@@ -360,6 +361,13 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 	    $vol_detail='single';  
 	}
     }
+    #if ( $hf->get_value('z_Agilent_bvalSave')!~ m/NO_KEY/x ){
+    my @aoa=printline_to_aoa($hf->get_value('z_Agilent_bvalue'));
+    if ( $#aoa>0 ) {
+	#$hf->get_value('z_Agilent_bvalue') > 
+	my $n_dwi_exp=$#aoa+1; #aoaref_get_length(\@aoa);
+	$vol_detail="DTI$n_dwi_exp-".$vol_detail; # could use the order of dti in the vol detail to control what dim order we use... 
+    }
 #     if ($hf->gepet_value($data_prefix."arraydim") ne 'NO_KEY') { 
 # 	if ( $hf->get_value($data_prefix."acqcycles") ne $hf->get_value($data_prefix."arraydim") ) {
 # 	    $channels=$hf->get_value($data_prefix."arraydim")/$z;
@@ -376,12 +384,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # 	}
 #     }
 
-#
-# 	if ( ! defined $hf->{"PVM_EncMatrix"}->[0]) {
-# 	    $x=$x/2;
-# 	    printd(45, "halving x\n");
-# 	}
-#     }
+
     printd(45,"order is $order\n");
     if ( $hf->get_value($data_prefix."acqdim") == 2) {
          $vol_type="2D";
@@ -390,8 +393,9 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # 	printd(90,"Setting type 2D, slices are b_slices->slices\n");
 # 	#should find detail here, not sure how, could be time or could be space, if space want to set slices, if time want to set vols
 #     } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
-    $vol_type="3D";
     my $cycles=$hf->get_value($data_prefix."acqcycles");
+    # cycles stores either the nslices or the nvolumes i think. for single (or multichannel) 3d volumes it is the nslices.
+    # blockslices=0? may have somethign to do with this.
     if ( $cycles ne 1  && $hf->get_value("ray_blocks")==1 ) { 
 #	$vol_type="2D";
 	$hf->set_value("ray_blocks",$cycles);
@@ -525,11 +529,13 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     }
 
     if ( $vol_num>1) { 
-	$vol_type="4D";
+	#$vol_type="4D"; # this is not helping
     } elsif ($vol_num != 1 ) 
     {
 	carp("Bad number of volumes <$vol_num>.");
     }
+   
+
 ###### handle xy swapping
     
     
@@ -777,12 +783,6 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 
 ### clean up keys which are inconsistent for some acq types.    
     
-#     if($vol_type eq "2D") {
-#         my $temp=pop(@{$hfkey_aliaslist{"nex"}});
-#     }
-#     if($vol_type eq "4D" && $vol_detail eq "DTI") { 
-# 	my $temp=pop(@{$hfkey_aliaslist{"B_NRepetitions"}});
-#     }
 ### insert standard keys * multiplier into civm headfile
     for my $hfkey (keys %hfkey_aliaslist) { 
         printd(55,"civmheadfilekey=$hfkey\n");
@@ -813,8 +813,6 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 # 	$hf->set_value('ne',1);
 #     }
     
-    
-
     my $volinfotext=set_volume_type($hf); # only determines the output volume type, need alternate to determine the kspace data and its orientations and orders.
     my ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type);
     ($vol_type, $vol_detail, $vols,$x,$y,$z,$bit_depth,$data_type,$report_order)=split(':',$volinfotext);
@@ -832,12 +830,33 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
     printd(75,"echos after set_volume_type = ".$hf->get_value($s_tag."echos").".\n");
     my $dim_order='xpyczt';#both xpyczt and xpcyzt work when we dont have channels, formerly 'xycpzt', c was in good position relative to yz for some acquisitions.
-
+    if ( $vol_type =~ /2D/x ){
+	printd(25,"Volume 2D detected setting special 2D dimensional order\n");
+	$dim_order='xpcyzt';
+    } elsif($vol_type =~ /4D/x) {
+	#$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
+	$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
+    }
+    
+    
     $hf->set_value("${s_tag}dimension_order",$dim_order);
     printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
+    printd(25,"acquisition order is $dim_order\n");
+    printd(40," dividing echos out of volumes ( $vols / ".$hf->get_value($data_prefix.'ne').")\n");
+    $vols=$vols/$hf->get_value($data_prefix.'ne');
+    if ( $vol_detail =~ m/.*DTI([0-9]+)-.*/x ) { #/.*DTI.*/x ) {
+	#my $dti_num = $vol_detail=~ ;
+	my $dti_num = $1;
+	if ( ! defined $dti_num ) { 
+	    $dti_num=1;
+	}
+	printd(40," dividing dti_scans out of volumes ( $vols / $dti_num )\n");
+	$vols=$vols/$dti_num;
+	$hf->set_value($s_tag.'dti_vols', $dti_num);
+    } 
     if ( $vol_detail =~ /multi.*channel/x) {
-	printd(40," setting channel data using volumes / echos ( $vols / ".$hf->get_value($data_prefix.'ne').")\n");
-	$hf->set_value($s_tag.'channels', $vols/$hf->get_value($data_prefix.'ne'));
+	printd(40," setting channel data using volumes remaining\n"); #/ echos ( $vols / ".$hf->get_value($data_prefix.'ne').
+	$hf->set_value($s_tag.'channels', $vols);
     } else {
   	$hf->set_value($s_tag.'channels', 1);
     }

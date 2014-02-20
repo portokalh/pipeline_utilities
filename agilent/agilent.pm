@@ -398,8 +398,8 @@ sub parse_array { # ( $elementsstring)
     my $single_element_regex;
     my $array_length_regex="(?:[0-9]+)";  #single int at beginning of line
     my $subseparator; # either space or newline
-    my $num_ex="[-]?[0-9]+(?:[.][0-9]+)?(?:e[-]?[0-9]+)?"; # positive or negative floating point or integer number including scientricic notation. 
-    $num_ex="[-]?(?:[0-9]+(?:[.][0-9]+)?(?:e[-]?[0-9]+)?|nan)"; # positive or negative floating point or integer number including scientricic notation, and +- nan's
+    #my $num_ex="[-]?[0-9]+(?:[.][0-9]+)?(?:e[-]?[0-9]+)?"; # positive or negative floating point or integer number including scientricic notation. 
+    my $num_ex="[-]?(?:[0-9]+(?:[.][0-9]+)?(?:e[-]?[0-9]+)?|nan)"; # positive or negative floating point or integer number including scientricic notation, and +- nan's
     my $num_sa_ex="(${array_length_regex}[ ](?:${num_ex}[ ])+)"; 
 #    my $string_ex="(?:\\w+)"; #single string withonly good characters
 ########    my $string_sa_ex="((?:$string_ex)(?:[ \n]$string_ex){$subarraysize})";
