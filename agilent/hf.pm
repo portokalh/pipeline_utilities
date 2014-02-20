@@ -421,8 +421,9 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     $time_pts=$hf->get_value($data_prefix."volumes");
     if ( $time_pts == 0 ) {
 	croak("Bad number or volumes in procpar file, cannot continue");
-    }
-#         $vol_type="4D";
+    } #elsif ( $time_pts >1 ) {
+      #   $vol_type="4D";
+    #p}
 #         if ( defined $n_dwi_exp ) { 
 #             printd(45,"diffusion exp with $n_dwi_exp frames\n");
 #             if ( $movie_frames!=$n_dwi_exp) { 
@@ -840,8 +841,6 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     
     
     $hf->set_value("${s_tag}dimension_order",$dim_order);
-    printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
-    printd(25,"acquisition order is $dim_order\n");
     printd(40," dividing echos out of volumes ( $vols / ".$hf->get_value($data_prefix.'ne').")\n");
     $vols=$vols/$hf->get_value($data_prefix.'ne');
     if ( $vol_detail =~ m/.*DTI([0-9]+)-.*/x ) { #/.*DTI.*/x ) {
@@ -853,6 +852,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	printd(40," dividing dti_scans out of volumes ( $vols / $dti_num )\n");
 	$vols=$vols/$dti_num;
 	$hf->set_value($s_tag.'dti_vols', $dti_num);
+	$vol_type="4D";
     } 
     if ( $vol_detail =~ /multi.*channel/x) {
 	printd(40," setting channel data using volumes remaining\n"); #/ echos ( $vols / ".$hf->get_value($data_prefix.'ne').
@@ -860,7 +860,8 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     } else {
   	$hf->set_value($s_tag.'channels', 1);
     }
-
+    printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
+    printd(25,"acquisition order is $dim_order\n");
 
 
 ### set kspace bit depth and type    
