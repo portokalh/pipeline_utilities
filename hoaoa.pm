@@ -337,22 +337,27 @@ mode 'single' get single, (first element of first subarray)
     
     if ($mode ne 'whole' && $mode ne 'sub' && $mode ne 'single' ) { push @dataarray,$mode; $mode='whole'; }
     if ($mode eq 'whole' ) {
+	my $inconsistent_bool=0;
         for my $aref ( @dataarray) {
             my @subarray=@{$aref}; 
-	    $dims=$subarray[0];
 ###
 # why was ita  requirement for subarrays to match in length?
-#             if ($dims eq "0" ) {
-#                 $dims=$subarray[0];
-#             } elsif ( $dims ne $subarray[0] ) { 
-#                 confess "Inconsistent subarray dims current $dims, next $subarray[0]\n" ;
-#             }
+             if ($dims eq "0" ) {
+                 $dims=$subarray[0];
+	     } elsif ( $dims ne $subarray[0] ) { 
+                 carp "\tINFO:Inconsistent subarray dims current $dims, next $subarray[0]\n" unless $debug_val < 45;
+		     $inconsistent_bool=1;
+	     }
             @subarray=@subarray[1..$#subarray];
             my $subjoin=join(",",@subarray); #@{$aref}); #[1..-1]
             push(@text_array,"($subjoin)");
             printd(75, "\t ($subjoin) \n");
         }
-        $data=join (':',@text_array);
+	if ( ! $inconsistent_bool) {
+	    $data=join (':',@text_array);
+	} else {
+	    $data=join ('+',@text_array);
+	}
     } elsif ( $mode eq 'sub' ) { 
         my $aref=$dataarray[0];
         my @subarray=@{$aref}; 
@@ -377,7 +382,7 @@ internal function doing the work of aoaref_to_printline
 =cut
     my (@dataarray)=@_;
     debugloc();
-    printd(90,"$ dataarray[0]\n");
+    printd(90,"$dataarray[0]\n");
     my @text_array; #array containing the text for each sub array, 
     #my $subarrayelements; #=$#{$dataarray[0]};
     my @dims=();
@@ -386,11 +391,12 @@ internal function doing the work of aoaref_to_printline
     for my $aref ( @dataarray) {
         my @subarray=@{$aref}; 
 	push(@dims,$subarray[0]);
-	if ( $dims[$#dims] ne $subarray[0] ) {
+	#if ( $dims[$#dims] ne $subarray[0] ) {
+	if ( $dims[$#dims] ne $dims[0] ) {
 	    $inconsistent_bool=1;
 ###
 # why was ita  requirement for subarrays to match in length? because of how we layed things out.
-	    #carp "Inconsistent subarray dims current $dims[$#dims], next $subarray[0]\n" ;
+	    carp "\tINFO:Inconsistent subarray dims current $dims[$#dims], next $subarray[0]\n" unless $debug_val < 45;
          } elsif ( $dims[$#dims] eq "" ) { 
              confess "No dims found \n";
 	}
