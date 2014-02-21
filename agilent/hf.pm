@@ -827,20 +827,9 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     printd(75,"echos before set_volume_type".$hf->get_value($s_tag."echos")."\n");
     $hf->set_value("${s_tag}volumes",$vols);
     $hf->set_value("${s_tag}echos",$hf->get_value($data_prefix.'ne'));
-    $hf->set_value("${s_tag}vol_type",$vol_type);
-    $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
+
     printd(75,"echos after set_volume_type = ".$hf->get_value($s_tag."echos").".\n");
-    my $dim_order='xpyczt';#both xpyczt and xpcyzt work when we dont have channels, formerly 'xycpzt', c was in good position relative to yz for some acquisitions.
-    if ( $vol_type =~ /2D/x ){
-	printd(25,"Volume 2D detected setting special 2D dimensional order\n");
-	$dim_order='xpcyzt';
-    } elsif($vol_type =~ /4D/x) {
-	#$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
-	$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
-    }
-    
-    
-    $hf->set_value("${s_tag}dimension_order",$dim_order);
+   
     printd(40," dividing echos out of volumes ( $vols / ".$hf->get_value($data_prefix.'ne').")\n");
     $vols=$vols/$hf->get_value($data_prefix.'ne');
     if ( $vol_detail =~ m/.*DTI([0-9]+)-.*/x ) { #/.*DTI.*/x ) {
@@ -860,6 +849,17 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     } else {
   	$hf->set_value($s_tag.'channels', 1);
     }
+    my $dim_order='xpyczt';#both xpyczt and xpcyzt work when we dont have channels, formerly 'xycpzt', c was in good position relative to yz for some acquisitions.
+    if ( $vol_type =~ /2D/x ){
+	printd(25,"Volume 2D detected setting special 2D dimensional order\n");
+	$dim_order='xpcyzt';
+    } elsif($vol_type =~ /4D/x) {
+	#$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
+	$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
+    }
+    $hf->set_value("${s_tag}vol_type",$vol_type);
+    $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
+    $hf->set_value("${s_tag}dimension_order",$dim_order);
     printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
     printd(25,"acquisition order is $dim_order\n");
 
