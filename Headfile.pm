@@ -135,6 +135,11 @@ sub check {
 	else {print STDERR "check: desired new headfile already exists\n";}
     }
     else { print STDERR "check: don't understand headfile open mode: $mode\n"; }
+    if ( ! $ok ) {
+	if (! $writeable) { print STDERR "because ! writeable\n"; }
+	if (! $readable) { print STDERR "because ! writeable\n"; }
+	if (! $exists) { print STDERR "because ! writeable\n"; }
+    }
     return ($ok);
 }
 

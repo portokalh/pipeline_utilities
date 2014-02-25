@@ -352,8 +352,8 @@ if ($#ARGV < 0 ) {
 	    #chomp(@all_lines);
 	    print(@all_lines."\n");
 	    if ( defined $data_min && defined $data_max ) { 
-		push (@all_lines,"min: $data_min\n");
-		push (@all_lines,"max: $data_max\n");
+		push (@all_lines,"min:= $data_min\n");
+		push (@all_lines,"max:= $data_max\n");
 	    }
 	    #push (@all_lines,'space units: "mm" "mm" "mm"'."\n");
 	    #push (@all_lines,"space directions: ".$dir_vectors."\n");
