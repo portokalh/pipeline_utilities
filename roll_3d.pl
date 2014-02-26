@@ -162,9 +162,9 @@ for my $runno (@runnos) {
     my $HF= new Headfile ( 'rw',$hfpath);
     if (! $HF->check()) { error_out(join("open",@error_m).' '.$hfpath."\n"); } 
     if (! $HF->read_headfile) { error_out(join("read",@error_m).' '.$hfpath."\n"); }
-    $HF->set_value("roll_X",$opts{'x'});
-    $HF->set_value("roll_Y",$opts{'y'});
-    $HF->set_value("roll_Z",$opts{'z'});
+    $HF->set_value("roll_corner_X",$opts{'x'});
+    $HF->set_value("roll_corner_Y",$opts{'y'});
+    $HF->set_value("roll_first_Z",$opts{'z'});
     my ($name,$hfdir,$suffix)=fileparts($hfpath);    
     my $tc=$HF->get_value("scanner_tesla_image_code");
     if ( $find_tags) {
@@ -189,6 +189,35 @@ for my $runno (@runnos) {
 	    printd(0,"WARNING: No tag file found for scan $runno\n");
 	}
     }
+    if ( -e "${hfdir}orig" ) {
+	printd(5,"Duplicate roll run called, checking for original images in orig folder to roll those instead\n");
+	$cmd="mkdir -p ${hfdir}last";
+	if ( ! -e "${hfdir}last") {
+	    `$cmd`;
+	} else {
+	    #`rm -fr ${hfdir}last`;
+	    printd(5,"WARNING: Re-run multiple times, behavior uncertain!\n");
+	    `$cmd`;
+	    $cmd="cp ${hfpath} ${hfdir}last/.";
+	    `$cmd`;
+	}
+	$cmd="mv ${hfdir}orig/* ${hfdir}last/.";
+	printd(45,"$cmd\n");
+	`$cmd`;
+	$cmd="mv ${hfdir}/*.raw ${hfdir}last/.";
+	printd(45,"$cmd\n");
+	`$cmd`;
+
+	$cmd="mv ${hfdir}/last/$runno${tc}imx.*.raw ${hfdir}";
+	printd(45,"$cmd\n");
+	`$cmd`;
+	if ( ! -e "$hfdir".$runno.$tc."imx.0001.raw") {
+	    printd(15,"Moving original out of way\n");
+	    $cmd="mv -f $hfdir"."last/".$runno.$tc."*.*.raw ${hfdir}/.";
+	    `$cmd`;
+	}
+    }
+
     if ( $opts{'x'} > 0 || $opts{'y'} > 0 ) { 
 	$cmd='roller_radish '.$runno.' '.$opts{'x'}.' '.$opts{'y'};
 	printd (15, $cmd."\n");
