@@ -429,7 +429,8 @@ sub start_fifo_program {
 	    close STDERR;
 	    close STDOUT;
 	    #setsid or die "Cant start new session : $!";
-	    umask(0027);
+	    #NAUGHTY NAUGHTY!
+	    #umask(0027); 
 	    chdir '/' or die "fifo start couldnt chdir to / : $!";
 	    open STDIN, '<', '/dev/null' or die $!; 
 	    open STDERR, '>', '/dev/null' or die $!; 

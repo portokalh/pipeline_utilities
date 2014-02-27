@@ -157,7 +157,7 @@ for my $runno (@runnos) {
     printd(5,"#---$runno\n");
     #find headfile.
     my $r_base_path = $EC->get_value('engine_work_directory').'/'.$runno;
-    my ($hfpath,$stat)=`find $r_base_path -iname \"$runno.headfile\"`;
+    my ($hfpath,$stat)=`find $r_base_path -iname \"$runno.headfile\" | grep -vE '(last|orig)'`;
     chomp $hfpath;
     my $HF= new Headfile ( 'rw',$hfpath);
     if (! $HF->check()) { error_out(join("open",@error_m).' '.$hfpath."\n"); } 
@@ -239,24 +239,39 @@ for my $runno (@runnos) {
 	    printd(45,"no \n\t$hfdir".$runno.$tc."imx.0001.raw or \n\t$hfdir".$runno."rsimx.0001.raw\n");
 	}
     }
-    if ( $opts{'z'} > 0 ) {
-	$cmd='restack_radish '.$runno." ".$opts{'z'}.' '.$HF->get_value("dim_Z")." ".$EC->get_value("engine_work_directory");
-	printd (15, $cmd."\n");
-	`$cmd`;
-	$cmd="mkdir -p ${hfdir}orig";
-	if ( ! -e "${hfdir}orig" ) { 
+    my $dim_z=$HF->get_value("dim_Z");
+    if ($HF->get_value("RH_xres") ne 'NO_KEY' ) {
+	$dim_z=$HF->get_value("RH_zres");
+    }
+    if ( $dim_z eq 'NO_KEY' || $dim_z<=1) {
+	if ( $opts{'z'} > 0 ) {
+	    printd(0,"WARNING: NO_Z Ignoring z rolls. YOU ASKED FOR a z Roll of $opts{'z'} ");
+	    if ( $dim_z eq 'NO_KEY' )  {
+		printd(0,"BUT CANNOT PULL dim_Z|RH_Zres FROM HEADFILE $hfpath\n");
+	    } else {
+		printd(0,"BUT Z is <=1 IN HEADFILE $hfpath\n");
+	    }
+	}
+    } else {
+	if ( $opts{'z'} > 0 ) {
+	    $cmd='restack_radish '.$runno." ".$opts{'z'}." $dim_z ".$EC->get_value("engine_work_directory");
+	    printd (15, $cmd."\n");
 	    `$cmd`;
-	}	
-	if ( -e "$hfdir".$runno.$tc."imx.0001.raw") {
-	    printd(15,"Moving original out of way\n");
-	    $cmd="mv -f $hfdir".$runno.$tc."*.*.raw ${hfdir}orig/.";
-	    `$cmd`;
-	} elsif ( -e "$hfdir".$runno."roimx.0001.raw") {
-	    printd(15,"Moving rolled out of way\n");
-	    $cmd="mv -f $hfdir".$runno."ro*.*.raw ${hfdir}orig/.";
-	    `$cmd`;
-	} else {
-	    printd(45,"no \n\t$hfdir".$runno.$tc."*.*001.raw or \n\t$hfdir".$runno."ro*.*001.raw\n");
+	    $cmd="mkdir -p ${hfdir}orig";
+	    if ( ! -e "${hfdir}orig" ) { 
+		`$cmd`;
+	    }	
+	    if ( -e "$hfdir".$runno.$tc."imx.0001.raw") {
+		printd(15,"Moving original out of way\n");
+		$cmd="mv -f $hfdir".$runno.$tc."*.*.raw ${hfdir}orig/.";
+		`$cmd`;
+	    } elsif ( -e "$hfdir".$runno."roimx.0001.raw") {
+		printd(15,"Moving rolled out of way\n");
+		$cmd="mv -f $hfdir".$runno."ro*.*.raw ${hfdir}orig/.";
+		`$cmd`;
+	    } else {
+		printd(45,"no \n\t$hfdir".$runno.$tc."*.*001.raw or \n\t$hfdir".$runno."ro*.*001.raw\n");
+	    }
 	}
     }
     $HF->write_headfile($hfpath);
