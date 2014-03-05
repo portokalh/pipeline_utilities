@@ -83,7 +83,7 @@ sub Close {
   my ($self, $runno) = @_;
 # disconnect from db
   if (! $self->{'__oracle_connected'}) {
-     print stderr "Webservices::Close: NOT CONNECTED TO ORACLE, already closed\n";
+     print stderr "Webservices::Close: NOT CONNECTION TO ORACLE, already closed\n";
   }
   else {
     base_dbi::rollback_dbhandle($self->{'__dbh'});  # should have made no changes 
@@ -99,7 +99,7 @@ sub RunnoExists {
 # ------------
   my ($self, $runno) = @_;
   if (! $self->{'__oracle_connected'}) {
-     print stderr "NO CONNECTED TO ORACLE, try Webservices->new()\n";
+     print stderr "NO CONNECTION TO ORACLE, try Webservices->new()\n";
      return (0,"NO ORACLE");
   }
   my $oracle_msg1;
@@ -125,7 +125,7 @@ sub SpecidExists {
 # ------------
   my ($self, $specid) = @_;
   if (! $self->{'__oracle_connected'}) {
-     print stderr "NO CONNECTED TO ORACLE, try Webservices->new()\n";
+     print stderr "NO CONNECTION TO ORACLE, try Webservices->new()\n";
      return (0,"NO ORACLE");
   }
   my ($result, $oracle_msg) = exists_in_db ($self->{'__dbh'}, 'labspecimenid', $specid, 'specowner.specimen'); 
@@ -139,7 +139,7 @@ sub ProjectExists {
 # ------------
   my ($self, $project) = @_;
   if (! $self->{'__oracle_connected'}) {
-     print stderr "NO CONNECTED TO ORACLE, try Webservices->new()\n";
+     print stderr "NO CONNECTION TO ORACLE, try Webservices->new()\n";
      return (0,"NO ORACLE");
   }
   my ($result, $oracle_msg) = exists_in_db ($self->{'__dbh'}, 'projectcode', $project, 'specowner.project');
@@ -148,9 +148,59 @@ sub ProjectExists {
 
   return ($query_ok_bool, $exists_bool, $oracle_msg);
 }
+# ------------
+sub SpecidMatchProject {
+# ------------
+    #assuming specid exists, look to see if it matches the project specified...
+    # doesnt check if the project you asked for exists, just that your specimen references it.
+    my ($self, $project,$specid) = @_;
+    if (! $self->{'__oracle_connected'}) {
+	print stderr "NO CONNECTION TO ORACLE, try Webservices->new()\n";
+      return (0,"NO ORACLE");
+    } 
+    my ($result, $oracle_msg) = db_listing ($self->{'__dbh'}, 'projectcode','labspecimenid', $specid, 'specowner.specimen');
+    my $query_ok_bool = $oracle_msg eq "ok" ? 1 : 0;
+    my $match_bool    = $result     eq "$project" ? 1 : 0;    
+    #if ( ! $match_bool ) { print ( "$project is not $result\n");}
 
+    return ($query_ok_bool, $match_bool, $oracle_msg,$result);
+}
 
 # --- local subs
+# ------------
+sub QueryTest {
+    my ($self) = @_;#, $out_column, $column, $value, $full_table_name) = @_;
+    my $dbh=$self->{'__dbh'};
+    #my $sql = "select $out_column from $full_table_name where $column=\'$value\'";
+    my $sql = "select projectcode from specowner.specimen where labspecimenid=\'140227-5:0\'";
+    print "sql = $sql\n";
+    my $query = new Query ($dbh);
+    #my ( $msg,@result) = $query->sql_on_fly_single_result_multiple_rows($sql);#_multiple_rows
+    my ($result, $msg) = $query->sql_on_fly_single_result($sql);#_multiple_rows
+    if ($msg ne "ok") {
+        print "QueryTest: SQL Statement failure<$sql>\n $msg";
+    } else {
+	#print join("\n",@result);
+	print $result;
+    }
+	
+    
+    return ;#($result, $msg);
+}
+
+#
+sub db_listing {
+# ------------
+  my ($dbh, $out_column, $column, $value, $full_table_name) = @_;
+  my $sql = "select $out_column from $full_table_name where $column=\'$value\'";
+  #print "sql = $sql\n";
+  my $query = new Query ($dbh);
+  my ($result, $msg) = $query->sql_on_fly_single_result($sql); #multiple_rows
+  if ($msg ne "ok") {
+        print "exists_in_db: Unable to $sql\n $msg";
+  }
+  return ($result, $msg); 
+}
 
 # ------------
 sub exists_in_db {
