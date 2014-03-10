@@ -87,18 +87,24 @@ if (! $EC->read_headfile) { error_out(join("read",@error_m)); }
 
 
 
+
+###
+# main 
+###
 #    if (! getopts('abc:d:ek:op:r:s:tu:', \%options)) {
 my %opts=  (
     'x' => 0,
     'y' => 0,
     'z' => 0 );
-
+printd(0, "Roll_3d Calls roller_radish and restack_radish on your behalf with your specifed xyz corner information. \n".
+       "This information is then added to your headfile and it looks up tag files to give a proper archivme prompt.\n".
+       "Usage: roll_3d [-x #] [-y #] [-z #] RUNNUMBER1 RUNNUMBER2... RUNNUMBERN\n".
+       "Valid options are \n\t-x $opts{'x'} \n\t-y $opts{'y'} \n\t-z $opts{'z'}\n");
 if( ! getopts('x:y:z:',\%opts)) {
-    printd(0, "ERROR: bad options specified,\n".
-	   "Valid options are \n\t-x \$opts{'x'} \n\t-y \$opts{'y'} \n\t-z \$opts{'z'}\n");
+    printd(0,	   "ERROR: bad options specified,\n");
     exit $ERROR_EXIT;
 } else { 
-    printd (0, "Roll3d calling roller_radish and restack_radish on your behalf and adding roll_dim keys to each headfile processed\n");
+    printd (0, "proceeding to adding roll[channel]_(corner/first)_(xyz) keys to each headfile processed\n");
 }
 
 my $dims=0;
@@ -123,6 +129,7 @@ my $cmd='';
 @error_m=("Unable to "," headfile ");
 my @missing_runnos;
 my @found_runnos;
+my $civm_id='';
 ###
 # check headfiles exist and make al list of present and non-present hf's
 ###
@@ -162,6 +169,7 @@ for my $runno (@runnos) {
     my $HF= new Headfile ( 'rw',$hfpath);
     if (! $HF->check()) { error_out(join("open",@error_m).' '.$hfpath."\n"); } 
     if (! $HF->read_headfile) { error_out(join("read",@error_m).' '.$hfpath."\n"); }
+    $civm_id=$HF->get_value("U_civmid");
     $HF->set_value("roll_corner_X",$opts{'x'});
     $HF->set_value("roll_corner_Y",$opts{'y'});
     $HF->set_value("roll_first_Z",$opts{'z'});
@@ -280,6 +288,6 @@ for my $runno (@runnos) {
 
 printd(5,"Finished all numbers with rolls x=$opts{x} y=$opts{y} z=$opts{z}, Original files stashed into RUNNOimages/orig\n");
 if ( $find_tags ) {
-printd(0,"initiate archive using \n\narchiveme civmid ".join(" ",keys(%taglist))."\n\n");
+printd(0,"initiate archive using \n\narchiveme $civm_id ".join(" ",keys(%taglist))."\n\n");
 }
 exit $GOODEXIT;
