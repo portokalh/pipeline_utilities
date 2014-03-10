@@ -264,7 +264,7 @@ sub old_determine_volume_type { # ( \%aspect_header_ref[,$debug_val] )
     if ( defined $aspect_header_ref->{'ACQ_n_echo_images'} )  {
         $n_echoes=aoaref_get_single($aspect_header_ref->{'ACQ_n_echo_images'});
 #         if ($n_echoes>1){ 
-#             croak("Never delt with echos, failing now.");           
+#             croak("Never delt with echoes, failing now.");           
 #         }
 	printd(45,"n_echoes:$n_echoes\n");
 	
@@ -287,7 +287,7 @@ sub old_determine_volume_type { # ( \%aspect_header_ref[,$debug_val] )
     my $list_size;
     if (defined $aspect_header_ref->{"ACQ_O1B_list_size"} ) {
         $list_sizeB=aoaref_get_single($aspect_header_ref->{"ACQ_O1B_list_size"});  # appears to be total "volumes" for 2d multi slice acquisitions will be total slices acquired. matches NI, (perhaps ni is number of images and images may be 2d or 3d)
-        $list_size=aoaref_get_single($aspect_header_ref->{"ACQ_O1_list_size"}); # appears to be nvolumes/echos matches NSLICES most of the time, notably does not match on 2d me(without multi slice
+        $list_size=aoaref_get_single($aspect_header_ref->{"ACQ_O1_list_size"}); # appears to be nvolumes/echoes matches NSLICES most of the time, notably does not match on 2d me(without multi slice
 #         if ("$list_size" ne "$list_sizeB") { 
 #             croak "ACQ_O1B_list_size ACQ_O1_list_size missmatch. This has never been seen before and probably should not happen\n";
 #         } else {

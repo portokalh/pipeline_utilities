@@ -173,10 +173,10 @@ sub set_volume_type { # ( aspect_headfile[,$debug_val] )
  	$n_slices=$hf->get_value($data_prefix."STRATI");
  	printd(45,"nslices:$n_slices\n");
      }
-#     my $list_sizeB;#(2dslices*echos*time)
+#     my $list_sizeB;#(2dslices*echoes*time)
 #     my $list_size;
 #     $list_sizeB=$hf->get_value($data_prefix."ACQ_O1B_list_size");  # appears to be total "volumes" for 2d multi slice acquisitions will be total slices acquired. matches NI, (perhaps ni is number of images and images may be 2d or 3d), doesent appear to accout for channel data.
-#     $list_size=$hf->get_value($data_prefix."ACQ_O1_list_size");    # appears to be nvolumes/echos matches NSLICES most of the time, notably does not match on 2d me(without multi slice), looks like its nslices*echos for 2d ms me
+#     $list_size=$hf->get_value($data_prefix."ACQ_O1_list_size");    # appears to be nvolumes/echoes matches NSLICES most of the time, notably does not match on 2d me(without multi slice), looks like its nslices*echoes for 2d ms me
 #     if ( $list_size ne 'NO_KEY' ) {
 # 	printd(45,"List_size:$list_size\n"); # is this a multi acquisition of some kind. gives nvolumes for 2d multislice and 3d(i think) 
 # 	printd(45,"List_sizeB:$list_sizeB\n"); 
@@ -497,7 +497,6 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 			   "navgs"=>[
 			       1,
 			       'UNKNOWN',                      # ?  
-			       # for angiography it matches PVM_NAverages, may be swaped with NAE.
 			   ],
 			   "ne"=>[
 			       1,
@@ -687,7 +686,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
     $hf->set_value("dim_Y",$y);
     $hf->set_value("dim_Z",$z);
     $hf->set_value("${s_tag}volumes",$vols);
-    $hf->set_value("${s_tag}echos",$vols);
+    $hf->set_value("${s_tag}echoes",$vols);
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
     my $hf_ne=$hf->get_value("ne");
@@ -737,8 +736,8 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 	 $hf->set_value("${s_tag}diffusion_scans",$hf->get_value("${s_tag}volumes"));
  	#$multiscan{"diffusion"}=$vols; 
      } #elsif ( $vol_detail =~ /.*?echo.*?/x    ) { 
-# 	$Hfile->set_value("${hf_name_prefix}echos",$vols);
-# 	#$multiscan{"echos"}=$vols; 
+# 	$Hfile->set_value("${hf_name_prefix}echoes",$vols);
+# 	#$multiscan{"echoes"}=$vols; 
 #     } elsif ( $vol_detail =~ /.*?channel.*?/x ) {
 # 	$Hfile->set_value("${hf_name_prefix}channels",$vols);
 #     } else {
@@ -980,9 +979,9 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
 
 ## parameter dimesino
 # PVM_NEchoImages     number of changes to the parameter if its TE, otherwise 1
-# EchoAcqMode         positiveReadOutEchos|? not sure what this is about
-# FirstEchoTime       time to first echo.(second echo is FirstEchoTime+1*EchoSpacing.)
-# EchoSpacing         distance between echos
+# EchoAcqMode         positiveReadOutEchoes|? not sure what this is about
+# FirstEchoTime       time to first echo.(second echo is FirstEchoTime+1*Echoespacing.)
+# Echoespacing         distance between echoes
 # EffectiveTE         sequence of TE's used
 
 ## data parametrs
@@ -999,7 +998,7 @@ sub copy_relevent_keys  { # ($aspect_header_ref, $hf)
     $hf->set_value($s_tag."dimension_order",$dim_order);
 #    $hf->set_value("${s_tag}channels",'');
     if ( $hf->get_value('ne')>1) {
-	$hf->set_value("${s_tag}varying_parameter",'echos');
+	$hf->set_value("${s_tag}varying_parameter",'echoes');
     } elsif ($hf->get_value('ne')>1) {
     } elsif ($hf->get_value('ne')>1) {
     }
