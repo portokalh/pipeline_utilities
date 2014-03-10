@@ -144,12 +144,12 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # n_dwi_exp, only dti, indicates multi volume, should be linked to movie_frames.
 # list_size & list_sie_B indicate multi_volume.
 # n_slice_packs, could mean a few things, either multi volume or, that we much multiply slices*nslicepacks, to get the whole volume's worth of slices.
-    my $n_echos;
-    $n_echos=$hf->get_value($data_prefix.'ACQ_n_echo_images');
-    if ( $n_echos =~ /NO_KEY/x)  {
-	$n_echos=1;
+    my $n_echoes;
+    $n_echoes=$hf->get_value($data_prefix.'ACQ_n_echo_images');
+    if ( $n_echoes =~ /NO_KEY/x)  {
+	$n_echoes=1;
     }
-    printd(45,"n_echos:$n_echos\n");
+    printd(45,"n_echoes:$n_echoes\n");
 #    my $movie_frames;
 #     $movie_frames=$hf->get_value($data_prefix."ACQ_n_movie_frames"); # ntimepoints=length, or 0 if only one time point
 #     if ( $movie_frames ne "NO_KEY" && $movie_frames>1 ) {  
@@ -167,10 +167,10 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # 	$b_slices=$hf->get_value($data_prefix."NSLICES");
 # 	printd(45,"bslices:$b_slices\n");
 #     }
-#     my $list_sizeB;#(2dslices*echos*time)
+#     my $list_sizeB;#(2dslices*echoes*time)
 #     my $list_size;
 #     $list_sizeB=$hf->get_value($data_prefix."ACQ_O1B_list_size");  # appears to be total "volumes" for 2d multi slice acquisitions will be total slices acquired. matches NI, (perhaps ni is number of images and images may be 2d or 3d), doesent appear to accout for channel data.
-#     $list_size=$hf->get_value($data_prefix."ACQ_O1_list_size");    # appears to be nvolumes/echos matches NSLICES most of the time, notably does not match on 2d me(without multi slice), looks like its nslices*echos for 2d ms me
+#     $list_size=$hf->get_value($data_prefix."ACQ_O1_list_size");    # appears to be nvolumes/echoes matches NSLICES most of the time, notably does not match on 2d me(without multi slice), looks like its nslices*echoes for 2d ms me
 #     if ( $list_size ne 'NO_KEY' ) {
 # 	printd(45,"List_size:$list_size\n"); # is this a multi acquisition of some kind. gives nvolumes for 2d multislice and 3d(i think) 
 # 	printd(45,"List_sizeB:$list_sizeB\n"); 
@@ -400,6 +400,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 #	$vol_type="2D";
 	$hf->set_value("ray_blocks",$cycles);
 	carp("\n\nwarning:\n\tCIVM RECONSTRUCTION HAS NEVER HAD SUCESS RECONSTRUCTING IMAGES WITH acqcycles > 1!\n\n");# JAMES HAS FORCED THIS TO BE A FAILURE.\n\n");
+	sleep_with_countdown(4);
     } elsif ( $cycles > 1 && $hf->get_value("ray_blocks") > 1 )  { 
 	carp("acqcycles>1 and ray_blocks>1, un expected condition see JAMES!");
 #	$hf->set_value("rays_per_block",$hf->get_value("rays_per_block")*$cycles); # this isnt it.
@@ -491,7 +492,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
 # 	    if ($z > 1 ){
 # 		$vol_detail=$vol_detail.'-vol';
 # 	    } 
-# 	    if ($n_echos >1 ) {
+# 	    if ($n_echoes >1 ) {
 # 		$vol_detail=$vol_detail.'-echo';		    
 # 	    }
 # 	} else { 
@@ -650,7 +651,11 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 			   "navgs"=>[
 			       1,
 #			       'UNKNOWN', 
-			   ],
+			  ],
+			  "alternate_echo_reverse"=>[
+			      1,
+			      'altecho_reverse',
+			  ],
 			   "nex"=>[
 			       1,
 #			       'UNKNOWN',     
@@ -681,7 +686,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 			   ],
 			   "ne"=>[
 			       1,
-			       'nechos',
+			       'nechoes',
 			       'ne',
 			   ],
 			   "EchoTimes"=>[
@@ -824,13 +829,13 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     $hf->set_value("dim_Z",$z);
     $hf->set_value("${s_tag}image_bit_depth",$bit_depth);
     $hf->set_value("${s_tag}image_data_type",$data_type);
-    printd(75,"echos before set_volume_type".$hf->get_value($s_tag."echos")."\n");
+    printd(75,"echoes before set_volume_type".$hf->get_value($s_tag."echoes")."\n");
     $hf->set_value("${s_tag}volumes",$vols);
-    $hf->set_value("${s_tag}echos",$hf->get_value($data_prefix.'ne'));
+    $hf->set_value("${s_tag}echoes",$hf->get_value($data_prefix.'ne'));
 
-    printd(75,"echos after set_volume_type = ".$hf->get_value($s_tag."echos").".\n");
+    printd(75,"echoes after set_volume_type = ".$hf->get_value($s_tag."echoes").".\n");
    
-    printd(40," dividing echos out of volumes ( $vols / ".$hf->get_value($data_prefix.'ne').")\n");
+    printd(40," dividing echoes out of volumes ( $vols / ".$hf->get_value($data_prefix.'ne').")\n");
     $vols=$vols/$hf->get_value($data_prefix.'ne');
     if ( $vol_detail =~ m/.*DTI([0-9]+)-.*/x ) { #/.*DTI.*/x ) {
 	#my $dti_num = $vol_detail=~ ;
@@ -844,10 +849,25 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	$vol_type="4D";
     } 
     if ( $vol_detail =~ /multi.*channel/x) {
-	printd(40," setting channel data using volumes remaining\n"); #/ echos ( $vols / ".$hf->get_value($data_prefix.'ne').
+	printd(40," setting channel data using volumes remaining\n"); #/ echoes ( $vols / ".$hf->get_value($data_prefix.'ne').
 	$hf->set_value($s_tag.'channels', $vols);
     } else {
   	$hf->set_value($s_tag.'channels', 1);
+    }
+
+    # if we have more than one echo of data, lets look to see if we should be swapping them.
+    if ( $hf->get_value('ne') >= 2 ) {
+	# set echo reversing option to on.
+	if ( $hf->get_value('alternate_echo_reverse') !~ /^(nn|yy)$/x ) {
+	    # n is normal conditions, yy  has never been seen, only nn and yn have been seen, and it actually seems to indicate that we start swaping on the second echo not the first, This needs to be confirmed by gary. 
+	    # we're going to convert this to a binary(logical) value for now, If it turns out that we could also be swapping after the second echo we weill go to a flag variable with 3 states( 0, 1 or 2), if the yy condition exists we'll go to 4 states.
+	    if (  $hf->get_value('alternate_echo_reverse') =~ /^(yn)$/x ) {
+		printd(25,"alternate_echo_reverse option set\n");
+		$hf->set_value('alternate_echo_reverse',1);
+	    } else { 
+		confess("Hf parser for agilent defficient!, We have alternate echo swapping but the swap code ".$hf->get_value('alternate_echo_reverse')." has not been seen before!\n");
+	    }
+	}
     }
     my $dim_order='xpyczt';#both xpyczt and xpcyzt work when we dont have channels, formerly 'xycpzt', c was in good position relative to yz for some acquisitions.
     if ( $vol_type =~ /2D/x ){
@@ -883,7 +903,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     $fov_y=$hf->get_value($data_prefix.$hf->get_value($data_prefix."dimX"))*10;
     #dimZ stores procpar variable name of dimz fov
     $fov_z=$hf->get_value($data_prefix.$hf->get_value($data_prefix."dimZ"))*10;
-    print("dim_X:$dx, dim_Y:$dy, dim_Z:$dz, echos:".$hf->get_value("${s_tag}echos").", channels:".$hf->get_value("${s_tag}channels")."\n");
+    print("dim_X:$dx, dim_Y:$dy, dim_Z:$dz, echoes:".$hf->get_value("${s_tag}echoes").", channels:".$hf->get_value("${s_tag}channels")."\n");
     print("fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n");
     if (! defined $dx || ! defined $dy ||! defined $dz ) {#||! defined $thick_f ||! defined $thick_p ||! defined $thick_z ){
 	croak("Problem resolving FOV!\n");
@@ -957,12 +977,12 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 
     if ( $hf->get_value('ne') ne 'NO_KEY' ) {
 	if ( $hf->get_value('ne')>1) {
-	    $hf->set_value("${s_tag}varying_parameter",'echos');
+	    $hf->set_value("${s_tag}varying_parameter",'echoes');
 	} elsif ($hf->get_value('ne')>1) {
 	} elsif ($hf->get_value('ne')>1) {
 	} else {
-	    #printd(35, "Doing default set of echos with $vols/".$hf->get_value('ne')."\n");
-	    #$hf->set_value("${s_tag}echos",$vols/$hf->get_value('ne'));
+	    #printd(35, "Doing default set of echoes with $vols/".$hf->get_value('ne')."\n");
+	    #$hf->set_value("${s_tag}echoes",$vols/$hf->get_value('ne'));
 	}
     }
 

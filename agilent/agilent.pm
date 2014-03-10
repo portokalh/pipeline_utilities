@@ -285,7 +285,7 @@ sub determine_volume_type { # ( \%agilent_header_ref )
     my $x=1;
     my $y=1;
     my $z=1; # slices per volume
-    my $ne=1; #number of echos per volume
+    my $ne=1; #number of echoes per volume
     my $slices=1;#total z dimension 
     my $order="NA"; # dimension report order code from scanner, may not be used under agilent, was used to determine if frequency or phase info was first on bruker. 
 ### keys which may help
@@ -293,12 +293,12 @@ sub determine_volume_type { # ( \%agilent_header_ref )
 ### multi3d, dti
 ### multislab
 ### multi echo
-#ne is number of echos, looks to hold true for two of test volumes
+#ne is number of echoes, looks to hold true for two of test volumes
     
 ### 3d single
 
     
-# for epi images, there are navigator echos, which
+# for epi images, there are navigator echoes, which
 # should be subtracted from the number of lines.
 # this can be known from the name of the petable
 # the petable name should be something like
