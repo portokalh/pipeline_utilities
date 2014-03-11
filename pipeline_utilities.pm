@@ -540,6 +540,41 @@ sub isopen_fifo_program {
     
     return $is_running;
 }
+
+# -------------
+sub get_image_suffix {
+# -------------
+    my ($runno_headfile_dir,$runno)=@_;
+    my ($ok,$img_suffix);
+    my @err_buffer;
+
+    my @files = glob("$runno_headfile_dir/${runno}*.*.*"); # lists all files named $runnosomething.something.something. This should match any civm formated images, and only their images.
+    my @first_files=grep (/^$runno_headfile_dir\/$runno.*[sim|imx][.][0]*[1][.].*$/x, @files ) ;
+    if( $#first_files>0 ) {
+	print STDERR "found files \n-> ".join ("\n-> ",@files)."\n";
+	print STDERR "WARNING: \n";
+	print STDERR "\tToo many 001 files found in archiveme\n";
+	print STDERR "\tdid you forget to remove your rolled or resampled images?\n";
+	print STDERR "Continuing anyway WHeeeeeeEEEEeeee!\n";
+    } elsif ($#first_files < 0) {
+	@first_files = glob("$runno_headfile_dir.*[sim|imx]\.[0]+1\..*");
+	if( $#first_files!=0 ) {
+	    push (@err_buffer, "\tERROR: $runno Did not find image files\n");
+	    $ok =0;
+	}
+    }
+    my ($file_vol,$file_path,$firstfile) =
+	File::Spec->splitpath( $first_files[0] );
+    my @parts=split('\.',$firstfile);
+    for(my $iter=0;$iter<3 ;$iter++) {
+	$img_suffix = pop @parts;
+    }
+    $img_suffix=substr($img_suffix,-5,2);
+    if ( 0 ){ #lenght suffix 
+	$ok=1;
+    }
+    return $ok,$img_suffix,@err_buffer;
+}
 # -------------
 sub matlab_fifo_cleanup {
 # -------------

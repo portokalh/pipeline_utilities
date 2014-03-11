@@ -175,6 +175,10 @@ for my $runno (@runnos) {
     $HF->set_value("roll_first_Z",$opts{'z'});
     my ($name,$hfdir,$suffix)=fileparts($hfpath);    
     my $tc=$HF->get_value("scanner_tesla_image_code");
+    my $ic=$HF->get_value("output_image_code");
+    if ($ic !~ /NO_KEY/x) {
+	$tc=$ic; # hack to fix US images not showing correcltly.
+    }
     if ( $find_tags) {
 	$cmd="grep $runno ".$EC->get_value("engine_work_directory")."/Archive_tags/* | cut -d ':' -f1";
 	printd(35,"find_tags using $cmd\n");
@@ -225,6 +229,12 @@ for my $runno (@runnos) {
 	    `$cmd`;
 	}
     }
+    my ($st,$img_suffix,@erros)=get_image_suffix($hfdir,$runno);
+    if ( ! -e "$hfdir".$runno.$tc."imx.0001.raw") {
+	printd(5,"image code did not follow standard, had to set to $img_suffix\n");
+	$HF->set_value("output_image_code",$img_suffix);
+	$tc=$img_suffix;
+    } 
 
     if ( $opts{'x'} > 0 || $opts{'y'} > 0 ) { 
 	$cmd='roller_radish '.$runno.' '.$opts{'x'}.' '.$opts{'y'};
