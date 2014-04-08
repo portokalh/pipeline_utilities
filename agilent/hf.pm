@@ -648,6 +648,10 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 			       1,
 			       'date',                # starting or ending acquision time , but its bad, it is  listed as an array but it only has one value, so the agilent parsecolonecomma function breaks on this one, should ignore and just abs time 
 			   ],
+			  "A_max_bval"=>[
+			      1,
+			      'max_bval'
+			  ],
 			   "navgs"=>[
 			       1,
 #			       'UNKNOWN', 
@@ -675,6 +679,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 			   "te"=>[
 			       1000,
 			       'first_te',
+			       'te',
 			   ],
 			   "S_PSDname"=>[
 			       1,
