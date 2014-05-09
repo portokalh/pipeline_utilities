@@ -18,6 +18,7 @@ our $plain_num="[-]?[0-9]+(?:[.][0-9]+)?"; # positive or negative number
 our $data_prefix ="";
 use File::Basename;
 use POSIX;
+use Getopt::Std;
 
 use Env qw(RADISH_PERL_LIB RADISH_RECON_DIR WORKSTATION_HOME WKS_SETTINGS RECON_HOSTNAME WORKSTATION_HOSTNAME); # root of radish pipeline folders
 if (! defined($RADISH_PERL_LIB)) {
@@ -31,7 +32,7 @@ use civm_simple_util qw(load_file_to_array write_array_to_file get_engine_consta
 
 $debug_val=5;
 my $reset_origin=0;
-my $re_make_headfile=1;
+my $re_make_headfile=0;
 
 my  $engine_settings_path = get_engine_constants_path($RADISH_RECON_DIR,$WORKSTATION_HOSTNAME);
 my $EC = new Headfile ('ro', $engine_settings_path);
@@ -68,6 +69,22 @@ my %data_ranges=(
 );
 
 #print "received ". ($#ARGV+1) ." args <".join(" ",@ARGV).">\n";
+our $civmorient=1;
+our %opt;
+our $cmdopts='';
+
+if (! getopts('sh', \%opt)) {
+    print STDERR ("Problem with command line options.\n");
+    exit 1;
+}
+if (defined $opt{s}) {  
+    print "Not in civmorient, will not change dim order\n";
+    $civmorient=0;
+}
+if (defined $opt{h}) {  
+    print "Re_creating_headfile\n";
+    $re_make_headfile=1;
+} 
 
 if ($#ARGV < 0 ) {
     print "No args found";
@@ -289,7 +306,7 @@ if ($#ARGV < 0 ) {
 	my @t3=(split / /,$hf->get_value("transform3") )[0, 1, 2];
 	
 
-	if ( 1 ) {
+	if ( $civmorient ) {
 	    # orientaiton correction for rat/mouse/mulatta data... 
 	    @t2=(split / /,$hf->get_value("transform1") )[0, 1, 2];
 	    @t1=(split / /,$hf->get_value("transform2") )[0, 1, 2];

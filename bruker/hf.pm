@@ -391,7 +391,11 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     }
     if ( $vol_type =~ /radial/x) {
 	#$time_pts=$hf->get_value(${data_prefix}."PVM_NRepetitions")*$hf->get_value(${data_prefix}."KeyHole")-($hf->get_value(${data_prefix}."KeyHole")-1);
-	$time_pts=$hf->get_value(${data_prefix}."PVM_NRepetitions")*$hf->get_value(${data_prefix}."KeyHole"); 
+	$time_pts=$hf->get_value(${s_tag}."NRepetitions");
+	if ( $hf->get_value(${data_prefix}."KeyHole") ne "NO_KEY" ){
+	    printd(15,"$time_pts*".$hf->get_value(${data_prefix}."KeyHole")."\n" );
+	    $time_pts=$time_pts*$hf->get_value(${data_prefix}."KeyHole") ;
+	}
 	#-($hf->get_value(${data_prefix}."KeyHole")-1)
     }
 ###### set z and volume number
