@@ -1,5 +1,5 @@
 #!/usr/local/radish-link/perl
-# small perl script to parse a header from some instrement  and save it back to disk
+# small perl script to parse a header from some acquisition device  and save it back to disk
 # this is for use in our matlab reconstruction such chat we can have the same input
 #  data format for the subsequent functions andget data forming ou tof the way. 
 
