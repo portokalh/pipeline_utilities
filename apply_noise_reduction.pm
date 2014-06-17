@@ -7,7 +7,7 @@
 
 
 use strict;
-require headfile;
+require Headfile;
 require pipeline_utilities; # not sure if i should do this include, might break stuff
 my  $BILATERAL_MFUNCTION = 'Bilateral_Point_Filter';  # an mfile function in matlab directory, but no .m here 
 use vars qw($GOODEXIT $test_mode);

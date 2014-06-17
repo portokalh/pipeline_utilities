@@ -103,8 +103,11 @@ our $verbose=0;
 ###
     my $engine_file ;
     my $this_engine_constants_path ;
+my $scanner_file_name               = join("_","scanner",$scanner,"radish_dependencies");
+my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name);
     if ( defined $WKS_SETTINGS) {
-	$this_engine_constants_path = get_engine_constants_path($RADISH_RECON_DIR,$WORKSTATION_HOSTNAME);
+	$this_engine_constants_path = get_engine_constants_path($WKS_SETTINGS,$WORKSTATION_HOSTNAME);
+	$the_scanner_constants_path = join("/",$WKS_SETTINGS."/scanner_deps/", $scanner_file_name); 
 #    printd(5,"found constants $this_engine_constants_path\n");
     } else { 
 	$this_engine_constants_path = join("/",$RADISH_RECON_DIR, $engine_file);
@@ -126,8 +129,8 @@ our $verbose=0;
     my $Engine_work_dir = $Engine_constants->get_value('engine_work_directory');
 #Engine_work_directory.'/'.$local_dest_dir
     
-    my $scanner_file_name               = join("_","scanner",$scanner,"radish_dependencies");
-    my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name);
+#    my $scanner_file_name               = join("_","scanner",$scanner,"radish_dependencies");
+#    my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name);
     
     my $Scanner_constants = new Headfile ('ro', $the_scanner_constants_path);
     if (! $Scanner_constants->check())       { 

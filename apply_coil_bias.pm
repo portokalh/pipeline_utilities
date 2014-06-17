@@ -6,7 +6,7 @@
 # 2011/09/08 James Cook
 # 
 use strict;
-require headfile;
+require Headfile;
 require pipeline_utilities; # not sure if i should do this include, might break stuff
 use vars qw($GOODEXIT $test_mode);
 my $ggo = 1;
