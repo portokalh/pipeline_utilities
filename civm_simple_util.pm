@@ -19,6 +19,7 @@ use Carp;
 #use bruker;
 use Scalar::Util qw(looks_like_number);
 use File::Find;
+use File::Basename;
 #use Devel::CheckOS qw(die_unsupported os_is);
 #require Exporter;
 
@@ -29,6 +30,8 @@ BEGIN {
 load_file_to_array 
 write_array_to_file
 get_engine_constants_path
+get_engine_hosts
+get_script_loc
 printd 
 whoami 
 whowasi 
@@ -39,8 +42,8 @@ $debug_locator
 ); 
 }
 use vars qw($debug_val $debug_locator);
-$debug_val=0;
-$debug_locator=80;
+$debug_val=0 unless defined $debug_val;
+$debug_locator=80 unless defined $debug_locator;
 
 
 
@@ -136,7 +139,69 @@ sub get_engine_constants_path { # (search_base,hostname[,debug_val])
 
     return ($fnames[0]);
 }
+=item constant_path=get_engine_hosts_path { # (search_base[,debug_val])
 
+=cut
+###
+sub get_engine_hosts { # (search_base,
+###
+# 
+    my (@input)=@_;
+    my $search_base=shift @input;
+    my $old_debug=$debug_val;
+    $debug_val =   shift @input or $debug_val=$old_debug;
+    civm_simple_util::debugloc();
+    civm_simple_util::whoami();
+    my %files;
+    find( sub { ${files{$File::Find::name}} = 1 if ($_ =~  m/^engine_.*_dependencies$/x ) ; },$search_base);
+    #nasty clever perl this is, have to cleanup the name->host condition below.
+    my @fnames=sort(keys(%files));
+    undef %files;
+    while($#fnames>0 ) {
+	my $n=basename(shift @fnames);
+	civm_simple_util::printd(90,"name $n.\n");
+	if ( $n =~ m/^engine_(.*)_.*dependencies/x  ) {
+	    if ( defined $files{$1} ){
+		$files{$1}=$files{$1}+1 
+	    }else {
+		$files{$1}=1;
+	}
+	    printd(50,"added host:$1 to list\n");#
+	}
+    } 
+    @fnames=sort(keys(%files)); 
+    if ($#fnames==-1 ) { push(@fnames,""); } 
+#     if(os_is('MicrosoftWindows') ) { 
+#  	printd(55,"fixing path for windows\n\n");
+#  	$fnames[0]=~ s:\\\\:/:gx;
+#     }
+    civm_simple_util::printd(30,"Found constants File $fnames[0].\n");
+    $debug_val=$old_debug;
+#    print(@fnames);
+    return @fnames;
+}
+=item real_script_path=get_script_loc { # (search_base[,debug_val])
+
+=cut
+###
+sub get_script_loc { # ($script_path,[debug_val])
+###
+# 
+    my (@input)=@_;
+    my $script_path=shift(@input);
+    my $old_debug=$debug_val;
+    $debug_val =   shift @input or $debug_val=$old_debug;
+    civm_simple_util::debugloc();
+    civm_simple_util::whoami();
+    #$script_path=__FILE__;
+    use Cwd 'abs_path';
+    while( -f $script_path && -l $script_path ) {
+	printd(25,"path was a link, resolving from $script_path");
+	$script_path=abs_path($script_path);
+	printd(25,"to  $script_path.\n");
+    }
+    return $script_path;
+}
 =item printd
     
 prints if globaldebug >= debuglevel

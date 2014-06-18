@@ -12,8 +12,9 @@
 #               takes an output identifier, and an array of required values in the constants file to be checked. 
 #               should add a standard headfile settings file for the required values in an engine_dependencie headfile 
 #               returns the three directories  in work result, outhf_path, and the engine_constants headfile.
+# 140717 added exporter line with list of functions
 # be sure to change version:
-my $VERSION = "130731";
+my $VERSION = "140717";
 
 my $log_open = 0;
 my $pipeline_info_log_path = "UNSET";
@@ -30,6 +31,50 @@ use English;
 use vars qw($HfResult $BADEXIT $GOODEXIT);
 my $PM="pipeline_utilities";
 use civm_simple_util qw(load_file_to_array write_array_to_file);
+
+
+BEGIN {
+    use Exporter;
+    our @ISA = qw(Exporter); # perl cricit wants this replaced with use base; not sure why yet.
+    our @EXPORT_OK = qw(
+open_log
+close_log
+log_info
+close_log_on_error
+error_out
+make_matlab_m_file
+make_matlab_m_file_quiet
+make_matlab_command
+make_matlab_command_nohf
+get_matlab_fifo
+start_fifo_program
+stop_fifo_program
+restart_fifo_program
+isopen_fifo_program
+get_image_suffix
+matlab_fifo_cleanup
+file_over_ttl
+make_matlab_command_V2
+rp_key_insert
+make_matlab_command_V2_OBSOLETE
+execute
+execute_heart
+execute_indep_forks
+executeV2
+start_pipe_script
+new_get_engine_dependencies
+make_list_of_files
+my_ls
+writeTextFile
+remove_dot_suffix
+depath_annot
+depath
+defile
+fileparts
+funct_obsolete
+); 
+}
+
 
 # -------------
 sub open_log {
@@ -1223,8 +1268,4 @@ sub funct_obsolete {
     sleep(1);
 }
 
-# ------------------
-sub get_ssh_auth {
-# ------------------
 
-}

@@ -19,7 +19,7 @@ sub works {
   my ($remote_system) = @_;
 
     #print STDERR "trying ssh_call::works(): ssh $remote_system date\n" if $DEBUG; 
-    my $date = `ssh -Y $remote_system date`;
+    my $date = `ssh -Y -o PasswordAuthentication=false $remote_system date`;
 
     if ($date eq "") {
        print STDERR "  Problem:\n";
@@ -55,7 +55,7 @@ sub get_file {
        print STDERR "  * to $dest.\n";
        return 0;
     }
-    print STDERR "Successful scp took $xfer_time second(s).\n";
+    print STDERR "Successful scp took $xfer_time second(s).\n" if $xfer_time > 5;
     return 1;
 }
 
@@ -72,7 +72,21 @@ sub get_dir_contents {
     chop ($date);
     my $src   = "$system:$source_dir/$dir/*";
     my $dest  = "$local_dest_dir/";
-    my @args  = ("scp", "-r", $src, $dest);
+    my @args ;
+    if ( $src =~ /\s/x ) {
+	print STDERR "adjust src from $src :\n";
+	my @parts=split(" ",$src);
+	#$src=join(' ',@parts[0,$#parts-1]);
+	#$src=$src.' -r '.$parts[$#parts];
+	push(@args,@parts);
+	print STDERR "adjusted src to".join(@args)." :\n";
+    } else {
+	#$src="-r ".$src;
+    }
+    unshift(@args,"-r");
+    unshift(@args,"scp");
+    push(@args,$dest);
+    #@args = ("scp", $src, $dest);
     my $start = time;
     print STDERR "   Beginning ".join(" ",@args)." at $date...\n";
     !system (@args) or 
@@ -100,7 +114,16 @@ sub get_dir {
     my $cdir=$dir; # clean any path separators from the path.
     $cdir    =~ s|/|_|g;
     my $dest  = "$local_dest_dir/$cdir";
-    my @args  = ("scp", "-r", $src, $dest);
+    # if ( $src =~ /\s/x ) {
+    # 	print STDERR "adjust src from $src :\n";
+    # 	my @parts=split(" ",$src);
+    # 	$src=join(' ',@parts[0,$#parts-1]);
+    # 	$src=$src.' -r '.$parts[$#parts];
+    # 	print STDERR "adjust src to $src :\n";
+    # } else {
+    # 	$src="-r ".$src;
+    # }
+    my @args  = ("scp","-r", $src, $dest);
     my $start = time;
     print STDERR "   Beginning scp of $src at $date...\n";
     !system (@args) or 
@@ -116,6 +139,57 @@ sub get_dir {
     print(STDERR "Successful scp took $xfer_time second(s).\n");
     return 1;
 }
+
+###
+# get_ssh_ident
+###
+# fora given remote host try to get the ssh auth file via waiting on a password prompt
+# if the $system contains an @ sign assume we're trying to get an other users ident.
+# name our output ident accordingly with user_ONSYS_system 
+# do a split on @.
+sub get_ssh_ident {
+    my ($system,$local_dest_dir)  =@_;
+    
+    my ($source_dir, $file,$outfile);
+    my $cleanup = 0 ;
+    $source_dir="~/.ssh";
+    if ( ! defined $local_dest_dir ) {
+	$local_dest_dir="~/tmp/"; }
+    
+    if ( $system =~ m/@/x ) {
+	my $user;
+	($user,$system)=split("@",$system);
+	if ( $system =~ m/\s/x){
+	    print STDERR "no options supported in get_ssh_ident\n";
+	    exit 1;
+	}
+	my $out_fn=$user."_ONSYS_".$system;
+	$outfile=$local_dest_dir."/".$out_fn;
+	$system="$user\@$system";
+    }
+    if ( ! -d $local_dest_dir ) {
+	$cleanup=1;
+	mkdir $local_dest_dir;
+    }
+    my @files=qw /id_rsa id_dsa identity/;
+    $file=shift @files;
+    #print( "outfile not found$outfile");
+    while ( ! -f $outfile && ! get_file ($system, $source_dir, $file, $local_dest_dir) && $#files>=0 && ! -e $local_dest_dir.'/'.$file ) {
+	$file=shift @files;
+    }
+    if ( -f $local_dest_dir.'/'.$file ){
+	rename($local_dest_dir.'/'.$file,$outfile);
+    } else { 
+	
+    }
+    if ($cleanup ) {
+	rmdir $local_dest_dir;
+    }    
+#    print status ? true : false
+    return 1;
+}
+
+
 sub most_recent_pfile {
   #  figure out latest pfile name (Signa)
   my ($system, $Pdirectory)  =@_;
