@@ -285,7 +285,6 @@ sub make_matlab_command_nohf {
    #$PID
    ### temporaray cluster disable mode for now.
    my $fifo_mode=`hostname -s`=~ "civmcluster1" ? 0 : 1;
-   
    if ( $fifo_mode ) { 
        my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$logpath);
        print STDERR ( "FIFO Log set to $fifo_log\n");
