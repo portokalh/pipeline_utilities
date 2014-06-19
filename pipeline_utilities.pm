@@ -283,7 +283,8 @@ sub make_matlab_command_nohf {
    # I THINK this breaks execute independent forks for matlab calls, however that shouldnt be terribly necessary any longer.
 
    #$PID
-   my $fifo_mode=1;
+   ### temporaray cluster disable mode for now.
+   my $fifo_mode=`hostname -s`== "civmcluster1" ? 0 : 1;
    if ( $fifo_mode ) { 
        my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$logpath);
        print STDERR ( "FIFO Log set to $fifo_log\n");
