@@ -35,16 +35,18 @@ sub works {
 }
 
 sub get_file {
-  my ($system, $source_dir, $file, $local_dest_dir)  =@_;
-
+    my ($system, $source_dir, $file, $local_dest_dir)  =@_;
+    
     my $date = `ssh -Y $system date`;
     chop ($date);
     my $src = "$system:$source_dir/$file";
-    print STDERR "Beginning scp of $src at $date...";
-    my $dest  = "$local_dest_dir/$file";
+    use File::Basename;
+    my $dest  = "$local_dest_dir/".basename($file);
     my @args  = ("scp", $src, $dest);
+    my $cmd=join(" ",@args);
+    print STDERR "   Beginning ".$cmd." at $date...\n";#    print STDERR "Beginning scp of $src at $date...";
     my $start = time;
-    my $rc    = system (@args);
+    my $rc    = system ($cmd);
     my $msg   = $?;
     my $end   = time;
     my $xfer_time = $end - $start;
@@ -125,7 +127,7 @@ sub get_dir {
     # }
     my @args  = ("scp","-r", $src, $dest);
     my $start = time;
-    print STDERR "   Beginning scp of $src at $date...\n";
+    print STDERR "   Beginning ".join(" ",@args)." at $date...\n";#    print STDERR "   Beginning scp of $src at $date...\n";
     !system (@args) or 
  	( print STDERR 
 	  "  * Remote copy failed: ".join(" ",@args)."\n",
@@ -152,9 +154,9 @@ sub get_ssh_ident {
     
     my ($source_dir, $file,$outfile);
     my $cleanup = 0 ;
-    $source_dir="~/.ssh";
+    $source_dir=".ssh";#$ENV{"HOME"}."/
     if ( ! defined $local_dest_dir ) {
-	$local_dest_dir="~/tmp/"; }
+	$local_dest_dir=$ENV{"HOME"}." /tmp/"; }
     
     if ( $system =~ m/@/x ) {
 	my $user;
@@ -168,17 +170,24 @@ sub get_ssh_ident {
 	$system="$user\@$system";
     }
     if ( ! -d $local_dest_dir ) {
-	$cleanup=1;
-	mkdir $local_dest_dir;
+	if ( $local_dest_dir eq $ENV{"HOME"}." /tmp/" ) {
+	    $cleanup=1;
+	}
+	print("Making local dir $local_dest_dir\n");
+	mkdir $local_dest_dir or die $!;
     }
     my @files=qw /id_rsa id_dsa identity/;
     $file=shift @files;
     #print( "outfile not found$outfile");
-    while ( ! -f $outfile && ! get_file ($system, $source_dir, $file, $local_dest_dir) && $#files>=0 && ! -e $local_dest_dir.'/'.$file ) {
+    #	$ident_store=$ENV{"HOME"}." /.ssh/wks_idents";
+    while ( (! -f $outfile || ! -r $outfile) && ! get_file ($system, $source_dir, $file, $local_dest_dir) && $#files>=0 && ! -e $local_dest_dir.'/'.$file ) {
 	$file=shift @files;
     }
     if ( -f $local_dest_dir.'/'.$file ){
 	rename($local_dest_dir.'/'.$file,$outfile);
+	`chmod g+r $outfile`;
+	`chmod go-rxw $local_dest_dir`;
+	`chmod -R go-rxw $local_dest_dir`;
     } else { 
 	
     }

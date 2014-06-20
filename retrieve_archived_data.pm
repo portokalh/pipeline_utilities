@@ -35,23 +35,28 @@ sub locate_data_util {
   # for Tensor pipe will be DW0...DW(n-1)
 
 # check set against allowed types, T1, T2W, T2star
-  my $dest       = $Hf->get_value('dir-input');
-  my $useunderscore=0;
-  if ($dest eq "NO_KEY" ) { $dest = $Hf->get_value("dir_input"); 
-			  $useunderscore=1;}
-  my $subproject = $Hf->get_value('subproject-source');
-  if ($subproject eq "NO_KEY" ) { $subproject = $Hf->get_value("subproject_source"); }
-  if ($subproject eq "NO_KEY" ) { error_out("cannot see subproject something bad happened"); }
-  my $runno_flavor = "$ch_id\-runno";
+  my $dest             =  $Hf->get_value('dir-input');
+  my $useunderscore    = 0;
+  if ($dest eq "NO_KEY" ) {
+      $dest            = $Hf->get_value("dir_input"); 
+    $useunderscore     =1;}
+  my $subproject       = $Hf->get_value('subproject-source');
+  if ($subproject eq "NO_KEY" ) {
+      $subproject      = $Hf->get_value("subproject_source"); }
+  if ($subproject eq "NO_KEY" ) {
+      error_out("cannot see subproject something bad happened"); }
+  my $runno_flavor     = "$ch_id\-runno";
  
-  my $runno = $Hf->get_value($runno_flavor);
-  if ($runno eq "NO_KEY" ) { $runno_flavor="${ch_id}_runno"; $runno = $Hf->get_value("$runno_flavor"); } 
+  my $runno            = $Hf->get_value($runno_flavor);
+  if ($runno eq "NO_KEY" ) {
+      $runno_flavor    = "${ch_id}_runno";
+      $runno           = $Hf->get_value("$runno_flavor"); } 
   if ($runno eq "NO_KEY" ) { error_out ("couldnt find Id tag for runno:$runno only got <${runno_flavor}>\n"); } 
   my $ret_set_dir;
   my ($image_name, $digits, $suffix);
   if ( $ch_id =~ m/(T1)|(T2W)|(T2star)|(DW[0-9]+)/ ) { # should move this to global options, as archivechannels
 #elsif ( $ch_id =~ m/DW[0-9]+/) {
-    $ret_set_dir = retrieve_archive_dir_util($pull_images, $subproject, $runno, $dest);  
+    $ret_set_dir       = retrieve_archive_dir_util($pull_images, $subproject, $runno, $dest);  
     my $first_image_name = first_image_name($ret_set_dir, $runno,1); # the 1 ignores missing first image
     ($image_name, $digits, $suffix) = split ('\.', "$first_image_name");
     $Hf->set_value("$ch_id\-image-padded-digits", $digits);
@@ -63,7 +68,7 @@ sub locate_data_util {
     error_out("$PM->locate_data: Unreconized channel type: $ch_id, sorry i dont support that yet.\n\tOnly support T1,T2W,T2star,adc,dwi,e1,e2,e3,fa.");
   }
   if($useunderscore==0) {
-    $Hf->set_value("$ch_id\-path", $ret_set_dir);
+      $Hf->set_value("$ch_id\-path", $ret_set_dir);
     $Hf->set_value("$ch_id\-image-basename"     , $image_name);
     $Hf->set_value("$ch_id\-image-suffix"       , $suffix);
   }elsif($useunderscore==1){
@@ -103,8 +108,10 @@ sub retrieve_archive_dir_util {
   }
   # add -q for quiet
   my $final_dir = "$local_dest_dir/$runno";
-  my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno/  $final_dir";
-
+  ### direct ssh call.
+  #my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno/  $final_dir";
+  ### pulelr call
+  my $cmd="puller_simple -f dir -o atlasdb $runno $local_dest_dir";
   #print ("DO_PULL = $do_pull\n");
   my $ok =0;
   if ( ! -d "$final_dir" ) { 
@@ -146,9 +153,11 @@ sub retrieve_DTI_research_image {
   my $hfname   = "tensor${runno}.headfile";
 #  my $filename = "ssh -qr omeaga\@atalsdb: ls $basepath/$filename";
   my @cmd=();
-  push @cmd , "scp -qr omega\@atlasdb:$basepath/$filename  $final_dir";
-  push @cmd , "scp -qr omega\@atlasdb:$basepath/$hfname  $final_dir/$hfname";
-
+  #push @cmd , "scp -qr omega\@atlasdb:$basepath/$filename  $final_dir";
+  #push @cmd , "scp -qr omega\@atlasdb:$basepath/$hfname  $final_dir/$hfname";
+  ### pulelr call
+  push @cmd,"puller_simple -f file -o atlasdb $subproject/research/tensor$runno/$filename $final_dir";
+  push @cmd,"puller_simple -f file -o atlasdb $subproject/research/tensor$runno/$hfname $final_dir";
   #print ("DO_PULL = $do_pull\n");
   my $ok = execute($do_pull, "research archive retrieve", @cmd);
   if (! $ok) {
