@@ -284,7 +284,8 @@ sub make_matlab_command_nohf {
 
    #$PID
    ### temporaray cluster disable mode for now.
-   my $fifo_mode=`hostname -s`== "civmcluster1" ? 0 : 1;
+   my $fifo_mode=`hostname -s`=~ "civmcluster1" ? 0 : 1;
+   
    if ( $fifo_mode ) { 
        my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$logpath);
        print STDERR ( "FIFO Log set to $fifo_log\n");
@@ -320,12 +321,14 @@ sub make_matlab_command_nohf {
        push (@fifo_cmd_wrapper, "if [ \"\$mat_err\" -ge \"1\" ] \n");
        push (@fifo_cmd_wrapper, "then\n");
        push (@fifo_cmd_wrapper, "\techo \"MATLAB_ERRORS:\$mat_err\"\n");
-      push (@fifo_cmd_wrapper, "\ttail -n20 $logpath|grep \"Error\" \n");#$logpath
+       push (@fifo_cmd_wrapper, "\ttail -n20 $logpath|grep \"Error\" \n");#$logpath
        push (@fifo_cmd_wrapper, "fi\n");
        write_array_to_file($shell_file,\@fifo_cmd_wrapper);
        chmod( 0755, $shell_file );
        $cmd_to_execute=("bash","-c","$shell_file");
 #       exit(0);
+   } else {
+       print STDERR ("FIFO Not enabled\n");
    }
    return ($cmd_to_execute);
 }
