@@ -87,6 +87,7 @@ sub get_dir_i { # the internal get_dir which does either the dir or its contents
     } else {
 #	print STDERR "COMPLETE MODE";
 	my $cdir=$dir;
+	$cdir = $1 if($cdir=~/(.*)\/$/);
 	$cdir    =~ s|/|_|g;
 	$dest  = "$local_dest_dir/$cdir";
     }
