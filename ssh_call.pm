@@ -175,7 +175,6 @@ sub get_ssh_ident {
     $source_dir=".ssh";#$ENV{"HOME"}."/
     if ( ! defined $local_dest_dir ) {
 	$local_dest_dir=$ENV{"HOME"}." /tmp/"; }
-    
     if ( $system =~ m/@/x ) {
 	my $user;
 	($user,$system)=split("@",$system);
