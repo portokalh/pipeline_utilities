@@ -62,20 +62,36 @@ sub get_file {
 }
 
 ###
-# scp's contents of a dir 
+# scp dir or contents of dir
 ###
 #at source_dir/$dir on system to local_dest_dir/   
 # cleans any separators from dir and returns that 
 # can switch out user by adding user@ to system name/ip
 sub get_dir_contents {
     my ($system, $source_dir, $dir, $local_dest_dir)  =@_;
-
+    return get_dir_i($system, $source_dir, $dir.'/*', $local_dest_dir);
+}
+sub get_dir {
+    my ($system, $source_dir, $dir, $local_dest_dir)  =@_;
+    return get_dir_i($system, $source_dir, $dir.'/', $local_dest_dir);
+}
+sub get_dir_i { # the internal get_dir which does either the dir or its contents
+    my ($system, $source_dir, $dir, $local_dest_dir)  =@_;
     my $date  = `ssh -Y $system date`;
     chop ($date);
-    my $src   = "$system:$source_dir/$dir/*";
-    my $dest  = "$local_dest_dir/";
+    my $src   = "$system:$source_dir/$dir";
+    my $dest;
+    if ( $src =~ /\*$/) {
+#	print STDERR "CONTENTS MODE";
+	$dest  = "$local_dest_dir/";
+    } else {
+#	print STDERR "COMPLETE MODE";
+	my $cdir=$dir;
+	$cdir    =~ s|/|_|g;
+	$dest  = "$local_dest_dir/$cdir";
+    }
     my @args ;
-    if ( $src =~ /\s/x ) {
+    if ( $src =~ /\s/x ) { # there are spaces in the source, implying there are options hiding in the source to add to our ssh call.
 	print STDERR "adjust src from $src :\n";
 	my @parts=split(" ",$src);
 	#$src=join(' ',@parts[0,$#parts-1]);
@@ -83,11 +99,12 @@ sub get_dir_contents {
 	push(@args,@parts);
 	print STDERR "adjusted src to".join(@args)." :\n";
     } else {
-	#$src="-r ".$src;
+	push( @args,$src);
     }
-    unshift(@args,"-r");
-    unshift(@args,"scp");
-    push(@args,$dest);
+    
+    unshift(@args,"-r"); # put -r on beinning of arglist,
+    unshift(@args,"scp");# put scp(our program name) on beginning of arglist
+    push(@args,$dest);   # put our destination at the end of the arglist
     #@args = ("scp", $src, $dest);
     my $start = time;
     print STDERR "   Beginning ".join(" ",@args)." at $date...\n";
@@ -104,11 +121,11 @@ sub get_dir_contents {
 }
 
 ###
-# scp dir 
+# scp dir  OLD
 ###
 #at source_dir/$dir on system to local_dest_dir/dir
 # cleans any separators from dir and returns that 
-sub get_dir {
+sub get_dir_OLD {
     my ($system, $source_dir, $dir, $local_dest_dir)  =@_;
     my $date  = `ssh -Y $system date`;
     chop ($date);
