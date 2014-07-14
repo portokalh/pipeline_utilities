@@ -26,7 +26,7 @@ my $debug_val = 5;
 use File::Path;
 use POSIX;
 use strict;
-#use warnings;
+use warnings;
 use English;
 #use seg_pipe;
 
@@ -38,12 +38,9 @@ my $custom_q = 0; # Default is to assume that the cluster queue is not specified
 my $my_queue = '';
 
 $my_queue = $ENV{'PIPELINE_QUEUE'} or $my_queue= '';
-#if ( ! -z $my_queue ) {
-#if (defined $ENV{'PIPELINE_QUEUE'}) {
-#if ($my_queue ne '') {
-if ($my_queue !~ /^$/ )  {
+
+if ((defined $ENV{'PIPELINE_QUEUE'}) && ($my_queue ne '') ) {
     $custom_q = 1;
-   # $my_queue = $ENV{'PIPELINE_QUEUE'};
 }
 
 
@@ -841,7 +838,7 @@ sub execute {
 	    if ($c =~ /matlab/) {
 		$c = $c;
 	    } else {
-		if ($custom_q = 1) {
+		if ($custom_q == 1) {
 		    $c = "srun -p $my_queue ".$c;
 		} else {
 		    $c = "srun ".$c;
