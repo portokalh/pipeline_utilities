@@ -111,11 +111,15 @@ sub retrieve_archive_dir_util {
   ### direct ssh call.
   #my $cmd = "scp -qr omega\@atlasdb:/atlas1/$subproject/$runno/  $final_dir";
   ### pulelr call
-  my $cmd="puller_simple -f dir -o atlasdb $runno $local_dest_dir";
+  my @cmds;
+  my $cmd="mkdir $final_dir"; # this is required because puller ALWAYS uses get_dir_contents instead of get dir.
+  push (@cmds,$cmd);
+  $cmd="puller_simple -f dir -o atlasdb $subproject/$runno $final_dir";
+  push (@cmds,$cmd);
   #print ("DO_PULL = $do_pull\n");
   my $ok =0;
   if ( ! -d "$final_dir" ) { 
-      $ok = execute($do_pull, "archive retrieve", $cmd);
+      $ok = execute($do_pull, "archive retrieve", @cmds);
   } else { 
       print STDERR "Found $final_dir, assuming complete, and not pulling. \n\tErrors will occur if nifti-creation is attempted with incomplete copies.\n";
       $ok=1;
