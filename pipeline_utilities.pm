@@ -1,3 +1,4 @@
+
 #pipeline_utilites.pm
 #
 # utilities for pipelines including matlab calls from perl 
@@ -23,14 +24,24 @@ my @outheadfile_comments = ();  # this added to by log_pipeline_info so define e
 #my $BADEXIT = 1;
 my $debug_val = 5;
 use File::Path;
-
+use POSIX;
 use strict;
+use warnings;
 use English;
 #use seg_pipe;
 
 use vars qw($HfResult $BADEXIT $GOODEXIT);
 my $PM="pipeline_utilities";
 use civm_simple_util qw(load_file_to_array write_array_to_file);
+
+my $custom_q = 0; # Default is to assume that the cluster queue is not specified.
+my $my_queue = '';
+
+$my_queue = $ENV{'PIPELINE_QUEUE'} or $my_queue= '';
+
+if ((defined $ENV{'PIPELINE_QUEUE'}) && ($my_queue ne '') ) {
+    $custom_q = 1;
+}
 
 
 BEGIN {
@@ -618,7 +629,7 @@ sub get_image_suffix {
 	$img_suffix = pop @parts;
     }
     $img_suffix=substr($img_suffix,-5,2);
-    if ( 0 ){ #lenght suffix 
+    if ( 0 ){ #length suffix 
 	$ok=1;
     }
     return $ok,$img_suffix,@err_buffer;
@@ -824,7 +835,22 @@ sub execute {
     my $ret;
     foreach my $c (@commands) {
 	$i++;
+	if (`hostname -s`== "civmcluster1") { # fixme: this will need to be generalized for any given cluster name(BJA)
+	    # For running Matlab, run on Master Node for now until we figure out how to handle the license issue. Otherwise, run with SLURM
+	    if ($c =~ /matlab/) {
+		$c = $c;
+	    } else {
+		if ($custom_q == 1) {
+		    $c = "srun -p $my_queue ".$c;
+		} else {
+		    $c = "srun ".$c;
+		}
+	    }
+	} else {
+	    $c = $c;
+	}
 
+	    
 	$ret = execute_heart($do_it, $annotation, $c);
 
 	if (0) { ################
@@ -1272,3 +1298,4 @@ sub funct_obsolete {
 }
 
 
+1;
