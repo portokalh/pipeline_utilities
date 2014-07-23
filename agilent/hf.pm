@@ -872,6 +872,8 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	    } else { 
 		confess("Hf parser for agilent defficient!, We have alternate echo swapping but the swap code ".$hf->get_value('alternate_echo_reverse')." has not been seen before!\n");
 	    }
+	} else {
+	    $hf->set_value('alternate_echo_reverse',0);
 	}
     }
     my $dim_order='xpyczt';#both xpyczt and xpcyzt work when we dont have channels, formerly 'xycpzt', c was in good position relative to yz for some acquisitions.
