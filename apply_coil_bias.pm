@@ -66,6 +66,19 @@ sub apply_coil_bias {
   if(!execute($ggo,"$hf_nii_id Coil Bias correction", $cmd)) {
       error_out("  $hf_nii_id Coil Bias failed.");
   } else {  # only set values on sucess, not sure i like this syntax.
+      if (! -f $out_nii ) { 
+	  my $prog="$ants_app_dir/ImageMath ";
+	  my $dimensions = 3;
+	  my $params=" $dimensions  $out_nii   / $in_nii     $out_field";
+	  my $cmd=$prog  . $params;
+	  my @cmd_list;
+	  push @cmd_list, $cmd;
+	  log_info("  $hf_nii_id Coil Bias apply command is $cmd");
+          my $ok = execute_indep_forks(1, "Apply Coil bias to each image", @cmd_list);
+	  if (! $ok) {
+	      error_out("coil bias apply failed -> $out_nii\n");
+	  }
+      }
       print( "Setting HF Keys\n") if ( $debug_val>=10);
       $Hf_out->set_value("${hf_nii_id}-coil-bias-input-nii-path",$in_nii);
       $Hf_out->set_value("${hf_nii_id}-coil-bias-applied","true");
