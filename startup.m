@@ -46,6 +46,7 @@ paths={
     [ workstation_home '/analysis/mr_relaxation_calc/' ]
     [ workstation_home '/analysis/label_measurements/' ]
     [ workstation_home '/analysis/volume_measurements/' ]
+    [ workstation_home '/recon/legacy/t2w_slg_dir/mfiles' ]
     };
 genpaths={
     [ workstation_home '/recon/DCE' ]
