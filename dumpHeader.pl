@@ -140,7 +140,18 @@ my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name)
     
     my $scanner_vendor;
     $scanner_vendor               = $Scanner_constants->get_value('scanner_vendor') or $scanner_vendor="";
-    
+###
+# check for unexpected scanner_vendor
+###    
+# agilent,aspect,bruker are expected
+    my @scanner_vendors= qw/agilent aspect bruker/;
+    my $odd_scanner_bool=0;
+    if ( join(@scanner_vendors,' ') !~ /$scanner_vendor/ ) {
+	printd(5,"NOT AN EXPECTED SCANNER VENDOR!, TRYING AGILENT\n");
+	$scanner_vendor="agilent";
+	$odd_scanner_bool=1;
+    }
+
 ###
 # set output
 ###
@@ -209,7 +220,7 @@ my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name)
 	require bruker::hf ;
 	import bruker::hf qw(copy_relevent_keys);
     } else {
-	error_out("scanner_vendor unspecifed");
+	error_out("unexpected scanner_vendor OR scanner_vendor unspecifed!");
     }
     foreach (@infiles) {
 	load_file_to_array($_,\@header_lines);
@@ -230,6 +241,15 @@ my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name)
     $Hfile->set_value("S_tag",$hf_short_prefix);
     aoa_hash_to_headfile($hfhashref,$Hfile,$hf_prefix); #puts all variables from scanner to hf $prefix$name keys
     my $cpkeys_status=copy_relevent_keys(\%hfhash,$Hfile,0);
+
+    
+###
+# cleanup tasks
+###
+    if ( $odd_scanner_bool ) {
+	printd(45,"odd scanner bool true!, setting U_scanner_vendor in headfile");
+	$Hfile->set_value("U_scanner_vendor", $scanner_vendor);
+    }
 ###
 # save header
 ###
