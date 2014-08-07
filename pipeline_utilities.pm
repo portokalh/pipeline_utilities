@@ -308,12 +308,14 @@ sub make_matlab_command_nohf {
        push (@fifo_cmd_wrapper, "#!/bin/bash\n") ;
        push (@fifo_cmd_wrapper, "echo \"MATLAB_FIFO_PASS_STUB\"\n");
        push (@fifo_cmd_wrapper, "echo \"run\(\'$mfile_path\'\)\;\" >> $fifo_path\n") ;
+       push (@fifo_cmd_wrapper, "echo \"stub::\${0##*/}\"  >> $logpath\n");
        push (@fifo_cmd_wrapper, "lastline=`tail -n1 $logpath`\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
        push (@fifo_cmd_wrapper, "mat_done=`tail -n1 $logpath|grep -c ${mfile_path}_DONE `\n");#$logpath
        #push (@fifo_cmd_wrapper, "mat_err=`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
        push (@fifo_cmd_wrapper, "mat_err=0\n"); #`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
        push (@fifo_cmd_wrapper, "echo \"\tWait for completion line:${mfile_path}_DONE in log $logpath\"\n");
-       push (@fifo_cmd_wrapper, "while [ \"\$mat_done\" -ne \"1\" -a \"\$mat_err\" -lt \"1\" ]\n");
+#       push (@fifo_cmd_wrapper, "sleep 1\n");
+       push (@fifo_cmd_wrapper, "while [ \"\$mat_done\" -lt \"1\" -a \"\$mat_err\" -lt \"1\" ]\n");
        push (@fifo_cmd_wrapper, "do \n");
        push (@fifo_cmd_wrapper, "\tline=\$lastline\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
        push (@fifo_cmd_wrapper, "\tlastline=`tail -n1 $logpath`\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
@@ -321,7 +323,7 @@ sub make_matlab_command_nohf {
        push (@fifo_cmd_wrapper, "\tthen\n");
        push (@fifo_cmd_wrapper, "\t\techo \"\tMATLAB:\$lastline\"\n");
        push (@fifo_cmd_wrapper, "\tfi\n");
-       push (@fifo_cmd_wrapper, "\tmat_done=`tail -n20 $logpath|grep -c ${mfile_path}_DONE `\n");#$logpath
+       push (@fifo_cmd_wrapper, "\tmat_done=`tail -n1 $logpath|grep -c ${mfile_path}_DONE`\n");#$logpath
        push (@fifo_cmd_wrapper, "\tmat_err=`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
 #        push (@fifo_cmd_wrapper, "\n");
 #        push (@fifo_cmd_wrapper, "\n");
@@ -739,6 +741,7 @@ sub matlab_fifo_cleanup {
 # -------------
 sub file_over_ttl { # ( $path,$ttl )
 # -------------
+# checks if a file is older than the time to live value passed.
     my ($path,$ttl) = @_;
     my $isold=0;
     use File::stat;
@@ -749,7 +752,8 @@ sub file_over_ttl { # ( $path,$ttl )
 
     my $file_timestamp=0;
     $file_timestamp = (stat($path))[9];
-    if ( "<$file_timestamp>" eq "<>" ) { 
+    if (  !defined $file_timestamp ) {
+    #if ( "$file_timestamp" eq "" ) { 
 	#print STDERR ( $path." FAILED TO GET TIMESTAMP< using method 1, trying method2\n");
 	$file_timestamp= stat($path)->mtime;
     }

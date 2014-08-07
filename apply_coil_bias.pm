@@ -82,9 +82,15 @@ sub apply_coil_bias {
       print( "Setting HF Keys\n") if ( $debug_val>=10);
       $Hf_out->set_value("${hf_nii_id}-coil-bias-input-nii-path",$in_nii);
       $Hf_out->set_value("${hf_nii_id}-coil-bias-applied","true");
-      $Hf_out->set_value("${hf_nii_id}-nii-file",$name);
+      $Hf_out->set_value("${hf_nii_id}-nii-file",$name."_".$suffix.$extension);
       $Hf_out->set_value("${hf_nii_id}-nii-path",$out_nii);
       $Hf_out->set_value("${hf_nii_id}-${suffix}-field-path",$out_field);
+      print("\t". join ("\n\t",("${hf_nii_id}-coil-bias-input-nii-path".$Hf_out->get_value("${hf_nii_id}-coil-bias-input-nii-path"),
+				"${hf_nii_id}-coil-bias-applied".$Hf_out->get_value("${hf_nii_id}-coil-bias-applied"),
+				"${hf_nii_id}-nii-file:".$Hf_out->get_value("${hf_nii_id}-nii-file"),
+				"${hf_nii_id}-nii-path".$Hf_out->get_value("${hf_nii_id}-nii-path"),
+				"${hf_nii_id}-${suffix}-field-path".$Hf_out->get_value("${hf_nii_id}-${suffix}-field-path") )
+	    )."\n" );
   }
   
   
