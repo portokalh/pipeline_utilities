@@ -45,7 +45,8 @@ sub apply_coil_bias {
   my ($status,$out_nii,$out_field)=apply_coil_bias_nohf($go, $ants_app_dir,$in_nii);
   my $suffix="bias";
   my ($name,$path,$extension)=fileparts($out_nii);
-  if ( ! $status ) {
+  print("Status:$status,out_nii:$out_nii,out_field:$out_field\n");
+  if ( $status ) {
       error_out("What a strangly impossible error condidtion you've found");
   } else {  # only set values on sucess, not sure i like this syntax.
     print( "Setting HF Keys\n") if ( $debug_val>=10);
