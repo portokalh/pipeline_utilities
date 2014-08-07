@@ -337,7 +337,8 @@ sub make_matlab_command_nohf {
        push (@fifo_cmd_wrapper, "fi\n");
        write_array_to_file($shell_file,\@fifo_cmd_wrapper);
        chmod( 0755, $shell_file );
-       $cmd_to_execute=("bash","-c","$shell_file");
+       #$cmd_to_execute=("bash","-c","$shell_file");
+       $cmd_to_execute="bash -c $shell_file"
 #       exit(0);
    } else {
        print STDERR ("FIFO Not enabled\n");
@@ -531,7 +532,7 @@ sub stop_fifo_program {
     #print STDERR ("\tfuser_out = ".join(',', @out)."\n");
 
     my $file_path=shift(@out);
-    @out = split(' ',@out[0]);
+    @out = split(' ',$out[0]);
     print STDERR ("\twatched_file = $file_path\n");
     for (my $on=0;$on<$#out;$on++){ 
 	if ($out[$on]!~ m/[0-9]+/x ) {
