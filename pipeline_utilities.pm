@@ -690,7 +690,7 @@ sub matlab_fifo_cleanup {
 		    }
 		    
 		} elsif ( ! defined ($stdin_fifo) ){ 
-		    print STDER ("");
+		    print STDERR ("");
 		} elsif( -e $stdin_fifo ) { 
 		    ### peel off for function
 		    #if( file_over_ttl($file,$ttl) )
