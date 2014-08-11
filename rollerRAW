@@ -72,10 +72,15 @@ endif
 set engine = $RECON_HOSTNAME
 echo "engine hostname = $engine"
 #
-if ($#argv == 4) then
+if ($#argv >= 4) then
   set recon_dirs = ($4)
   set iroll_name = iroll_mine
   set special_dir = 1
+  if ($#argv == 6 ) then
+    set mockup_convertinfo=1
+    
+  endif
+    
 else
   set special_dir = 0
   switch ($engine)
@@ -157,6 +162,10 @@ set warnings = ()
 # ======== check basic items before doing anything 
 #
 set image_dir = $runno_dir/$runno\images
+# check image_dir is real
+  if (-e $image_dir == 0) then
+    set image_dir = $runno_dir/
+  endif
 #
 # check that image directory exists
   if (-e $image_dir == 0) then
@@ -186,7 +195,17 @@ set temp_file = $image_dir/roller_temp_file
 cd $image_dir 
 # unalias ls so that list is always in numeric order
 unalias ls
-set empty = `(ls $runno*.0001.raw > $temp_file) >& /dev/null`
+#set empty = `(ls $runno*.0001.raw > $temp_file) >& /dev/null`
+# line changed 2014 to account for inifinte stacks and to allow for first file 0.
+# find . -maxdepth 1 -iname "S65177*0000.raw"
+set start = 0
+#check start at 0 bool
+#set empty = `(ls $runno*000$start.raw > $temp_file) >& /dev/null`
+set empty = `( find . -maxdepth 1 -iname "$runno*000$start.raw" >$temp_file ) >& /dev/null`
+if ( -z $temp_file ) then
+    set start = 1
+    set empty = `( find . -maxdepth 1 -iname "$runno*000$start.raw" >$temp_file ) >& /dev/null`
+endif
 set flist = `cat $temp_file` 
 @ n001 = 0 
 foreach f ($flist)
@@ -197,9 +216,9 @@ unalias rm
 rm $temp_file
 switch ($n001)
 case 0:
-       echo "  WARNING: Couldn't find .0001 image in $image_dir."
-       echo "  This script requires file numbering to start from 1."
-       set error = "Image numbering does not start from 1."
+       echo "  WARNING: Couldn't find .000$start image in $image_dir."
+       echo "  This script requires file numbering to start from $start."
+       set error = "Image numbering does not start from $start."
        goto errorend
        breaksw
 case 1:
@@ -218,7 +237,7 @@ default:
        echo "WARNING: There is more than one image set in $image_dir"
        set warnings = ($warnings multiple_image_sets)
 
-       echo "Several .001 files exist in $image_dir,"
+       echo "Several .00$start files exist in $image_dir,"
        echo "  indicating multiple image sets are present."
        echo The multiple image set names are: $flist
 
@@ -231,6 +250,7 @@ default:
        goto errorend
        breaksw
 endsw 
+
 #
 # ============ figure out the dimensions of the images
 # use the convert_info file to find dimensions, if it is available.
@@ -242,15 +262,42 @@ endsw
 set info = convert_info_fixed
 #if (-e $image_dir/convert_info_auto == 0) then
 if (-e $image_dir/$info == 0) then
-    echo "No convert_info $info file is available for this dataset."
-    echo "  (These may be signa reconned images.)"
-    echo "  The convert_info file would contain the image dimensions for this set."
-    echo " "
-    echo "You must provide the X and Y dimensions of this image set."
-    echo "  Enter image X dimension (width) :"
-    set ixdim  = $<
-    echo "  Enter image Y dimension (height):"
-    set iydim  = $<
+    set list="S_xres_img dim_X RH_xres"
+    set count = 0;
+    set ixdim = "" 
+    foreach key (  $list  ) 
+	if ( "x$ixdim" != "x" && $count > 2 ) then
+	    break
+	endif 
+	set line = `grep -E ^$key= $runno.$headext` 
+	set ixdim = `echo $line | cut -d '=' -f 2`
+	@ count = $count + 1
+	echo $key $ixdim $count $line
+    end
+    set list="S_yres_img dim_Y RH_yres"
+    set count = 0;
+    set iydim = "" 
+    foreach key (  $list  ) 
+	if ( "x$iydim" != "x" && $count > 2 ) then
+	    break
+	endif 
+	set line = `grep -E ^$key= $runno.$headext` 
+	set iydim = `echo $line | cut -d '=' -f 2`
+	@ count = $count + 1
+	echo $key $iydim $count $line
+    end
+
+    if ( "x$ixdim" == "x" || "x$iydim" == "x" )  then
+      echo "No convert_info $info file is available for this dataset."
+      echo "  (These may be signa reconned images.)"
+      echo "  The convert_info file would contain the image dimensions for this set."
+      echo " "
+      echo "You must provide the X and Y dimensions of this image set."
+      echo "  Enter image X dimension (width) :"
+      set ixdim  = $<
+      echo "  Enter image Y dimension (height):"
+      set iydim  = $<
+    endif
 else
    #set ixdim = `cat $image_dir/convert_info_auto | grep dimension | awk '{printf("%s",$1)}'`
    #set iydim = `cat $image_dir/convert_info_auto | grep dimension | awk '{printf("%s",$2)}'`
@@ -362,6 +409,7 @@ foreach hundred ($hundreds)
        if ($do_it) then
             $iroll_name $myargs > $image_dir/$rollfile
             set keepstat = $status
+	    #echo -n "."
        else
             echo fake: $iroll_name $myargs \> $rollfile
             set keepstat = 0

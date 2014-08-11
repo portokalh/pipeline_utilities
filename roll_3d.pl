@@ -244,7 +244,7 @@ for my $runno (@runnos) {
     } 
 
     if ( $opts{'x'} > 0 || $opts{'y'} > 0 ) { 
-	$cmd='roller_radish '.$runno.' '.$opts{'x'}.' '.$opts{'y'};
+	$cmd='roller_radish '.$runno.' '.$opts{'x'}.' '.$opts{'y'}.' '.$WORK_FOLDER_PATH;
 	printd (15, $cmd."\n");
 	`$cmd`;
 
