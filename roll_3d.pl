@@ -93,14 +93,15 @@ if (! $EC->read_headfile) { error_out(join("read",@error_m)); }
 ###
 #    if (! getopts('abc:d:ek:op:r:s:tu:', \%options)) {
 my %opts=  (
+    'w' => 'UNDEFINED',
     'x' => 0,
     'y' => 0,
-    'z' => 0 );
+    'z' => 0, );
 printd(0, "Roll_3d Calls roller_radish and restack_radish on your behalf with your specifed xyz corner information. \n".
        "This information is then added to your headfile and it looks up tag files to give a proper archivme prompt.\n".
-       "Usage: roll_3d [-x #] [-y #] [-z #] RUNNUMBER1 RUNNUMBER2... RUNNUMBERN\n".
-       "Valid options are \n\t-x $opts{'x'} \n\t-y $opts{'y'} \n\t-z $opts{'z'}\n");
-if( ! getopts('x:y:z:',\%opts)) {
+       "Usage: roll_3d [-w alternate_search_path] [-x #] [-y #] [-z #] RUNNUMBER1 RUNNUMBER2... RUNNUMBERN\n".
+       "Valid options are \n\t-x $opts{'x'} \n\t-y $opts{'y'} \n\t-z $opts{'z'}\n\t -w /alternate_working_path\n \n\t use -w `pwd` to look at runno images in current directory\n");
+if( ! getopts('w:x:y:z:',\%opts)) {
     printd(0,	   "ERROR: bad options specified,\n");
     exit $ERROR_EXIT;
 } else { 
@@ -130,12 +131,18 @@ my $cmd='';
 my @missing_runnos;
 my @found_runnos;
 my $civm_id='';
+my $WORK_FOLDER_PATH = $EC->get_value('engine_work_directory');
+if ( $opts{w} ne "UNDEFINED" ) {
+    $WORK_FOLDER_PATH=$opts{w};
+}
+
 ###
-# check headfiles exist and make al list of present and non-present hf's
+# check headfiles exist and make a list of present and non-present hf's
 ###
 for my $runno (@runnos) {
     #find headfile.
-    my $r_base_path = $EC->get_value('engine_work_directory').'/'.$runno.'/';
+    my $r_base_path = $WORK_FOLDER_PATH.'/'.$runno.'/';
+    
     my ($hfpath,$stat)=`find $r_base_path -iname \"$runno.headfile\"`;
     if ( !defined $hfpath) {
 #	print("no hf $runno\n");
@@ -163,7 +170,7 @@ my $find_tags=1;
 for my $runno (@runnos) {
     printd(5,"#---$runno\n");
     #find headfile.
-    my $r_base_path = $EC->get_value('engine_work_directory').'/'.$runno;
+    my $r_base_path = $WORK_FOLDER_PATH.'/'.$runno;
     my ($hfpath,$stat)=`find $r_base_path -iname \"$runno.headfile\" | grep -vE '(last|orig)'`;
     chomp $hfpath;
     my $HF= new Headfile ( 'rw',$hfpath);
@@ -272,7 +279,7 @@ for my $runno (@runnos) {
 	}
     } else {
 	if ( $opts{'z'} > 0 ) {
-	    $cmd='restack_radish '.$runno." ".$opts{'z'}." $dim_z ".$EC->get_value("engine_work_directory");
+	    $cmd='restack_radish '.$runno." ".$opts{'z'}." $dim_z ".$WORK_FOLDER_PATH;
 	    printd (15, $cmd."\n");
 	    `$cmd`;
 	    $cmd="mkdir -p ${hfdir}orig";

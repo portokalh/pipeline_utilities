@@ -127,6 +127,10 @@ set warnings = ()
 # ======== check basic items before doing anything 
 #
 set image_dir = $runno_dir/$runno\images
+# check image_dir is real
+  if (-e $image_dir == 0) then
+    set image_dir = $runno_dir/
+  endif
 #
 # check that image directory exists
   if (-e $image_dir == 0) then
@@ -156,7 +160,17 @@ set temp_file = $image_dir/restack_temp_file
 cd $image_dir 
 # unalias ls so that list is always in numeric order
 unalias ls
-set empty = `(ls $runno*.0001.raw > $temp_file) >& /dev/null`
+#set empty = `(ls $runno*.0001.raw > $temp_file) >& /dev/null`
+# line changed 2014 to account for inifinte stacks and to allow for first file 0.
+# find . -maxdepth 1 -iname "S65177*0000.raw"
+set start = 0
+#check start at 0 bool
+#set empty = `(ls $runno*000$start.raw > $temp_file) >& /dev/null`
+set empty = `( find . -maxdepth 1 -iname "$runno*000$start.raw" >$temp_file ) >& /dev/null`
+if ( -z $temp_file ) then
+    set start = 1
+    set empty = `( find . -maxdepth 1 -iname "$runno*000$start.raw" >$temp_file ) >& /dev/null`
+endif
 set flist = `cat $temp_file` 
 @ n001 = 0 
 foreach f ($flist)
@@ -166,7 +180,7 @@ unalias rm
 rm $temp_file
 switch ($n001)
 case 0:
-       echo "  WARNING: Couldn't find .0001.raw image in $image_dir."
+       echo "  WARNING: Couldn't find .000$start.raw image in $image_dir."
        echo "  This script requires file numbering to start from 1."
        set error = "Image numbering does not start from 1."
        goto errorend
@@ -181,7 +195,7 @@ default:
        echo "WARNING: There is more than one image set in $image_dir"
        set warnings = ($warnings multiple_image_sets)
 
-       echo "Several .0001.raw files exist in $image_dir,"
+       echo "Several .000$start.raw files exist in $image_dir,"
        echo "indicating multiple image sets are present."
        echo The full multiple image set names are: $flist
 
@@ -205,7 +219,8 @@ endif
 # ============ make a list of (001 ... ALL)
 
 #
-set start = 1
+#set start = 1 # moved higher to allow for alternate stat number(0 or 1) 
+#check start at 0 bool
 #set end = 100  
 set end = $nslices  
 set ggo = 1
