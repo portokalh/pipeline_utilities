@@ -36,7 +36,7 @@ sub apply_noise_reduction {
   $cmd[0] = 'NO NOISE CORRECTION FOUND';
   my $noise_reduction_type = $Hf_out->get_value('noise_reduction');
   if ( $noise_reduction_type eq 'SUSAN') {
-      @cmd=fsl_noise_reduction($in_nii, $hf_nii_id,$Hf_out);
+      @cmd=fsl_noise_reduction($in_nii, $hf_nii_id,$Hf_out->get_value("engine-app-fsl-dir"));
   } elsif ( $noise_reduction_type eq 'Bilateral'){
       @cmd=matlab_noise_reduction($in_nii, $hf_nii_id, $Hf_out);
   } elsif ( $noise_reduction_type eq 'ANTS'){
@@ -79,6 +79,10 @@ sub matlab_noise_reduction {
 #    $params = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $voxel_size, $flip_y, $flip_z, $zstart, $zstop";
     my $params = "\'$in_nii\', \'\', \'$out_nii\'";
     my $cmd =  make_matlab_command ($BILATERAL_MFUNCTION, $params, "$hf_nii_id\_", $Hf_out); 
+    #my $cmd =  make_matlab_command_nohf($function_m_name,$args,$short_unique_purpose,$work_dir,$matlab_app,$logpath,$matlab_opts);
+    #my $cmd =  make_matlab_command_nohf($BILATERAL_MFUNCTION,$params,$hf_nii_id\_",
+    #$work_dir,$matlab_app,$logpath,$matlab_opts);
+    
     push @cmdlist, $cmd;
     return @cmdlist
 }
@@ -86,8 +90,8 @@ sub matlab_noise_reduction {
 # ------------------
 sub fsl_noise_reduction {
 # ------------------
-    my ( $in_nii, $hf_nii_id, $Hf_out) = @_;
-    my $fsl_dir = $Hf_out->get_value("engine-app-fsl-dir");
+    my ( $in_nii, $hf_nii_id, $fsl_dir) = @_;
+
     my ($name,$path,$extension)=fileparts($in_nii);
     print("File parts returned path:$path  $name  $extension\n") if( $debug_val>=35);
     my $dimensions = 3;
