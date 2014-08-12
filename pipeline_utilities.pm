@@ -254,7 +254,7 @@ sub make_matlab_command {
    
    my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}";
    my $function_call = "$function_m_name ( $args )";
-   make_matlab_m_file ($mfile_path, $function_call);
+   make_matlab_m_file ($mfile_path, $function_call); # this seems superfluous.
 
 
    my $logpath="$work_dir/matlab_${function_m_name}";
@@ -304,11 +304,14 @@ sub make_matlab_command_nohf {
        my $n_closed = matlab_fifo_cleanup();
        print STDERR ( "FIFO cleanup closed $n_closed.\n");
        my $shell_file = "$work_dir/${short_unique_purpose}${function_m_name}"."_fifo_bash_wrapper.bash";
+       #sed -e '1,/TERMINATE/d' # make a start line
        my @fifo_cmd_wrapper=();
        push (@fifo_cmd_wrapper, "#!/bin/bash\n") ;
        push (@fifo_cmd_wrapper, "echo \"MATLAB_FIFO_PASS_STUB\"\n");
        push (@fifo_cmd_wrapper, "echo \"run\(\'$mfile_path\'\)\;\" >> $fifo_path\n") ;
        push (@fifo_cmd_wrapper, "echo \"stub::\${0##*/}\"  >> $logpath\n");
+       push (@fifo_cmd_wrapper, "skey=`head -c 10 /dev/urandom | base64 | tr -dc \"[:alnum:]\" | head -c64`\n");
+       push (@fifo_cmd_wrapper, "echo \"\$skey\"  >> $logpath\n");
        push (@fifo_cmd_wrapper, "lastline=`tail -n1 $logpath`\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
        push (@fifo_cmd_wrapper, "mat_done=`tail -n1 $logpath|grep -c ${mfile_path}_DONE `\n");#$logpath
        #push (@fifo_cmd_wrapper, "mat_err=`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
@@ -324,7 +327,10 @@ sub make_matlab_command_nohf {
        push (@fifo_cmd_wrapper, "\t\techo \"\tMATLAB:\$lastline\"\n");
        push (@fifo_cmd_wrapper, "\tfi\n");
        push (@fifo_cmd_wrapper, "\tmat_done=`tail -n1 $logpath|grep -c ${mfile_path}_DONE`\n");#$logpath
-       push (@fifo_cmd_wrapper, "\tmat_err=`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
+       #push (@fifo_cmd_wrapper, "\tmat_err=`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
+       push (@fifo_cmd_wrapper, "\tmat_err=`sed -e '1,/\"\$skey\"/d' $logpath | grep -c \"Error\"`\n");
+
+
 #        push (@fifo_cmd_wrapper, "\n");
 #        push (@fifo_cmd_wrapper, "\n");
 #        push (@fifo_cmd_wrapper, "\n");
