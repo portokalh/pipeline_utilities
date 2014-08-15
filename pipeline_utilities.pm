@@ -65,6 +65,7 @@ isopen_fifo_program
 get_image_suffix
 matlab_fifo_cleanup
 file_over_ttl
+data_checksum
 make_matlab_command_V2
 rp_key_insert
 make_matlab_command_V2_OBSOLETE
@@ -749,6 +750,9 @@ sub matlab_fifo_cleanup {
 sub file_over_ttl { # ( $path,$ttl )
 # -------------
 # checks if a file is older than the time to live value passed.
+# path is file to look at
+# ttl is in seconds old
+# returns boolean true if old file
     my ($path,$ttl) = @_;
     my $isold=0;
     use File::stat;
@@ -778,6 +782,54 @@ sub file_over_ttl { # ( $path,$ttl )
     }
     return $isold;
 }
+
+
+# add three related data integrity functions
+# data_check, a boolean returning function
+# checksum_calc, to calculate checksum and store in array
+ 
+# -------------
+sub data_checksum {
+# -------------
+# if checksum file older than some n days, calc checksum of file, and compare to saved. 
+    my ($file) = @_;
+    my $data_check=0; # init to bad data
+    my ($n,$p,$ext) = fileparts($file);
+    my $checksumfile=$n.$p.".md5";
+
+    use Digeset::MD5 qw(md5 md5_hex md5_base64); 
+    open my $data_fid, "<", "$file" or croak "could not open $file";#croak "file <$file> not Text\n" unless -T $data_fid ;
+    # path md5, save = path.md5 
+    my @md5;
+    my @stored_md5;
+    my $md_calc=Digets::MD5->new ;
+    $md_calc->addfile($data_fid);
+    @md5 = ($md_calc->digest);
+    if ( ! -e $checksumfile ) { 
+	write_array_to_file($checksumfile,\@md5);
+	$data_check=1;
+    } else {
+#		    $lines=load_file_to_array($FIFO_regfile,\@fifo_reg_path);
+	load_file_to_array($checksumfile,\@stored_md5);
+	if ( $stored_md5[0] == $md5[0] ) { 
+	    print("stored same as calced.\n");
+	    $data_check=1;
+	    write_array_to_file($checksumfile,\@md5);
+	} else {
+	    print ("BADCHECKSUM! ($file)") and exit;
+	}
+    }
+    
+
+    
+    return $data_check;
+}
+# -------------
+sub file_checksum {
+# -------------
+    return;
+}
+
 
 # -------------
 sub make_matlab_command_V2 { 
