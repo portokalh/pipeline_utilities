@@ -795,24 +795,26 @@ sub data_checksum {
     my ($file) = @_;
     my $data_check=0; # init to bad data
     my ($n,$p,$ext) = fileparts($file);
-    my $checksumfile=$n.$p.".md5";
+    my $checksumfile=$p.$n.".md5";
 
-    use Digeset::MD5 qw(md5 md5_hex md5_base64); 
-    open my $data_fid, "<", "$file" or croak "could not open $file";#croak "file <$file> not Text\n" unless -T $data_fid ;
+    use Digest::MD5 qw(md5 md5_hex md5_base64); 
+    #open my $data_fid, "<", "$file" or croak "could not open $file";#croak "file <$file> not Text\n" unless -T $data_fid ;
+    open my $data_fid, "<", "$file" or die "could not open $file";#croak "file <$file> not Text\n" unless -T $data_fid ;
+    #print("open $file, will save to $checksumfile\n");
     # path md5, save = path.md5 
     my @md5;
     my @stored_md5;
-    my $md_calc=Digets::MD5->new ;
+    my $md_calc=Digest::MD5->new ;
     $md_calc->addfile($data_fid);
-    @md5 = ($md_calc->digest);
+    @md5 = ($md_calc->b64digest);
     if ( ! -e $checksumfile ) { 
 	write_array_to_file($checksumfile,\@md5);
 	$data_check=1;
     } else {
 #		    $lines=load_file_to_array($FIFO_regfile,\@fifo_reg_path);
 	load_file_to_array($checksumfile,\@stored_md5);
-	if ( $stored_md5[0] == $md5[0] ) { 
-	    print("stored same as calced.\n");
+	if ( $stored_md5[0] eq $md5[0] ) { 
+	    #print("$file good!\n");
 	    $data_check=1;
 	    write_array_to_file($checksumfile,\@md5);
 	} else {
@@ -1161,8 +1163,8 @@ sub new_get_engine_dependencies {
   use Env qw(PIPELINE_HOSTNAME PIPELINE_HOME BIGGUS_DISKUS WKS_SETTINGS WORKSTATION_HOSTNAME);
   
   if (! defined($BIGGUS_DISKUS)) { error_out ("Environment variable BIGGUS_DISKUS must be set."); }
-  if (!-d $BIGGUS_DISKUS)        { error_out ("unable to find $BIGGUS_DISKUS"); }
-  if (!-w $BIGGUS_DISKUS)        { error_out ("unable to write to $BIGGUS_DISKUS"); }
+  if (!-d $BIGGUS_DISKUS)        { error_out ("unable to find disk location: $BIGGUS_DISKUS"); }
+  if (!-w $BIGGUS_DISKUS)        { error_out ("unable to write to disk location: $BIGGUS_DISKUS"); }
   if  ( ! defined($WORKSTATION_HOSTNAME)) { 
       print("WARNING: obsolete variable PIPELINE_HOSTNAME used.\n");
   } else { 
