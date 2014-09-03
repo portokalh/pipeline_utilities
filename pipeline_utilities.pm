@@ -213,6 +213,7 @@ sub make_matlab_m_file {
    log_info("Matlab function call mfile created: $mfile_path");
    log_info("  mfile contains: $function_call");
    make_matlab_m_file_quiet($mfile_path,$function_call);
+   return;
 }
 
 # -------------
@@ -233,6 +234,7 @@ sub make_matlab_m_file_quiet {
    print MATLAB_M "$function_call\;"."\n";
    print MATLAB_M 'fprintf(['."\'${mfile_path}_DONE\'".' \'\n\']);'."\n";
    close MATLAB_M;
+   return;
 }
 
 # -------------
@@ -253,9 +255,9 @@ sub make_matlab_command {
    } 
    print("make_matlab_command:\n\tengine_matlab_path:${matlab_app}\n\twork_dir:$work_dir\n") if($debug_val>=25);
    
-   my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}";
+   my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}.m";
    my $function_call = "$function_m_name ( $args )";
-   make_matlab_m_file ($mfile_path, $function_call); # this seems superfluous.
+   #make_matlab_m_file ($mfile_path, $function_call); # this seems superfluous.
 
 
    my $logpath="$work_dir/matlab_${function_m_name}";
@@ -284,8 +286,11 @@ sub make_matlab_command_nohf {
        $logpath='> '."$work_dir/matlab_${function_m_name}";
    }
 
-   make_matlab_m_file_quiet ($mfile_path, $function_call);
-   #my $cmd_to_execute = "$matlab_app < $mfile_path $logpath"; 
+   make_matlab_m_file ($mfile_path, $function_call); # this seems superfluous.
+   #make_matlab_m_file_quiet ($mfile_path, $function_call); #### RECENTLY COMMENTED<-POSSIBLE UNNECESSARY EFFORT
+   
+
+  #my $cmd_to_execute = "$matlab_app < $mfile_path $logpath"; 
     
    my $cmd_to_execute = "$matlab_app $matlab_opts < $mfile_path > $logpath "; #; echo 'Matlab_Done' > $logpath 
    # we want to weave in our fifo support here, in doing that the returned command HAS 
@@ -307,41 +312,104 @@ sub make_matlab_command_nohf {
        my $shell_file = "$work_dir/${short_unique_purpose}${function_m_name}"."_fifo_bash_wrapper.bash";
        #sed -e '1,/TERMINATE/d' # make a start line
        my @fifo_cmd_wrapper=();
+       my $script_version="bash";
+       if ( $script_version eq "bash" ) {
        push (@fifo_cmd_wrapper, "#!/bin/bash\n") ;
        push (@fifo_cmd_wrapper, "echo \"MATLAB_FIFO_PASS_STUB\"\n");
+       push (@fifo_cmd_wrapper, "logpath=$logpath;\n");
+       push (@fifo_cmd_wrapper, "echo \"stub::\${0##*/}\"  >> \$logpath\n");
+       push (@fifo_cmd_wrapper, "#skey var is semi-unique identifier for log file so w can cleanly find info from this matlab call in log\n#line var is the next line to check\n#lastline var is the previous line checked\n#logpath is the path to our fifo log\n"); # label our bash file
+       push (@fifo_cmd_wrapper, "skey=`head -c 10 /dev/urandom | base64 | tr -dc \"[:alnum:]\" | head -c64`\n");# get a uniqueish, psuedo-random identifier for the log file so we can get only data after we started this run.
+       push (@fifo_cmd_wrapper, "lastline=\$skey;\n");
+       push (@fifo_cmd_wrapper, "echo \"\$skey\"  >> \$logpath\n");
+       push (@fifo_cmd_wrapper, "mat_done=`sed -e \"1,/\$skey/d\" \$logpath | grep -c ${mfile_path}_DONE`;\n");#\$logpath
+       push (@fifo_cmd_wrapper, "mat_err=`sed -e \"1,/\$skey/d\" \$logpath | grep -c \"Error\"`;\n");
+       push (@fifo_cmd_wrapper, "echo \"\tWait for completion line:${mfile_path}_DONE in log \$logpath\"\n");
        push (@fifo_cmd_wrapper, "echo \"run\(\'$mfile_path\'\)\;\" >> $fifo_path\n") ;
-       push (@fifo_cmd_wrapper, "echo \"stub::\${0##*/}\"  >> $logpath\n");
-       push (@fifo_cmd_wrapper, "skey=`head -c 10 /dev/urandom | base64 | tr -dc \"[:alnum:]\" | head -c64`\n");
-       push (@fifo_cmd_wrapper, "echo \"\$skey\"  >> $logpath\n");
-       push (@fifo_cmd_wrapper, "lastline=`tail -n1 $logpath`\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
-       push (@fifo_cmd_wrapper, "mat_done=`tail -n1 $logpath|grep -c ${mfile_path}_DONE `\n");#$logpath
-       #push (@fifo_cmd_wrapper, "mat_err=`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
-       push (@fifo_cmd_wrapper, "mat_err=0\n"); #`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
-       push (@fifo_cmd_wrapper, "echo \"\tWait for completion line:${mfile_path}_DONE in log $logpath\"\n");
-#       push (@fifo_cmd_wrapper, "sleep 1\n");
-       push (@fifo_cmd_wrapper, "while [ \"\$mat_done\" -lt \"1\" -a \"\$mat_err\" -lt \"1\" ]\n");
+
+       
+       ### begin bash while
+       push (@fifo_cmd_wrapper, "while [ \"\$mat_done\" -lt \"1\" -a \"\$mat_err\" -lt \"1\" ];\n");
        push (@fifo_cmd_wrapper, "do \n");
-       push (@fifo_cmd_wrapper, "\tline=\$lastline\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
-       push (@fifo_cmd_wrapper, "\tlastline=`tail -n1 $logpath`\n"); #push (@fifo_cmd_wrapper, "\techo -n \"\"\n");
+       push (@fifo_cmd_wrapper, "\tline=`awk \"/\$skey/{y=1;}y\" /vidconfmacspace/S64800_m0Labels-work/S64800_fifo.log | grep -A 1 -m 100 \"\$lastline\" `;\n");
+       push (@fifo_cmd_wrapper, "\tdeclare -i lc;\n");
+       push (@fifo_cmd_wrapper, "\tlc=`echo \"\$line\" | wc -l`;\n");
+       push (@fifo_cmd_wrapper, "\tlc=\$lc-1;\n");
+       push (@fifo_cmd_wrapper, "\tline=`echo \"\$line\" | tail -n \$lc`;\n");
+       push (@fifo_cmd_wrapper, "\tsleep .05;\n");
        push (@fifo_cmd_wrapper, "\tif [ \"\$line\" != \"\$lastline\" ] \n");
        push (@fifo_cmd_wrapper, "\tthen\n");
-       push (@fifo_cmd_wrapper, "\t\techo \"\tMATLAB:\$lastline\"\n");
+       push (@fifo_cmd_wrapper, "\t\t if [ ! -z \"\$line\" ]; then \n");
+       push (@fifo_cmd_wrapper, "\t\t echo \"\$line\" | awk '{print \"\tMATLAB:\"\$0;}' || echo -n \"\";\n");
+       push (@fifo_cmd_wrapper, "\t\t declare -i inc=1;\n");
+       push (@fifo_cmd_wrapper, "\t\t lastline=`echo \"\$line\" |tail -n \$inc|head -n1 `;\n");
+       push (@fifo_cmd_wrapper, "\t\t while [ -z \"\$lastline\" ];\n");
+       push (@fifo_cmd_wrapper, "\t\t do \n");
+       push (@fifo_cmd_wrapper, "\t\t\t inc=\$inc+1;\n");
+       push (@fifo_cmd_wrapper, "\t\t\t lastline=`echo \"\$line\" |tail -n \$inc|head -n1 `;\n");
+       push (@fifo_cmd_wrapper, "\t\t\t echo -n \"\\\\\";\n");
+       push (@fifo_cmd_wrapper, "\t\t done;\n");
+       push (@fifo_cmd_wrapper, "\t\t else \n");
+       push (@fifo_cmd_wrapper, "\t\t echo -n \".\";\n");
+       push (@fifo_cmd_wrapper, "\t\t sleep 0.5;\n");
+       push (@fifo_cmd_wrapper, "\t\t fi;\n");
        push (@fifo_cmd_wrapper, "\tfi\n");
-       push (@fifo_cmd_wrapper, "\tmat_done=`tail -n1 $logpath|grep -c ${mfile_path}_DONE`\n");#$logpath
-       #push (@fifo_cmd_wrapper, "\tmat_err=`tail -n20 $logpath|grep -c \"Error\" `\n");#$logpath
-       push (@fifo_cmd_wrapper, "\tmat_err=`sed -e '1,/\"\$skey\"/d' $logpath | grep -c \"Error\"`\n");
+       push (@fifo_cmd_wrapper, "\tmat_done=`echo \$line | grep -c /vidconfmacspace/S64800_m0Labels-work/stat_calcwrite_stats.m_DONE`;\n");
+       push (@fifo_cmd_wrapper, "\tmat_err=`sed -e \"1,/\$skey/d\" /vidconfmacspace/S64800_m0Labels-work/S64800_fifo.log | grep -c \"Error\"`;\n");
 
-
-#        push (@fifo_cmd_wrapper, "\n");
-#        push (@fifo_cmd_wrapper, "\n");
-#        push (@fifo_cmd_wrapper, "\n");
-#        push (@fifo_cmd_wrapper, "\n");
-       push (@fifo_cmd_wrapper, "done \n");
-       push (@fifo_cmd_wrapper, "if [ \"\$mat_err\" -ge \"1\" ] \n");
+       push (@fifo_cmd_wrapper, "done;\n");
+       #### end bash while
+       push (@fifo_cmd_wrapper, "if [ \"\$mat_err\" -ge \"1\" ];\n");
        push (@fifo_cmd_wrapper, "then\n");
-       push (@fifo_cmd_wrapper, "\techo \"MATLAB_ERRORS:\$mat_err\"\n");
-       push (@fifo_cmd_wrapper, "\ttail -n20 $logpath|grep \"Error\" \n");#$logpath
-       push (@fifo_cmd_wrapper, "fi\n");
+       push (@fifo_cmd_wrapper, "\techo \"MATLAB_ERRORS:\$mat_err\";\n");
+       push (@fifo_cmd_wrapper, "\tsed -e \"1,/\$skey/d\" \$logpath |grep -m 1 \"Error\";\n");#$logpath
+       push (@fifo_cmd_wrapper, "fi;\n");
+       } elsif ($script_version eq "perl" ) {
+	   push (@fifo_cmd_wrapper, "#!/usr/bin/perl\n") ;
+	   push (@fifo_cmd_wrapper, "print(\"MATLAB_FIFO_PASS_STUB\\n\n\");\n");
+	   push (@fifo_cmd_wrapper, "my \$LOGHDL;\n");
+	   push (@fifo_cmd_wrapper, "open (\$LOGHDL, '>>', 'log.txt');");
+	   push (@fifo_cmd_wrapper, "my \$logpath=$logpath;\n");
+	   push (@fifo_cmd_wrapper, "print \$LOGHDL, (\"stub::\${0##*/}\")  >> \$logpath\n");
+	   push (@fifo_cmd_wrapper, "#skey var is semi-unique identifier for log file so w can cleanly find info from this matlab call in log\n#line var is the next line to check\n#lastline var is the previous line checked\n#logpath is the path to our fifo log\n"); # label our bash file
+	   push (@fifo_cmd_wrapper, "skey=`head -c 10 /dev/urandom | base64 | tr -dc \"[:alnum:]\" | head -c64`\n");# get a uniqueish, psuedo-random identifier for the log file so we can get only data after we started this run.
+	   push (@fifo_cmd_wrapper, "lastline=\$skey;\n");
+	   push (@fifo_cmd_wrapper, "echo \"\$skey\"  >> \$logpath\n");
+	   push (@fifo_cmd_wrapper, "mat_done=`sed -e \"1,/\$skey/d\" \$logpath | grep -c ${mfile_path}_DONE`;\n");#\$logpath
+	   push (@fifo_cmd_wrapper, "mat_err=`sed -e \"1,/\$skey/d\" \$logpath | grep -c \"Error\"`;\n");
+	   push (@fifo_cmd_wrapper, "echo \"\tWait for completion line:${mfile_path}_DONE in log \$logpath\"\n");
+	   push (@fifo_cmd_wrapper, "echo \"run\(\'$mfile_path\'\)\;\" >> $fifo_path\n") ;
+
+	   
+	   ### begin bash while
+	   push (@fifo_cmd_wrapper, "while [ \"\$mat_done\" -lt \"1\" -a \"\$mat_err\" -lt \"1\" ]\n");
+	   push (@fifo_cmd_wrapper, "do \n");
+	   push (@fifo_cmd_wrapper, "\tif [ ! -z \"\$line\" ]; then \n\t" ); # sed returns a blank on no match, so we need to account for that properly. 
+	   push (@fifo_cmd_wrapper, "\tlastline=\$line;\n");
+	   push (@fifo_cmd_wrapper, "\tfi;\n");
+	   push (@fifo_cmd_wrapper, "\tline=`sed -e \"1,/\\\"\$lastline\\\"/d\" \$logpath`;\n");
+	   #push (@fifo_cmd_wrapper, "\tif [ -z \"\$line\" ]; then line=BLANK; echo \"last line err on \$lastline\"; echo endlerr;\n fi;\n");
+	   #push (@fifo_cmd_wrapper, "\tif [ \"\$line\" != \"\$lastline\" -a \"\$lastline\" != \"BLANK\" ] \n");
+	   push (@fifo_cmd_wrapper, "\tif [ \"\$line\" != \"\$lastline\" -a ! -z \"\$line\"  ] \n");
+	   push (@fifo_cmd_wrapper, "\tthen\n");
+	   push (@fifo_cmd_wrapper, "\t\techo \"\tMATLAB:\$line\";\n");
+	   push (@fifo_cmd_wrapper, "\tfi\n");
+	   push (@fifo_cmd_wrapper, "\tmat_done=`sed -e \"1,/\$skey/d\" \$logpath | grep -c ${mfile_path}_DONE`;\n");
+	   push (@fifo_cmd_wrapper, "\tmat_err=`sed -e \"1,/\$skey/d\" \$logpath | grep -c \"Error\"`;\n");
+	   push (@fifo_cmd_wrapper, "\tsleep 1\n"); #sleep at least 0.1 seconds per iteration of loop so loop doesnt demand too much cpu
+
+	   push (@fifo_cmd_wrapper, "done;\n");
+	   #### end bash while
+	   push (@fifo_cmd_wrapper, "if [ \"\$mat_err\" -ge \"1\" ];\n");
+	   push (@fifo_cmd_wrapper, "then\n");
+	   push (@fifo_cmd_wrapper, "\techo \"MATLAB_ERRORS:\$mat_err\";\n");
+	   push (@fifo_cmd_wrapper, "\tsed -e \"1,/\$skey/d\" \$logpath |grep -m 1 \"Error\";\n");#$logpath
+	   push (@fifo_cmd_wrapper, "fi;\n");
+	   
+	   
+       
+
+       }
        write_array_to_file($shell_file,\@fifo_cmd_wrapper);
        chmod( 0755, $shell_file );
        #$cmd_to_execute=("bash","-c","$shell_file");
