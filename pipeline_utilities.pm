@@ -225,6 +225,9 @@ sub make_matlab_m_file_quiet {
    # insert startup.m call here.
    use Env qw(WKS_SHARED);
    print MATLAB_M 'fprintf([datestr(now, \'HH:MM:SS\'),\'\n\']);'."\n";
+   my ($fn) = $function_call =~ /^\s*([^ (]+).*$/x ;
+   print MATLAB_M 'path=which(\''.$fn.'\');'."\n";
+   print MATLAB_M 'fprintf(\'calling %s \n\',path);'."\n";
    if ( defined $WKS_SHARED) { 
        if ( -e "$WKS_SHARED/pipeline_utilities/startup.m") 
        {
@@ -331,11 +334,11 @@ sub make_matlab_command_nohf {
        ### begin bash while
        push (@fifo_cmd_wrapper, "nl=0;#newline before print flag. to make printing prettier\n");
        push (@fifo_cmd_wrapper, "while [ \"\$mat_done\" -lt \"1\" -a \"\$mat_err\" -lt \"1\" ]; do \n");
-       push (@fifo_cmd_wrapper, "    line=`awk \"/\$skey/{y=1;}y\" \$logpath | grep -A 1 -m 100 \"\$lastline\" `;\n");
+       push (@fifo_cmd_wrapper, "    line=`awk \"/\$skey/{y=1;}y\" \$logpath | grep -A 1 -m 100 -F \"\$lastline\" `;\n");
        push (@fifo_cmd_wrapper, "    nmatches=`echo \"\$line\" | grep -c '\\-\\-' `;\n");
        push (@fifo_cmd_wrapper, "    if [ \$nmatches -ge 1 ]; then\n");
        push (@fifo_cmd_wrapper, "        for((n=\$nmatches;\$n>0;)); do \n");
-       push (@fifo_cmd_wrapper, "            line=`echo \"\$line\" | awk '/--/{y=1;next}y'` ;\n");
+       push (@fifo_cmd_wrapper, "            line=`echo \"\$line\" | awk '/\\-\\-/{y=1;next}y'` ;\n");
        push (@fifo_cmd_wrapper, "            n=`echo \"\$line\" | grep -c '\\-\\-' `;\n");
        push (@fifo_cmd_wrapper, "        done;\n");
        push (@fifo_cmd_wrapper, "    fi;\n");

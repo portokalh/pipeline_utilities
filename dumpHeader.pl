@@ -145,11 +145,13 @@ my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name)
 ###    
 # agilent,aspect,bruker are expected
     my @scanner_vendors= qw/agilent aspect bruker/;
-    my $odd_scanner_bool=0;
-    if ( join(@scanner_vendors,' ') !~ /$scanner_vendor/ ) {
-	printd(5,"NOT AN EXPECTED SCANNER VENDOR!, TRYING AGILENT\n");
+    my $odd_scanner;
+    my $scanner_regex=join('|',@scanner_vendors);
+    if ( $scanner_vendor !~  /^($scanner_regex)$/ ) {
+	printd(5,"UNEXPECTED SCANNER VENDOR!($scanner_vendor), TRYING AGILENT\n");
+	printd(30,"scanner regex match was $scanner_regex\n");
+	$odd_scanner=$scanner_vendor;
 	$scanner_vendor="agilent";
-	$odd_scanner_bool=1;
     }
 
 ###
@@ -246,9 +248,10 @@ my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name)
 ###
 # cleanup tasks
 ###
-    if ( $odd_scanner_bool ) {
+    if ( defined $odd_scanner ) {
 	printd(45,"odd scanner bool true!, setting U_scanner_vendor in headfile");
-	$Hfile->set_value("U_scanner_vendor", $scanner_vendor);
+	$Hfile->set_value("U_scanner_override", $scanner_vendor);
+	$Hfile->set_value("U_scanner_vendor", $odd_scanner);
     }
 ###
 # save header
