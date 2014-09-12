@@ -224,7 +224,8 @@ sub make_matlab_m_file_quiet {
    open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path";
    # insert startup.m call here.
    use Env qw(WKS_SHARED);
-   print MATLAB_M 'fprintf([datestr(now, \'HH:MM:SS\'),\'\n\']);'."\n";
+   #print MATLAB_M 'fprintf([datestr(now, \'HH:MM:SS\'),\'\n\n\']);'."\n";
+   print MATLAB_M 'fprintf(\'%s\n\n\',datestr(now, \'HH:MM:SS\'));'."\n";
    my ($fn) = $function_call =~ /^\s*([^ (]+).*$/x ;
    print MATLAB_M 'path=which(\''.$fn.'\');'."\n";
    print MATLAB_M 'fprintf(\'calling %s \n\',path);'."\n";
@@ -325,7 +326,8 @@ sub make_matlab_command_nohf {
        push (@fifo_cmd_wrapper, "echo \"stub::\${0##*/}\"  >> \$logpath\n");
        push (@fifo_cmd_wrapper, "skey=`head -c 10 /dev/urandom | base64 | tr -dc \"[:alnum:]\" | head -c64`\n");# get a uniqueish, psuedo-random identifier for the log file so we can get only data after we started this run.
        push (@fifo_cmd_wrapper, "lastline=\$skey;\n");
-       push (@fifo_cmd_wrapper, "echo \"\$skey\"  >> \$logpath\n");
+       push (@fifo_cmd_wrapper, "echo \"fprintf\(\'\%s\',\'\$skey\'\)\;\" >> $fifo_path\n") ;
+       #push (@fifo_cmd_wrapper, "echo \"\$skey\"  >> \$logpath\n");
        push (@fifo_cmd_wrapper, "mat_done=`sed -e \"1,/\$skey/d\" \$logpath | grep -c \$donecode`;\n");#\$logpath
        push (@fifo_cmd_wrapper, "mat_err=`sed -e \"1,/\$skey/d\" \$logpath | grep -c \"Error\"`;\n");
        push (@fifo_cmd_wrapper, "echo \"\tWait for completion line:\$donecode in log \$logpath\"\n");
@@ -374,7 +376,8 @@ sub make_matlab_command_nohf {
        push (@fifo_cmd_wrapper, "        echo -n \".\";\n");
        push (@fifo_cmd_wrapper, "        sleep 0.5;\n");
        push (@fifo_cmd_wrapper, "    fi\n");
-       push (@fifo_cmd_wrapper, "    mat_done=`echo \$line | grep -c \$donecode `;\n");
+       push (@fifo_cmd_wrapper, "    mat_done=`sed -e \"1,/\$skey/d\" \$logpath | grep -c \$donecode`;\n");#\$logpath
+       #push (@fifo_cmd_wrapper, "    mat_done=`echo \$line | grep -c \$donecode `;\n");
        push (@fifo_cmd_wrapper, "    mat_err=`sed -e \"1,/\$skey/d\" \$logpath | grep -c \"Error\"`;\n");
 
        push (@fifo_cmd_wrapper, "done;\n");
