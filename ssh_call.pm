@@ -10,6 +10,7 @@ package ssh_call;
 # Sally Gewalt civm 2/15/2007
 use strict;
 use warnings;
+use File::Basename;
 my $DEBUG = 1;
 
 sub works {
@@ -39,9 +40,13 @@ sub get_file {
     
     my $date = `ssh -Y $system date`;
     chop ($date);
-    my $src = "$system:$source_dir/$file";
-    use File::Basename;
-    my $dest  = "$local_dest_dir/".basename($file);
+    my $src = "$system:$source_dir";
+    my $dest  = "$local_dest_dir";
+    if ( $file ne "" ) {
+	$src="$src/$file"; 
+	$dest="$dest/".basename($file);
+    } #allow empty file, in case we have the full path in our sourcedir
+
     my @args  = ("scp", $src, $dest);
     my $cmd=join(" ",@args);
     print STDERR "   Beginning ".$cmd." at $date...\n";#    print STDERR "Beginning scp of $src at $date...";
@@ -59,6 +64,37 @@ sub get_file {
     }
     print STDERR "Successful scp took $xfer_time second(s).\n" if $xfer_time > 5;
     return 1;
+}
+
+###
+# get_dir_listing sys, source, pattern
+###
+sub get_dir_listing {
+    my ($system, $source_dir, $pattern)  =@_;
+    my $date  = `ssh -Y $system date`;
+    chop ($date);
+    my $src   = "$system";
+    my $cmd = "\"find -E $source_dir -iregex \\\"$pattern\\\"\"";
+    #my $cmd = "ls -A $source_dir | grep -E -iregex \"$pattern\"";
+    my @args;
+    unshift(@args,"ssh");# put scp(our program name) on beginning of arglist
+    push(@args,$src);   # put our src at the end of the arglist
+    push(@args,$cmd); # put ls command at end of the arglist
+    #@args = ("scp", $src, $dest);
+    my $start = time;
+    #print STDERR "   Beginning ".join(" ",@args)." at $date...\n";
+    my @dir_listing=qx/@args/; #or 
+#  	( print STDERR 
+# 	  "  * Remote listing failed: ".join(" ",@args)."\n",
+# 	  "  * Couldn't find files at $source_dir\n",
+# 	  "  * with pattern $pattern.\n" and return 0); 
+    my $msg   = $?;
+    my $end   = time;
+    my $xfer_time = $end - $start;
+    chomp @dir_listing;
+    #print(STDERR "Successful listing took $xfer_time second(s).\n");
+    
+    return @dir_listing;
 }
 
 ###
