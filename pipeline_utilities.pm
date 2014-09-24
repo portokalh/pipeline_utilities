@@ -74,6 +74,7 @@ execute_heart
 execute_indep_forks
 executeV2
 start_pipe_script
+load_engine_deps
 new_get_engine_dependencies
 make_list_of_files
 my_ls
@@ -883,50 +884,60 @@ sub file_over_ttl { # ( $path,$ttl )
 sub data_integrity {
 # -------------
 # calc checksum of file, and if file.md5 exists load and compare, else save file.md5.
-#if checksum file older than some n days,
+
     my ($file) = @_;
-    my $data_check=0; # init to bad data
+    my $data_check=0;
+
     my ($n,$p,$ext) = fileparts($file);
     my $checksumfile=$p.$n.".md5";
 
-    use Digest::MD5 qw(md5 md5_hex md5_base64); 
-    #open my $data_fid, "<", "$file" or croak "could not open $file";#croak "file <$file> not Text\n" unless -T $data_fid ;
-    open my $data_fid, "<", "$file" or die "could not open $file";#croak "file <$file> not Text\n" unless -T $data_fid ;
-    #print("open $file, will save to $checksumfile\n");
-    # path md5, save = path.md5 
-    my @md5;
+    my @md5 = (file_checksum($file));
     my @stored_md5;
-    my $md_calc=Digest::MD5->new ;
-    $md_calc->addfile($data_fid);
-    #@md5 = ($md_calc->b64digest);
-    #@md5 = ($md_calc->digest);
-    @md5 = ($md_calc->hexdigest);
-
     if ( ! -e $checksumfile ) { 
 	write_array_to_file($checksumfile,\@md5);
 	$data_check=1;
-
     } else {
-#		    $lines=load_file_to_array($FIFO_regfile,\@fifo_reg_path);
 	load_file_to_array($checksumfile,\@stored_md5);
 	if ( $stored_md5[0] eq $md5[0] ) { 
 	    $data_check=1;
-	    #print("GOOD! ($file)");	    
-	    #write_array_to_file($checksumfile,\@md5);
+	    #print("GOOD! ($file:$md5[0])\n");
 	} else {
-	    print ("BADCHECKSUM! ($file)") ;
+	    print ("BADCHECKSUM! $md5[0]($file)") ;
 	}
     }
-    
-
-    
     return $data_check;
 }
 # -------------
 sub file_checksum {
 # -------------
+    # run checksum on file and return checksum result.
+    my ($file) = @_;
+    use Digest::MD5 qw(md5 md5_hex md5_base64); 
+    open  my $data_fid, "<", "$file" or die "could not open $file";
+    #print("md5 calc on $file\n");
+    my $md_calc=Digest::MD5->new ;
+    $md_calc->addfile($data_fid);
+    #my $md5 = $md_calc->b64digest;
+    #my $md5 = $md_calc->digest;
+    my $md5 = $md_calc->hexdigest;
+    close $data_fid or warn "error on file close $file";
+    #print("md5:$md5\n");
+    return $md5;
+}
+
+
+# -------------
+sub static_data_update{
+# -------------
+    
+    #foreach local file, md5
+    #scp remote md5 to temp place
+    # compare.
+
+    
     return;
 }
+
 
 
 # -------------
@@ -1249,6 +1260,106 @@ return 1;
 }
 
 
+
+# ------------------
+sub load_engine_deps {
+# ------------------
+# load local engine_deps, OR load an arbitrary one, return the engine constants headfile
+    my ($engine) = @_;
+    #requried_values=engine==hostname -s
+    #$engine=thishost.
+    
+    my @errors;
+    my @warnings;
+    use Env qw(PIPELINE_HOSTNAME PIPELINE_HOME WKS_SETTINGS WORKSTATION_HOSTNAME);
+    
+
+    # alternate way to get the path to the engine constants file
+    #    if ( defined $WKS_SETTINGS) { $this_engine_constants_path = get_engine_constants_path($WKS_SETTINGS,$WORKSTATION_HOSTNAME); }
+
+    
+#    if (! defined($PIPELINE_HOSTNAME))       { push(@errors, "Environment variable WORKSTATION_HOSTNAME must be set."); }
+    
+    ### set the host
+    if  ( ! defined($WORKSTATION_HOSTNAME)) { 
+	print("WARNING: obsolete variable PIPELINE_HOSTNAME used.\n");
+	$WORKSTATION_HOSTNAME=$PIPELINE_HOSTNAME;
+    }
+    if ( defined($engine)) { $WORKSTATION_HOSTNAME=$engine; };
+    if (! defined($WORKSTATION_HOSTNAME)) { push(@warnings, "Environment variable WORKSTATION_HOSTNAME not set."); }
+    
+    ### set the dir
+    my $engine_constants_dir;
+    if ( ! defined($WKS_SETTINGS) ) { 
+	if (! -d $PIPELINE_HOME)             { push(@errors, "unable to find $PIPELINE_HOME"); }
+	print("WARNING: obsolete variable PIPELINE_HOME used to find dependenceis\n");
+	$WKS_SETTINGS=$PIPELINE_HOME;
+	$engine_constants_dir="$WKS_SETTINGS/dependencies";
+    } else { 
+      $engine_constants_dir="$WKS_SETTINGS/engine_deps";
+    }
+    
+    if (! -d $engine_constants_dir)      { push(@errors, "$engine_constants_dir does not exist."); }
+    
+    ### set the file name
+    my $engine_file =join("_","engine","$WORKSTATION_HOSTNAME","dependencies"); 
+    my $engine_constants_path = "$engine_constants_dir/".$engine_file;
+    if ( ! -f $engine_constants_path ) { 
+	$engine_file=join("_","engine","$WORKSTATION_HOSTNAME","pipeline_dependencies");
+	$engine_constants_path = "$engine_constants_dir/".$engine_file;
+	print("WARNING: OBSOLETE SETTINGS FILE USED, $engine_file\n")
+    }
+    
+    ### load engine_deps
+    my $engine_constants = new Headfile ('ro', $engine_constants_path);
+    if (! $engine_constants->check()) {
+	push(@errors, "Unable to open engine constants file $engine_constants_path\n");
+    }
+    if (! $engine_constants->read_headfile) {
+	push(@errors, "Unable to read engine constants from headfile form file $engine_constants_path\n");
+    }
+    
+    return $engine_constants;
+}
+
+# ------------------
+sub make_process_dirs {
+# ------------------
+    my ( $identifier) =@_;
+
+    use Env qw(BIGGUS_DISKUS);
+    my @errors;
+    if (! defined($BIGGUS_DISKUS))       { push(@errors, "Environment variable BIGGUS_DISKUS must be set."); }
+    if (! -d $BIGGUS_DISKUS)             { push(@errors, "unable to find disk location: $BIGGUS_DISKUS"); }
+    if (! -w $BIGGUS_DISKUS)             { push(@errors, "unable to write to disk location: $BIGGUS_DISKUS"); }
+
+    my @dirs;
+    foreach ( qw/inputs work results/ ){
+	push(@dirs,"$BIGGUS_DISKUS/$identifier\-$_"); }
+    foreach (@dirs ){
+	if (! -d ){
+	    mkdir( $_,0777) or push(@errors,"couldnt create dir $_");}}
+    
+
+#   if (! -e $local_work_dir) {
+#     mkdir $local_work_dir;
+#   }
+#   if (! -e $local_result_dir) {
+#     mkdir $local_result_dir;
+#   }
+    
+    if ( $#errors >= 0 ) { 
+	error_out(join(", ",@errors));
+    }
+    
+    my $local_input_dir = "$BIGGUS_DISKUS/$identifier\-inputs"; # may not exist yet
+    my $local_work_dir  = "$BIGGUS_DISKUS/$identifier\-work";
+    my $local_result_dir  = "$BIGGUS_DISKUS/$identifier\-results";
+    my $result_headfile = "$local_result_dir/$identifier\.headfile"; 
+    return ($local_input_dir, $local_work_dir, $local_result_dir, $result_headfile);
+
+}
+
 # ------------------
 sub new_get_engine_dependencies {
 # ------------------
@@ -1256,9 +1367,10 @@ sub new_get_engine_dependencies {
 # error checks required values passed in addition to the standard required things.
   my ($identifier,@required_values) = @_;
 
+  my @errors;
 
   use Env qw(PIPELINE_HOSTNAME PIPELINE_HOME BIGGUS_DISKUS WKS_SETTINGS WORKSTATION_HOSTNAME);
-  my @errors;
+
 
   if (! defined($BIGGUS_DISKUS))       { push(@errors, "Environment variable BIGGUS_DISKUS must be set."); }
   if (! -d $BIGGUS_DISKUS)             { push(@errors, "unable to find disk location: $BIGGUS_DISKUS"); }
@@ -1278,6 +1390,7 @@ sub new_get_engine_dependencies {
   } else { 
       $engine_constants_dir="$WKS_SETTINGS/engine_deps";
   }
+
   if (! -d $engine_constants_dir)      { push(@errors, "$engine_constants_dir does not exist."); }
 
   my $engine_file =join("_","engine","$WORKSTATION_HOSTNAME","dependencies"); 
