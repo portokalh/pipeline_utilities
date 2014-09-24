@@ -47,10 +47,13 @@ if ( $#list < 0  ) {
 
 #print($EC->get_value("engine_data_directory")."\n");
 my @atlas_dir_contents=make_list_of_files($EC->get_value("engine_data_directory")."/atlas","[^.]+");
+push(@list,make_list_of_files($EC->get_value("engine_data_directory")."/atlas",$file_pat));
 my @dirs_to_check=();
 for(my $fn=0;$fn<=$#atlas_dir_contents;$fn++){
     if ( -d $EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn] ) {
 	push(@dirs_to_check,$EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn]);
+    } else {
+	print("not dir $atlas_dir_contents[$fn]\n");
     }
 }
 print(join(" ",@dirs_to_check)."\n");
