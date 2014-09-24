@@ -31,10 +31,11 @@ require apply_coil_bias_to_all;
 require apply_noise_reduction_to_all;
 
 
-my $file_pat=".*\.nii.*";
+my $file_pat=".*\.nii(?:[.].*)?";
 
 #  my ($identifier,@required_values) = @_;#runno
-my ($local_input_dir, $local_work_dir, $local_result_dir, $result_headfile, $EC)=new_get_engine_dependencies('PU_TEST',());
+#my ($local_input_dir, $local_work_dir, $local_result_dir, $result_headfile, $EC)=new_get_engine_dependencies('PU_TEST',());
+my $EC      =load_engine_deps();
 #my @runs = ('/Users/BiGDATADUMP/14.gaj.33/S65177.nii','/Users/BiGDATADUMP/14.gaj.33/S65180.nii','/Users/BiGDATADUMP/14.gaj.33/S65183.nii');
 
 my @list=make_list_of_files($EC->get_value('engine_waxholm_canonical_images_dir'),$file_pat);
@@ -45,9 +46,12 @@ if ( $#list < 0  ) {
 }
 
 #print($EC->get_value("engine_data_directory")."\n");
-my @dirs_to_check=make_list_of_files($EC->get_value("engine_data_directory")."/atlas","[^.]+");
-for(my $fn=0;$fn<=$#dirs_to_check;$fn++){
-    $dirs_to_check[$fn]=$EC->get_value("engine_data_directory")."/atlas".'/'.$dirs_to_check[$fn];
+my @atlas_dir_contents=make_list_of_files($EC->get_value("engine_data_directory")."/atlas","[^.]+");
+my @dirs_to_check=();
+for(my $fn=0;$fn<=$#atlas_dir_contents;$fn++){
+    if ( -d $EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn] ) {
+	push(@dirs_to_check,$EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn]);
+    }
 }
 print(join(" ",@dirs_to_check)."\n");
 #print($#dirs_to_check."\n");
