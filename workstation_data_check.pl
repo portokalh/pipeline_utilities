@@ -37,23 +37,27 @@ my $file_pat=".*\.nii(?:[.].*)?";
 #my ($local_input_dir, $local_work_dir, $local_result_dir, $result_headfile, $EC)=new_get_engine_dependencies('PU_TEST',());
 my $EC      =load_engine_deps();
 #my @runs = ('/Users/BiGDATADUMP/14.gaj.33/S65177.nii','/Users/BiGDATADUMP/14.gaj.33/S65180.nii','/Users/BiGDATADUMP/14.gaj.33/S65183.nii');
-
-my @list=make_list_of_files($EC->get_value('engine_waxholm_canonical_images_dir'),$file_pat);
-push(@list,make_list_of_files($EC->get_value('engine_waxholm_labels_dir'),$file_pat));
+my @list=();
+my @canon_images=make_list_of_files($EC->get_value('engine_waxholm_canonical_images_dir'),$file_pat);
+foreach (@canon_images){push(@list,$EC->get_value('engine_waxholm_canonical_images_dir')."/$_"); }
+my @canon_labels=make_list_of_files($EC->get_value('engine_waxholm_labels_dir'),$file_pat);
+foreach (@canon_labels){push(@list,$EC->get_value('engine_waxholm_labels_dir')."/$_"); }
 
 if ( $#list < 0  ) {
     print("Dir empty:".$EC->get_value('engine_waxholm_canonical_images_dir')." and ".$EC->get_value('engine_waxholm_canonical_images_dir').".\n");
 }
 
 #print($EC->get_value("engine_data_directory")."\n");
+
+
+foreach (make_list_of_files($EC->get_value("engine_data_directory")."/atlas",$file_pat) ) { push(@list,$EC->get_value("engine_data_directory")."/atlas/$_"); }
+
 my @atlas_dir_contents=make_list_of_files($EC->get_value("engine_data_directory")."/atlas","[^.]+");
-push(@list,make_list_of_files($EC->get_value("engine_data_directory")."/atlas",$file_pat));
 my @dirs_to_check=();
 for(my $fn=0;$fn<=$#atlas_dir_contents;$fn++){
     if ( -d $EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn] ) {
 	push(@dirs_to_check,$EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn]);
     } else {
-	print("not dir $atlas_dir_contents[$fn]\n");
     }
 }
 print(join(" ",@dirs_to_check)."\n");
@@ -63,12 +67,10 @@ push(@dirs_to_check,@ARGV);
 while($#dirs_to_check>=0 ) { 
     my $t_dir=shift @dirs_to_check;
     print("Adding contents of dir $t_dir\n");
-    my @filepaths=make_list_of_files($t_dir,$file_pat);
-    
-    for(my $fn=0;$fn<=$#filepaths;$fn++){
-	$filepaths[$fn]=$t_dir.'/'.$filepaths[$fn];
+    my @filenames=make_list_of_files($t_dir,$file_pat);
+    for(my $fn=0;$fn<=$#filenames;$fn++){
+	push(@list,$t_dir.'/'.$filenames[$fn]);
     }
-    push(@list,@filepaths);
 }
 
 if ( $#list < 0  ) {
