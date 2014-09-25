@@ -177,7 +177,7 @@ for my $remote_data_file (@list ) {
 	    if ( ! -d dirname($local_data_dir.$rel_path) ) {
 		mkdir(dirname($local_data_dir.$rel_path),0777) or die("Local atlas dir missing for ".dirname($local_data_dir.$rel_path)."and could not be created\n");
 	    }
-	    print("copying:$remote_data_file\n");
+	    print("copying:$rel_path to $local_data_dir\n");
    		#ssh_call::get_file($data_EC->get_vlaau
 	    
 	    if ( ! -f $local_data_dir.$rel_path ) {
