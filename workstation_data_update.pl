@@ -20,6 +20,7 @@ if (! defined($RADISH_PERL_LIB)) {
 }
 
 use lib split(':',$RADISH_PERL_LIB);
+use List::MoreUtils qw/uniq/;
 
 require pipeline_utilities ;
 require Headfile;
@@ -95,11 +96,12 @@ while($#dirs_to_check>=0 ) {
 #     }
     push(@list,@filepaths);
 }
-
+@list=uniq(@list);
 if ( $#list < 0  ) {
     print("All dirs empty\n"); 
 } else {
-    print(join(" ",@list)."\n");
+    #print(join(" ",@list)."\n");
+    print("".($#list+1)." entries found on remote\n");
 }
     
 
@@ -175,7 +177,7 @@ for my $remote_data_file (@list ) {
 	    if ( ! -d dirname($local_data_dir.$rel_path) ) {
 		mkdir(dirname($local_data_dir.$rel_path),0777) or die("Local atlas dir missing for ".dirname($local_data_dir.$rel_path)."and could not be created\n");
 	    }
-	    print("file should be copied:$remote_data_file\n");
+	    print("copying:$remote_data_file\n");
    		#ssh_call::get_file($data_EC->get_vlaau
 	    
 	    if ( ! -f $local_data_dir.$rel_path ) {
