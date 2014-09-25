@@ -94,7 +94,7 @@ sub get_file {
 	    while (<$CMD_FID>){
 		print if $verbose>0;
 	    }
-	    close ($CMD_FID) or warn "command close failure";
+	    close ($CMD_FID) or print "command close failure\n" and return 0;
 	} else {
 	    return 0; 
 	}
