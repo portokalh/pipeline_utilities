@@ -184,7 +184,7 @@ for my $remote_data_file (@list ) {
 		ssh_call::get_file($data_EC->get_value("engine"),$remote_data_dir.$rel_path,'',dirname($local_data_dir.$rel_path),0);
 		ssh_call::get_file($data_EC->get_value("engine"),$remote_data_dir.$rel_md5,'',dirname($local_data_dir.$rel_md5),-1);
 	    } else {
-		error("Local file was not preserved!(code bug), NOT OVERWRITING\n");
+		warn("Local file was not preserved!(code bug), NOT OVERWRITING\n");
 	    }
 	}
 	
