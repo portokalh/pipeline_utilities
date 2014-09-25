@@ -26,7 +26,9 @@ require Headfile;
 require ssh_call;
 use civm_simple_util qw(get_engine_hosts);
 
-my $file_pat=".*\.nii.*";
+#my $file_pat=".*\.nii.*\$";
+#my $file_pat=".*\.nii(?:\.gz)?\$"; #check used in data_check
+my $file_pat=".*\.nii(\.gz)?\$"; 
 my $lead_data_system="crete";#take this in via variable?
 my @eng_hosts=get_engine_hosts($WKS_SETTINGS);
 my $EC      =load_engine_deps();
@@ -129,36 +131,59 @@ for my $remote_data_file (@list ) {
 	unlink $in.$rel_md5 or warn("Coudlnt remove last copy of md5 file.\n"); }
     my $skip_file=0;
 #  get_file ($system, $source_dir, $file, $local_dest_dir);
-    ssh_call::get_file($data_EC->get_value("engine"),$data_EC->get_value("engine_data_directory").$rel_md5,'',$fp,1) or $skip_file=1;
+    ssh_call::get_file($data_EC->get_value("engine"),$remote_data_dir.$rel_md5,'',$fp,-1) or $skip_file=1;
     
-
+    my $cp_file=0;
     if ( ! $skip_file) {
 	my @remote_md5;
 	load_file_to_array($in.$rel_md5,\@remote_md5);
 	# integrity check local file if exist.
-	my $integrity=data_integrity($local_data_dir.$rel_path);
-	my @local_md5;
-	if ( $integrity ) {
-	    # in integrity same, check against remote.	
-	    load_file_to_array($local_data_dir.$rel_md5,\@local_md5);
-	    if ( $remote_md5[0] eq $local_md5[0]) {
-	    #no work
-		print("$local_data_dir$rel_path is same as remote.\n");
-	    } else {
-		# if different from remote, move to file.date.ext and file.date.md5, scp remote to local.
-		#my $last_mod_time = (stat ($file))[9];
-		my $last_mod_time = (stat ($local_data_dir.$rel_path))[9];
-		#my $epoch_timestamp = (stat($fh))[9];
-		print("Last mod was $last_mod_time\n");
-		my ($l_p,$l_n,$l_e)=fileparts($local_data_dir.$rel_path);
-		#rename($local_data_dir.$rel_path,$l_p.$last_mod_time.$l_e);
-		#($l_p,$l_n,$l_e)=fileparts($local_data_dir.$rel_md5);
-		#rename($local_data_dir.$rel_path,$l_p.$last_mod_time.$l_e);
-		#ssh_call::get_file($data_EC->get_vlaau
+	if ( -f $local_data_dir.$rel_path) {
+	    my $integrity=data_integrity($local_data_dir.$rel_path);
+	    my @local_md5;
+	    if ( $integrity ) {
+		# in integrity same, check against remote.	
+		load_file_to_array($local_data_dir.$rel_md5,\@local_md5);
+		if ( $remote_md5[0] eq $local_md5[0]) {
+		    #no work
+		    print("$local_data_dir$rel_path is same as remote.\n");
+		} else {
+		    # if different from remote, move to file.date.ext and file.date.md5, scp remote to local.
+		    #my $last_mod_time = (stat ($file))[9];
+		    #my $epoch_timestamp = (stat($fh))[9];
+		    my $last_mod_time = strftime("%F_%X", localtime((stat ($local_data_dir.$rel_path))[9]));
+		    $last_mod_time =~ s/://gx;
+		    print("Last mod was $last_mod_time\n");
+		    my ($l_p,$l_n,$l_e)=fileparts($local_data_dir.$rel_path);
+		    
+		    rename($local_data_dir.$rel_path,$l_p.$last_mod_time.$l_e);
+		    ($l_p,$l_n,$l_e)=fileparts($local_data_dir.$rel_md5);
+		    rename($local_data_dir.$rel_path,$l_p.$last_mod_time.$l_e);
+		    $cp_file=1
+		}
+	    } else { 
+		# if integrity change warning
+		warn("local file lost integrity.");
 	    }
-	} else { 
-	# if integrity change warning
-	    warn("local file lost integrity.");
+	} else {
+	    $cp_file=1;
+	}
+
+
+	if ( $cp_file ) {
+	    
+	    if ( ! -d dirname($local_data_dir.$rel_path) ) {
+		mkdir(dirname($local_data_dir.$rel_path),0777) or die("Local atlas dir missing for ".dirname($local_data_dir.$rel_path)."and could not be created\n");
+	    }
+	    print("file should be copied:$remote_data_file\n");
+   		#ssh_call::get_file($data_EC->get_vlaau
+	    
+	    if ( ! -f $local_data_dir.$rel_path ) {
+		ssh_call::get_file($data_EC->get_value("engine"),$remote_data_dir.$rel_path,'',dirname($local_data_dir.$rel_path),0);
+		ssh_call::get_file($data_EC->get_value("engine"),$remote_data_dir.$rel_md5,'',dirname($local_data_dir.$rel_md5),-1);
+	    } else {
+		error("Local file was not preserved!(code bug), NOT OVERWRITING\n");
+	    }
 	}
 	
 	
@@ -168,7 +193,7 @@ for my $remote_data_file (@list ) {
 	#if ( ! $exit_code ) {
 	#print("Test, checksum of file $file\n");
     } else {
-	warn("cannot data check $rel_path\n");
+	warn("cannot data check $rel_path it did not have an md5 on source.\n");
     }
     
 
