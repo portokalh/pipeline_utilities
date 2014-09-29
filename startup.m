@@ -55,6 +55,7 @@ genpaths={
     [ workstation_home '/recon/mat_recon_pipe/filter' ]
     [ workstation_home '/recon/mat_recon_pipe/grid' ]
     [ workstation_home '/recon/External/grid/mri_unbound']
+    [ workstation_home '/../stuent_matlab/']
     };
 
 for p=1:length(old_paths)
@@ -99,7 +100,7 @@ if display
 end
 patharray=strsplit(path,':');
 for p=length(patharray):-1:1
-    if regexpi(patharray{p},'.*\.svn')
+    if ( regexpi(patharray{p},'.*\.svn') or regexpi(patharray{p},'.*\.git') )
         %         fprintf('\t%s\n',patharray{i});
         rmpath(patharray{p});
     end
