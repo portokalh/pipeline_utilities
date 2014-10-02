@@ -48,14 +48,15 @@ paths={
     [ workstation_home '/analysis/volume_measurements/' ]
     [ workstation_home '/recon/legacy/t2w_slg_dir/mfiles' ]
     };
+% we put student matlab first so it can be overridden by "pipeline" functions
 genpaths={
+    [ workstation_home '/../student_matlab/']
     [ workstation_home '/recon/DCE' ]
     [ workstation_home '/shared/mathworks']
     [ workstation_home '/shared/matlab_img_processing']
     [ workstation_home '/recon/mat_recon_pipe/filter' ]
     [ workstation_home '/recon/mat_recon_pipe/grid' ]
     [ workstation_home '/recon/External/grid/mri_unbound']
-    [ workstation_home '/../stuent_matlab/']
     };
 
 for p=1:length(old_paths)
@@ -100,7 +101,11 @@ if display
 end
 patharray=strsplit(path,':');
 for p=length(patharray):-1:1
-    if ( regexpi(patharray{p},'.*\.svn') or regexpi(patharray{p},'.*\.git') )
+    if regexpi(patharray{p},'.*\.svn')
+        %         fprintf('\t%s\n',patharray{i});
+        rmpath(patharray{p});
+    end
+    if regexpi(patharray{p},'.*\.git')
         %         fprintf('\t%s\n',patharray{i});
         rmpath(patharray{p});
     end
