@@ -52,7 +52,7 @@ sub apply_coil_bias {
     print( "Setting HF Keys\n") if ( $debug_val>=10);
     $Hf_out->set_value("${hf_nii_id}-coil-bias-input-nii-path",$in_nii);
     $Hf_out->set_value("${hf_nii_id}-coil-bias-applied","true");
-    $Hf_out->set_value("${hf_nii_id}-nii-file",$name);
+    $Hf_out->set_value("${hf_nii_id}-nii-file",$name.$extension);
     $Hf_out->set_value("${hf_nii_id}-nii-path",$out_nii);
     $Hf_out->set_value("${hf_nii_id}-${suffix}-field-path",$out_field);
     print("\t". join ("\n\t",("${hf_nii_id}-coil-bias-input-nii-path".$Hf_out->get_value("${hf_nii_id}-coil-bias-input-nii-path"),

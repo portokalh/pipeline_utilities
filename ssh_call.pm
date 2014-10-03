@@ -10,6 +10,7 @@ package ssh_call;
 # Sally Gewalt civm 2/15/2007
 use strict;
 use warnings;
+use File::Basename;
 my $DEBUG = 1;
 
 sub works {
@@ -35,30 +36,107 @@ sub works {
 }
 
 sub get_file {
-    my ($system, $source_dir, $file, $local_dest_dir)  =@_;
+    my ($system, $source_dir, $file, $local_dest_dir,$verbose)  =@_;
     
     my $date = `ssh -Y $system date`;
     chop ($date);
-    my $src = "$system:$source_dir/$file";
-    use File::Basename;
-    my $dest  = "$local_dest_dir/".basename($file);
+    my $src = "$system:$source_dir";
+    my $dest  = "$local_dest_dir";
+    if ( !defined $verbose) { 
+	$verbose=1;
+    }
+    if ( $file ne "" ) {
+	$src="$src/$file"; 
+	$dest="$dest/".basename($file);
+    } #allow empty file, in case we have the full path in our sourcedir
+
     my @args  = ("scp", $src, $dest);
     my $cmd=join(" ",@args);
-    print STDERR "   Beginning ".$cmd." at $date...\n";#    print STDERR "Beginning scp of $src at $date...";
+    print STDERR "   Beginning ".$cmd." at $date...\n" if $verbose>0;#    print STDERR "Beginning scp of $src at $date...";
     my $start = time;
-    my $rc    = system ($cmd);
-    my $msg   = $?;
+
+#         my $pid = open(PH, "$c 3>&1 1>&2 2>&3 3>&-|");
+#         while (<PH>) {
+#            $something_on_stderr = 1;
+#            print "Executed command sent this message to STDERR: $_\n";
+#            if (/Exception thrown/) {  # checks $_
+#               print "  Execute recognized this ANTS error msg: $_\n";
+#            }
+#         }   
+    if ( 0 ) {
+	my $rc    = system ($cmd);#i think i want to conver this to an open | and while.
+	    my $msg   = $?;
+	if ($rc != 0 && $verbose>0) {
+	    print STDERR "\n  * Remote copy failed: @args\n";
+	    print STDERR "  * Couldn't copy file $src\n";
+	    print STDERR "  * to $dest.\n";
+	}
+	if ($rc != 0) {
+	    return 0;
+	}
+	
+    } elsif ( 0 ) {    
+	my $pid = open (my $CMD_FID,"$cmd 3>&1 1>&2 2>&3 3>&-|");
+	#my $pid = open(CMD_FID, "$c 3>&1 1>&2 2>&3 3>&-|");
+	my $something_on_stderr;
+	while (<CMD_FID>) {
+	    $something_on_stderr = 1;
+	    print "Executed command sent this message to STDERR: $_\n";
+	    if (/Exception thrown/) {  # checks $_
+		print "  Execute recognized this ANTS error msg: $_\n";
+	    }
+	}   
+    } elsif ( 1 ) {
+	
+	my $pid = open (my $CMD_FID,"$cmd 2>&1 |");
+	if ( defined $pid) {
+	    #print("PID$pid\n");
+	    while (<$CMD_FID>){
+		print if $verbose>0;
+	    }
+	    close ($CMD_FID) or print "command close failure\n" and return 0;
+	} else {
+	    return 0; 
+	}
+	#print("CMDEND\n");
+    }
     my $end   = time;
     my $xfer_time = $end - $start;
 
-    if ($rc != 0) {
-       print STDERR "\n  * Remote copy failed: @args\n";
-       print STDERR "  * Couldn't copy file $src\n";
-       print STDERR "  * to $dest.\n";
-       return 0;
-    }
+
     print STDERR "Successful scp took $xfer_time second(s).\n" if $xfer_time > 5;
     return 1;
+}
+
+###
+# get_dir_listing sys, source, pattern
+###
+sub get_dir_listing {
+    my ($system, $source_dir, $pattern)  =@_;
+    my $date  = `ssh -Y $system date`;
+    chop ($date);
+    my $src   = "$system";
+    my $cmd = "\"find -E $source_dir -iregex \'$pattern\'\"";
+    #my $cmd = "ls -A $source_dir | grep -E -iregex \"$pattern\"";
+    my @args;
+    unshift(@args,"ssh");# put scp(our program name) on beginning of arglist
+    push(@args,$src);   # put our src at the end of the arglist
+    push(@args,$cmd); # put ls command at end of the arglist
+    #@args = ("scp", $src, $dest);
+    my $start = time;
+    #print STDERR "   Beginning ".join(" ",@args)." at $date...\n";
+    my @dir_listing=qx/@args/; #or 
+#  	( print STDERR 
+# 	  "  * Remote listing failed: ".join(" ",@args)."\n",
+# 	  "  * Couldn't find files at $source_dir\n",
+# 	  "  * with pattern $pattern.\n" and return 0); 
+    my $msg   = $?;
+    my $end   = time;
+    my $xfer_time = $end - $start;
+    chomp @dir_listing;
+    #print(STDERR "Successful listing took $xfer_time second(s).\n");
+    
+    return @dir_listing;
 }
 
 ###
