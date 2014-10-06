@@ -11,24 +11,27 @@ package ssh_call;
 use strict;
 use warnings;
 use File::Basename;
-my $DEBUG = 1;
+#my $DEBUG = 1;
 
 sub works {
 # is ssh working at all?
 
 
-  my ($remote_system) = @_;
-
+  my ($remote_system,$DEBUG) = @_;
+  if(! defined($DEBUG) ){
+      $DEBUG=1;
+  }
     #print STDERR "trying ssh_call::works(): ssh $remote_system date\n" if $DEBUG; 
-    my $date = `ssh -Y -o PasswordAuthentication=false $remote_system date`;
+  #my $date = `ssh -Y -o PasswordAuthentication=false $remote_system date`;
+  #my $date = `ssh -qY -o BatchMode=true $remote_system date`;
+    my $date = `ssh -qY -o BatchMode=yes -o ConnectionAttempts=1 -o ConnectTimeout=1 -o IdentitiesOnly=yes -o NumberOfPasswordPrompts=0 -o PasswordAuthentication=no $remote_system date`;
 
     if ($date eq "") {
-       print STDERR "  Problem:\n";
-       print STDERR "  * Unable to remotely access system $remote_system.\n";
-       print STDERR "  * Remote system must allow ssh, scp.  User omega should have permissions.\n
-";
-       my $who = `whoami`;
-       print STDERR "  * You are running this script as: $who\n";
+       print STDERR "  Problem:\n" if($DEBUG>=0); 
+       print STDERR "  * Unable to remotely access system $remote_system.\n" if($DEBUG>=0);
+       print STDERR "  * Remote system must allow ssh, scp.  User omega should have permissions.\n" if($DEBUG>=0);
+       my $who = `whoami` if($DEBUG>=0);
+       print STDERR "  * You are running this script as: $who\n" if($DEBUG>=0);
 
        return 0;
     }
