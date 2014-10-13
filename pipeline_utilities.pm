@@ -1005,9 +1005,12 @@ sub execute {
     my $rc;
     my $i = 0;
     my $ret;
+    #my $hostynamey=`hostname -s`;
+    #pchomp($hostynamey);
     foreach my $c (@commands) {
 	$i++;
-	if (`hostname -s`eq "civmcluster1") { # fixme: this will need to be generalized for any given cluster name(BJA)
+	if (`hostname -s` =~ /civmcluster1/ ) {
+	    #if ($hostynamey eq  "civmcluster1") { # fixme: this will need to be generalized for any given cluster name(BJA
 	    # For running Matlab, run on Master Node for now until we figure out how to handle the license issue. Otherwise, run with SLURM
 	    if ($c =~ /matlab/) {
 		$c = $c;
@@ -1017,9 +1020,11 @@ sub execute {
 		} else {
 		    $c = "srun ".$c;
 		}
+		print("SLURM MODE ENGAGED\n");
 	    }
 	} else {
 	    $c = $c;
+	    #print("SLURM MODE DISABLED:$hostynamey\n");
 	}
 
 	    
