@@ -1011,6 +1011,7 @@ sub execute {
 	$i++;
 	if (`hostname -s` =~ /civmcluster1/ ) {
 	    #if ($hostynamey eq  "civmcluster1") { # fixme: this will need to be generalized for any given cluster name(BJA
+
 	    # For running Matlab, run on Master Node for now until we figure out how to handle the license issue. Otherwise, run with SLURM
 	    if ($c =~ /matlab/) {
 		$c = $c;
