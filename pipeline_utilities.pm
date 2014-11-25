@@ -28,7 +28,21 @@ use POSIX;
 use strict;
 use warnings;
 use English;
+use Carp;
 #use seg_pipe;
+
+
+#scrapped from xml reader slicer_read_xml thingy... 
+#use lib ".";
+#use PDL;
+#use PDL::NiceSLice;
+#use FindBin;
+#use lib $FindBin::Bin;
+#use XML::Parser;
+use XML::Rules;
+#use LWP::Simple;
+
+
 
 use vars qw($HfResult $BADEXIT $GOODEXIT);
 my $PM="pipeline_utilities";
@@ -79,12 +93,18 @@ new_get_engine_dependencies
 make_list_of_files
 my_ls
 writeTextFile
+xml_read
+mrml_find_by_id
+mrml_find_by_name
+mrml_attr_search
+mrml_node_diff
 remove_dot_suffix
 depath_annot
 depath
 defile
 fileparts
 funct_obsolete
+
 ); 
 }
 
@@ -1427,7 +1447,7 @@ sub new_get_engine_dependencies {
   }
   my $local_input_dir = "$BIGGUS_DISKUS/$identifier\-inputs"; # may not exist yet
   my $local_work_dir  = "$BIGGUS_DISKUS/$identifier\-work";
-  my $local_result_dir  = "$BIGGUS_DISKUS/$identifier\-results";
+  my $local_result_dir= "$BIGGUS_DISKUS/$identifier\-results";
 
 #   if (! -e $local_work_dir) {
 #     mkdir $local_work_dir;
@@ -1509,6 +1529,827 @@ sub writeTextFile {
   if (! -e $filepath) { return 0; }
   else { return 1; }  # OK
 }
+
+# -------------
+sub xml_read {
+# -------------
+    my ($xml_file,$options)=@_;
+
+    if ( 1 ) {
+	#my $rules = XML::Rules::inferRulesFromExample( <xml_example> ); 
+	# replace basename of file? grab all xml files there? ! 
+	my $rules = XML::Rules::inferRulesFromExample( $xml_file );# could pass many xml files here to form rules, might be good to grab all xml's we know about.
+	#print Data::Dump::dump( $rules );# dump not found :(
+	# now refine the rules skeleton
+	my $parser = XML::Rules->new( rules => $rules );
+	my $data = $parser->parsefile( $xml_file );
+	
+	if($options =~ /giveparser/) {
+	    return($data,$parser);
+	} else {
+	    return($data);
+	}
+	
+    } elsif(0) {
+	
+	#my $parser = XML::Rules->new( %{XML::Rules::inferRulesFromExample( $xml_file )} );
+	#my $data = $parser->parsefile( $xml_file );
+	#return $data;
+    } else {
+    my $parser = XML::Rules->new(
+	stripspaces =>7,
+	rules => { 
+	    Slice => sub {
+		my ($tag,$atts)=@_;
+		return;
+	    },
+	    'INFO,CHATTER' => 'pass',
+	}
+	);
+    my $data=$parser->parsefile($xml_file);
+    return ($data,\$parser);
+    }
+}
+
+sub xml_to_string {
+    my ( $xml_ref,$xml_file,$outpath) = @_;
+	my $rules = XML::Rules::inferRulesFromExample( $xml_file );# could pass many xml files here to form rules, might be good to grab all xml's we know about.
+    my $parser = XML::Rules->new( rules => $rules );
+    my $xml=$parser->ToXML('',$xml_ref);
+    my $sucess=0;
+    return $xml;
+}
+
+####
+# mrml support should be in its own pm, we're just stuffing it here for brevity right now. 
+###
+# mrml, xml structure as loaded is a hash of arrays of hashes of scalars. For sanity we could convert this to a hash of hashes of scalars.
+# current strucutre has one element per MRML tag in the primary hash. each element found adds a new element to the array for that element.
+# could change structure to more directly represent the mrml structure using a hash of mrml nodes, with a hash of values per node.
+
+# 
+sub mrml_find_by_id {
+# 
+# find the mrml node in the loaded xml tree by id
+# get a reference to the mrml hash, given specific name, and optionally given a type.
+    my ($mrml_tree,$value,$type)=@_;
+    my @arr=mrml_attr_search($mrml_tree,"id",$value,$type);
+    #my @arr=@{$a_ref};
+    if ($#arr<0){
+	@arr=mrml_attr_search($mrml_tree,"id",$value,$type."Node");
+    }
+    return @arr;
+}
+# 
+sub mrml_find_by_name {
+# 
+# get a reference to the mrml hash, given specific name, and optionally given a type.
+    my ($mrml_tree,$value,$type)=@_;
+    #ref to mrml tree.
+
+#     if(defined $mrml_tree) {
+# 	print("mrlm_tree:".ref($mrml_tree)."\n");
+#     }
+#     if(defined $value) {
+# 	print("id:".ref($value)."\n");
+#     }
+#     #ref to mrml tree.
+#     if(defined $type) {
+# 	print("type:".ref($type)."\n");
+#     }
+    return mrml_attr_search($mrml_tree,"name",$value,$type);
+}
+
+# 
+sub mrml_attr_search {
+# 
+# find the mrml node in the loaded xml tree by id
+    my ($mrml_tree,$attr,$value,$type)=@_;
+    #ref to mrml tree. when 
+    #$mrml_tree->{"MRML"};
+    my @mrml_types;
+    my @refs;
+    die unless ( defined $attr);# print("attr undef") 
+
+    if ( defined $mrml_tree->{"MRML"} && keys %{$mrml_tree} <=1  ) {
+	$mrml_tree=$mrml_tree->{"MRML"};
+    }
+    if ( ! defined $type ) { 
+	@mrml_types=keys %{$mrml_tree};
+    } else {
+	push(@mrml_types,$type);
+    }
+    for $type (@mrml_types) {
+	my $a_ref=ref($mrml_tree->{$type});
+	my @hash_array;
+	if ( $a_ref eq 'ARRAY') {
+	     @hash_array=@{$mrml_tree->{$type}};
+	} else{ 
+	    print("$type Singleton.\n") if ($debug_val>=95);
+	    push(@hash_array,$a_ref);
+	}
+	#for( my $ha_i=0; $ha_i<$#{$mrml_tree->{$type}};$ha_i++ ){#when all arrays this works, but some are not so we trick this by makeing those cases arrays also.
+	for( my $ha_i=0; $ha_i<$#hash_array;$ha_i++ ){
+	    #foreach my $ref (@hash_array) {
+	    my $ref=$hash_array[$ha_i];# this is just to simplify reading the code.
+	    if ( defined $ref->{$attr}) {
+		if ( $ref->{$attr} =~ /$value/x) { 
+		    #print($ref." ".$ref->{$attr}."\n");
+		    #push(@refs,${$mrml_tree->{$type}}[$ha_i]);#when all ar arrays this works, but some are not. 
+		    push(@refs,$hash_array[$ha_i]);
+		    
+ 		} 
+ 	    }
+	    
+	}
+
+    }
+    my $count=$#refs+1;
+    print("got ".$count." match(es)\n")if ($debug_val>=50);;
+    return @refs; #ref to mrml tree.
+}
+sub mrml_clear_nodes { 
+    my ($mrml_tree,@saved_types)=@_;
+
+    my @mrml_types;
+    my @refs;
+
+    if ( defined $mrml_tree->{"MRML"} && keys %{$mrml_tree} <=1  ) {
+	$mrml_tree=$mrml_tree->{"MRML"};
+    }
+
+    my $node_match="(".join("|",@saved_types).")";
+    @mrml_types=keys %{$mrml_tree};
+    for my $type (@mrml_types) {# for each type of mrml_node
+	my $a_ref=ref($mrml_tree->{$type});
+	my @hash_array;
+	if ($type !~ /^$node_match$/x ){
+	    delete $mrml_tree->{$type};
+	}
+
+# 	if ( $a_ref eq 'ARRAY') {
+# 	     @hash_array=@{$mrml_tree->{$type}};
+# 	} else{ 
+# 	    print("$type Singleton.\n") if ($debug_val>=95);
+# 	    push(@hash_array,$a_ref);
+# 	}
+# 	#for( my $ha_i=0; $ha_i<$#{$mrml_tree->{$type}};$ha_i++ ){#when all arrays this works, but some are not so we trick this by makeing those cases arrays also.
+# 	for( my $ha_i=0; $ha_i<$#hash_array;$ha_i++ ){
+# 	    #foreach my $ref (@hash_array) {
+# 	    my $ref=$hash_array[$ha_i];# this is just to simplify reading the code.
+# 	    if ( defined $ref->{$attr}) {
+# 		if ( $ref->{$attr} =~ /$id/x) { 
+# 		    #print($ref." ".$ref->{$attr}."\n");
+# 		    #push(@refs,${$mrml_tree->{$type}}[$ha_i]);#when all ar arrays this works, but some are not. 
+# 		    push(@refs,$hash_array[$ha_i]);
+		    
+#  		} 
+#  	    }
+    }
+    return; 
+}
+
+sub mrml_find_attrs {
+# returns matching values for array of regular expressions
+# values returned in a hash of arrays. with one hash element per referenc found.
+    my ( $mrml_ref1,@attrs) =@_;
+    if ( ref($mrml_ref1) eq "HASH") {
+	
+    }
+    my @mrml_keys=keys %{$mrml_ref1};
+    my %mrml_attrs=();
+    my $regex=join('|',@attrs);
+    
+    for my $attr (@mrml_keys) {
+	
+	#print("check $attr\n");
+	if ($attr=~ /($regex)/ ) {
+	    if ( ! defined( $mrml_attrs{$attr} ) ) { 
+		$mrml_attrs{$attr}=();
+	    }
+	    push(@{$mrml_attrs{$attr}},$mrml_ref1->{$attr});
+	}
+    }
+    return \%mrml_attrs;
+}
+
+sub mrml_get_refs {
+# get mrml ids referneced in mrml node, and perhaps its child nodes
+    use List::MoreUtils qw/uniq/;
+    my ($mrml_tree,$node)=@_;
+    if ( defined $mrml_tree->{"MRML"} && keys %{$mrml_tree} <=1  ) {
+	$mrml_tree=$mrml_tree->{"MRML"};
+    }
+    my %mrml_refs=();
+    my $mrml_subrefs={};
+    my %nodelinks=();
+    my @all_nodes;
+#    dump($node);
+    my $attrhref=mrml_find_attrs($node,"(^ref.*|.*Ref\$)");
+    my %refmatches=%{$attrhref};
+
+#    dump(%refmatches);
+#     if ( keys(%refmatches) > 1 ) { 
+# 	dump(%refmatches);
+#     }
+        
+    for my $mrml_attr ( keys(%refmatches)){
+	print("procesing $mrml_attr\n");
+#	my $mrml_refids=$node->{"references"};# old way of getting reference bits.
+	my @refa=@{$refmatches{$mrml_attr}};
+	#dump(@refa);
+	if ($#refa>0){
+	    warn("More than one entry found in hash\n");
+	}
+	for my $mrml_refids (@refa) {
+	    #dump($mrml_refids);
+	    # split reference list in pieces, reference type will have : after it
+	    # reference list
+	    #my @mrml_id_list = $mrml_refids =~ /([[:alnum:]]+[:])([[:alnum:]]+)([\s]+[[:alnum:]]+)?/xg;
+	    my @mrml_id_list = $mrml_refids =~ /(?:([[:alnum:]]+[:])([[:alnum:]]+)([\s]+[[:alnum:]]+)?)|([[:alnum:]]+)/xg;
+
+#	my $node_reftype='';
+	foreach my $rn (@mrml_id_list){
+	    if ( defined $rn ) {
+		if (my(@vars)=$rn =~ /[\s]*([[:alnum:]]+)[:]/) {
+		    print("name colon\n");
+#		    $node_reftype=$1;
+		    #dump(@vars);
+		} else { #we're a node id lets find the mmrl node typel
+		    $rn =~ s/[\s:]//gx;# remove spaces or colons from the text
+		    print("id=$rn\n");
+		    my ($snode)=mrml_find_by_id($mrml_tree,$rn);
+		    my ($mrml_type) = $rn =~ /vtkMRML(.*?)Node/x;
+#		    if ( ! defined $nodelinks{$node_reftype}) {# clever way to build hierarchy hash on fly. 
+#			$nodelinks{$node_reftype}=(); 
+#		    }
+		    if ( ! defined $mrml_refs{$mrml_type}) {# clever way to build hierarchy hash on fly. 
+			$mrml_refs{$mrml_type}=();
+			print("Adding mrml_type $mrml_type\n");
+		    }
+#		    push(@{$nodelinks{$node_reftype}},$rn);
+		    push(@{$mrml_refs{$mrml_type}},$rn);
+		    push(@all_nodes,$rn);
+		    #my $max_id=$#{$mrml_refs{$mrml_type}};
+		    @{$mrml_refs{$mrml_type}}=uniq(@{$mrml_refs{$mrml_type}});
+		    #print("uniq removed ".($max_id-$#{$mrml_refs{$mrml_type}})." elements\n");
+
+		    if ( 1 ) {
+		    my $mrml_subrefs=mrml_get_refs($mrml_tree,$snode);
+		    #print("dump_subrefs\n");
+		    #dump(%{$mrml_subrefs});
+		    for my $sub_mrml_type (keys(%{$mrml_subrefs})){
+			print("ids=".join(" ",@{$mrml_subrefs->{$sub_mrml_type}})."\n");
+			#my ($sub_mrml_type) = $rn =~ /vtkMRML(.*?)Node/x;
+			if ( ! defined $mrml_refs{$sub_mrml_type}) {# clever way to build hierarchy hash on fly. 
+			    print("Adding mrml_type $sub_mrml_type\n");
+			    $mrml_refs{$sub_mrml_type}=();
+			}
+			push(@{$mrml_refs{$sub_mrml_type}},@{$mrml_subrefs->{$sub_mrml_type}});
+			push(@all_nodes,@{$mrml_subrefs->{$sub_mrml_type}});
+			#my $max_id=$#{$mrml_refs{$sub_mrml_type}};
+			@{$mrml_refs{$sub_mrml_type}}=uniq(@{$mrml_refs{$sub_mrml_type}});
+			#print("uniq removed ".($max_id-$#{$mrml_refs{$sub_mrml_type}})." elements\n");
+		    }
+		    }
+		    
+		}
+	    }  else {
+		#for whatever reason we end up with one undefined at the end of theses lists every time.
+		#print("somehow this wasnt defined...\n");
+	    }
+	}
+	}
+    }
+    
+    return \%mrml_refs;
+}
+
+sub mrml_node_diff {
+    my ( $mrml_ref1, $mrml_ref2) =@_;
+
+    my @mrml_keys=keys %{$mrml_ref1};
+#    print("found ".($#mrml_keys)." attrs to compare");
+    my $diff_count=0;
+    my @diff_message;
+    for my $attr (@mrml_keys) {
+	#print("check $attr\n");
+	if ( ! defined $mrml_ref2 ->{$attr} ) {
+	    $diff_count++;
+	    #print("undef");
+	    push(@diff_message,"mrml_ref1($mrml_ref1->{name}) $attr not found in mrml_ref2($mrml_ref1->{name})");
+	} elsif ($mrml_ref1->{$attr} ne $mrml_ref2->{$attr} ) { 
+	    $diff_count++;
+	    push(@diff_message,"attr  $attr differ : ".${mrml_ref1}->{$attr}." ,\t ".${mrml_ref2}->{$attr}."");
+	} else {
+	    #print("same! $mrml_ref1->{$attr} eq $mrml_ref2->{$attr} \n")
+	    
+	}
+
+    }
+    if ($#diff_message>-1){
+	print("found differences: \n\t".join("\n\t",@diff_message)."\n");
+    }
+    return $diff_count;
+}
+
+
+sub mrml_write { 
+
+    my ($data_struct_ref,$file)=@_;
+    my($itxt,$i_level,$format)=('  ',0,'mrml');
+     
+    my $mrml_string=mmrl_to_string($data_struct_ref,$itxt,$i_level,$format);
+    return ;
+}
+sub isfilehandle { 
+    my ($FH)=@_;
+    if (! defined $FH) { print("UNDEF_FH");return 0;}
+    my $reft=ref($FH);
+    #print($reft);
+    #return 0;
+    if ( $reft =~ /IO|GLOB|HASH/x || $FH =~ /GLOB/) {
+	#print(".");
+	return 1;
+    } else { 
+	return 0;
+    }
+}
+
+sub mrml_to_file { # ( $hash_ref,$indentext,$indent_level,$format,$pathtowrite ) 
+###
+    use Scalar::Util qw(looks_like_number);
+
+    my ($data_struct_ref,$itxt,$i_level,$format,$open_tag,$FH)=@_;
+    if(! defined $itxt ) { $itxt='  ';}
+    if(! defined $i_level ) { $i_level=0} else { $i_level++};
+    if(! defined $format ) { $format='';}
+    if(! defined $open_tag) { $open_tag='';}
+    my $FH_close_bool=0;
+    my $file;
+    if(! defined $FH ) {
+	exit("no file or file handle specified\n");
+    } elsif ( ! isfilehandle($FH) ) { 
+	$file=$FH;
+	if( $file !~ /GLOB/ ) {
+	    undef $FH;
+	    open $FH, ">","$file" or die ;
+	    $FH_close_bool=1;
+	} else {
+	    warn "Filename reported glob! this is not ok!\n";
+	    return;
+	    #die "Filename reported glob! this is not ok!\n";
+	}
+    } elsif ( isfilehandle($FH) )  { 
+	#print("ISHANDLE");
+    } else { 
+	exit("bad path for file, or broken filehandle");
+    }
+    #my $debug_val=66;
+    my $indent=$itxt;
+    for (my $ind=0;$ind<$i_level;$ind++) {
+	$indent=$indent.$itxt; 
+    }
+    debugloc();
+#    printd(75,"Data_Struct_Ref:<$data_struct_ref>\n");
+    my $reftype=ref($data_struct_ref); 
+    if ( ! $reftype ) {
+	$reftype='NOTREF';
+    }
+    # expected structure hashref->HASHOFNODETYPES->ARRAYOFELEMENTS->HASHOFATTRIBUTES
+    my $delete_parts=0;
+    if ( 1 ) { $delete_parts=0;}
+	
+    # expect a full mrml tree to print.
+    if( $reftype eq "HASH" ) {
+	#print( "$indent\{\n");
+	my $pc=0;
+
+#	while (keys %{$data_struct_ref} ) { 
+	my $sc_count=0;
+	my $attr_count=0;
+	for my $k (keys %{$data_struct_ref}){
+	    my $kreftype=ref($data_struct_ref->{$k});		
+	    $attr_count++;
+	    if ( $kreftype eq 'SCALAR' ){
+		#mrml_to_file($d_ref,$itxt,$i_level,$format,$open_tag);
+		print("$k=\"${$data_struct_ref->{$k}}\"   ") if ($debug_val>=65);
+		print $FH ( "$k=${$data_struct_ref->{$k}}   "); 
+		delete $data_struct_ref->{$k} if ( $delete_parts) ;
+		$sc_count++;
+	    } elsif ( ! $kreftype ) { 
+		print("$k=\"$data_struct_ref->{$k}\"   ") if ($debug_val>=65);
+		print $FH ( "$k=\"$data_struct_ref->{$k}\"   "); 
+		delete $data_struct_ref->{$k} if ( $delete_parts) ;
+		$sc_count++;
+	    }
+	}
+	#if ( $sc_count>0) {#this prints too often
+	#if ( $sc_count == $attr_count ) {#if all scalars, or if no attribs we should print close?
+	if ( $open_tag ne '' ) {#this prints too often
+	    print("\>\n")if ($debug_val>=65);
+	    print $FH ( "\>");
+	} # end attribs mrml , or does it...
+	for my $k (keys %{$data_struct_ref}){
+	    my $kreftype=ref($data_struct_ref->{$k});
+
+	    if ( $kreftype eq 'HASH' ){
+		print("$indent<$k\n") if ($debug_val>=65);
+		print $FH ( "$indent<$k\n" ); 
+		#$FH=$FH.mrml_to_file($data_struct_ref->{$k},$itxt,$i_level,$format,$k,$FH);
+		mrml_to_file($data_struct_ref->{$k},$itxt,$i_level,$format,$k,$FH);
+		#            ($data_struct_ref,      $itxt,$i_level,$format,$open_tag,$FH)=@_;
+		delete $data_struct_ref->{$k} if ( $delete_parts) ;
+		print("$indent\></$k\>\n") if ($debug_val>=65);
+		#print $FH ( "$indent\></$k\>\n"); 
+		print $FH ( "$indent\</$k\>\n"); 
+	    }
+	}
+
+	for my $k (keys %{$data_struct_ref}){
+	    my $kreftype=ref($data_struct_ref->{$k});		
+	    if ( $kreftype eq 'ARRAY' ){
+		#print("ARRAY:$k\n") if ($debug_val>=65);
+		foreach (@{$data_struct_ref->{$k}}) {
+		    print("$indent<$k\n") if ($debug_val>=65);
+		    print $FH ( "$indent<$k\n"); 
+		    #$FH=$FH.mrml_to_file($_,$itxt,$i_level,$format,$k,$FH);
+		    mrml_to_file($_,$itxt,$i_level,$format,$k,$FH);
+		    #($data_struct_ref,$itxt,$i_level,$format,$open_tag,$FH)=@_;
+		    print("$indent\></$k\>\n") if ($debug_val>=65);
+		    #}print $FH ( "$indent\></$k\>\n"); 
+		    print $FH ( "$indent\</$k\>\n"); 
+		}
+		delete $data_struct_ref->{$k} if ( $delete_parts) ;
+	    }
+	}
+
+#	}
+    }
+    if ( $FH_close_bool ){
+	close $FH;
+	print("Finished writing $file.\n");
+    }
+    return 0;
+}
+
+
+
+sub mrml_to_string { # ( $hash_ref,$indentext,$indent_level,$format,$pathtowrite ) 
+###
+    use Scalar::Util qw(looks_like_number);
+
+    my ($data_struct_ref,$itxt,$i_level,$format,$open_tag,$xml_string)=@_;
+    if(! defined $itxt ) { $itxt='  ';}
+    if(! defined $i_level ) { $i_level=0} else { $i_level++};
+    if(! defined $format ) { $format='';}
+    if(! defined $open_tag) { $open_tag='';}
+    if(! defined $xml_string) { $xml_string=''; }
+    #my $debug_val=66;
+    my $indent=$itxt;
+    for (my $ind=0;$ind<$i_level;$ind++) {
+	$indent=$indent.$itxt; 
+    }
+    debugloc();
+#    printd(75,"Data_Struct_Ref:<$data_struct_ref>\n");
+    my $reftype=ref($data_struct_ref); 
+    if ( ! $reftype ) {
+	$reftype='NOTREF';
+    }
+    # expected structure hashref->HASHOFNODETYPES->ARRAYOFELEMENTS->HASHOFATTRIBUTES
+    my $delete_parts=0;
+    if ( 1 ) { $delete_parts=0;}
+	
+    # expect a full mrml tree to print.
+    if( $reftype eq "HASH" ) {
+	#print( "$indent\{\n");
+	my $pc=0;
+
+#	while (keys %{$data_struct_ref} ) { 
+	my $sc_count=0;
+	for my $k (keys %{$data_struct_ref}){
+	    my $kreftype=ref($data_struct_ref->{$k});		
+	    if ( $kreftype eq 'SCALAR' ){
+		#mrml_to_string($d_ref,$itxt,$i_level,$format,$open_tag);
+		print("$k=\"${$data_struct_ref->{$k}}\"   ") if ($debug_val>=65);
+		$xml_string=$xml_string."$k=${$data_struct_ref->{$k}}   ";
+		delete $data_struct_ref->{$k} if ( $delete_parts) ;
+		$sc_count++;
+	    } elsif ( ! $kreftype ) { 
+		print("$k=\"$data_struct_ref->{$k}\"   ") if ($debug_val>=65);
+		$xml_string=$xml_string."$k=\"$data_struct_ref->{$k}\"   ";
+		delete $data_struct_ref->{$k} if ( $delete_parts) ;
+		$sc_count++;
+	    }
+	}
+	if ( $sc_count>0) {print("\>\n")if ($debug_val>=65);$xml_string=$xml_string."\>\n";} # end attribs mrml
+	for my $k (keys %{$data_struct_ref}){
+	    my $kreftype=ref($data_struct_ref->{$k});
+
+	    if ( $kreftype eq 'HASH' ){
+		print("$indent<$k\n") if ($debug_val>=65);
+		$xml_string=$xml_string."$indent<$k\n";
+		$xml_string=$xml_string.mrml_to_string($data_struct_ref->{$k},$itxt,$i_level,$format,$k,$xml_string);
+		delete $data_struct_ref->{$k} if ( $delete_parts) ;
+		print("$indent\></$k\>\n") if ($debug_val>=65);
+		$xml_string=$xml_string."$indent\></$k\>\n";
+	    }
+	}
+
+	for my $k (keys %{$data_struct_ref}){
+	    my $kreftype=ref($data_struct_ref->{$k});		
+	    if ( $kreftype eq 'ARRAY' ){
+		#print("ARRAY:$k\n") if ($debug_val>=65);
+		foreach (@{$data_struct_ref->{$k}}) {
+		    print("$indent<$k\n") if ($debug_val>=65);
+		    $xml_string=$xml_string."$indent<$k\n";
+		    $xml_string=$xml_string.mrml_to_string($_,$itxt,$i_level,$format,$k,$xml_string);
+		    print("$indent\></$k\>\n") if ($debug_val>=65);
+		    $xml_string=$xml_string."$indent\></$k\>\n";
+		}
+		delete $data_struct_ref->{$k} if ( $delete_parts) ;
+	    }
+	}
+
+#	}
+    }
+
+return $xml_string;
+}
+
+=item mrml_to_string
+
+displays an entire more complex data structure "prettily" from reference structure
+
+=cut
+###
+sub mrml_to_string1 { # ( $hash_ref,$indentext,$indent_level,$format,$pathtowrite ) 
+###
+    use Scalar::Util qw(looks_like_number);
+    my ($data_struct_ref,$itxt,$i_level,$format,$open_tag)=@_;
+    if(! defined $itxt ) { $itxt='  ';}
+    if(! defined $i_level ) { $i_level=0} else { $i_level++};
+    if(! defined $format ) { $format='';}
+    if(! defined $open_tag) { $open_tag='';}
+    my $indent=$itxt;
+    my $xml_string='';
+    for (my $ind=0;$ind<$i_level;$ind++) {
+	$indent=$indent.$itxt; 
+    }
+    debugloc();
+    printd(75,"Data_Struct_Ref:<$data_struct_ref>\n");
+    my $reftype=ref($data_struct_ref); 
+    if ( ! $reftype ) {
+	$reftype='NOTREF';
+    }
+    # expected structure hashref->HASHOFNODETYPES->ARRAYOFELEMENTS->HASHOFATTRIBUTES
+    if ( 1 ) { 
+	# expect a full mrml tree to print.
+	
+	if( $reftype eq "HASH" ) {
+	    #print( "$indent\{\n");
+	    my $pc=0;
+	    
+	    my @s_refs;
+	    my @a_refs;
+	    my %h_refs;
+
+	    foreach my $key (keys %{$data_struct_ref} ) {#sort 
+		my $kreftype=ref($data_struct_ref->{$key});
+		if ( ! $kreftype ) {
+		    $kreftype='NOTREF';
+		}
+		if ( $kreftype eq 'ARRAY' ) {
+		    push(@a_refs,$data_struct_ref->{$key});
+		} elsif ( $kreftype eq 'HASH'){
+		    $h_refs{$key}=$data_struct_ref->{$key};
+		    
+		} elsif ( $kreftype eq 'SCALAR' ){
+		    push(@s_refs,$data_struct_ref->{$key});
+		} elsif (  $kreftype eq 'NOTREF'){
+		    push(@s_refs,\$data_struct_ref->{$key});
+		} else { 
+		    #mrml_to_string($,$itxt,$i_level,$format,$open_tag);
+		    print("$key not known ref($kreftype)");
+		}
+	    }
+	    print("s:".($#s_refs+1)."a:".($#a_refs+1)."h:".((keys %h_refs)+1)."\n");
+	    if ( 1 ) { 
+		foreach my $d_ref ( @s_refs) {
+		    #print("<$open_tag");
+		    mrml_to_string($d_ref,$itxt,$i_level,$format,$open_tag);
+		}
+		foreach my $h_key ( keys %h_refs) {
+		    #print("$indent\<$open_tag");
+		    my $d_ref=$h_refs{$h_key};
+		    mrml_to_string($d_ref,$itxt,$i_level,$format,$h_key);
+		}
+		foreach my $d_ref ( @a_refs) {
+		    #mrml_to_string($d_ref,$itxt,$i_level,$format,$open_tag);
+		}
+
+
+	    } else {
+		foreach my $key (keys %{$data_struct_ref} ) {#sort 
+		    #if any of my children are arrays then i'm done printing myself.
+		    my $kreftype=ref($data_struct_ref);
+		    if ( $kreftype eq 'ARRAY' ){$pc=1;}#maybe we need to handle in order, scalar's first, then hashes?
+		}
+		
+		foreach my $key (keys %{$data_struct_ref} ) {#sort 
+		    print( "$indent\<$key ");
+		    if ($pc ){
+			print("\>");
+		    }
+		    mrml_to_string($data_struct_ref->{$key},$itxt,$i_level,$format,$key);
+		    if ( ! $pc) {print("$indent\>\</$key\>\n");}
+		}
+	    }
+	    #print( "$indent}\n");
+	} elsif( $reftype eq "ARRAY" ) {
+	    print("$indent");
+	    foreach ( @{$data_struct_ref} ) {
+		#mrml_to_string($_,$itxt,$i_level,$format);
+		#print("$indent\n");	
+	    }
+
+	} elsif( ( $reftype eq "SCALAR"|| $reftype eq 'NOTREF' ) && $format ne 'noleaves' ) {
+	    #print( "SCALAR\n"); if($text_fid>-1) { print($text_fid  "SCALAR\n"); }
+	    my $value=$data_struct_ref;
+	    if ( $reftype eq 'SCALAR') {
+		$value=${$data_struct_ref};
+	    }	
+	    if ( defined $value ) { 
+		print( "$open_tag=$value   ");# if($text_fid>-1) { print($text_fid  "$value.\n"); }
+	    } else { 
+		print("UNDEF \n");
+	    }
+	} elsif( $reftype eq "CODE" ) {
+	    print( $indent.$reftype."\n");# if($text_fid>-1) { print($text_fid  $indent.$reftype."\n"); }
+	} else {
+	    print( "REFTYPEUNKNOWN\n");# if($text_fid>-1) { print($text_fid  "REFTYPEUNKNOWN\n"); }
+	}
+	
+    } else {
+    if( $reftype eq "HASH" ) {
+	#print( "$indent\{\n");
+	foreach my $key (keys %{$data_struct_ref} ) {#sort 
+	    #print( "$indent\<$key ");
+	    mrml_to_string($data_struct_ref->{$key},$itxt,$i_level,$format,$key);
+	    #print("$indent\>\</$key\>\n");
+	}
+	#print( "$indent}\n");
+    } elsif( $reftype eq "ARRAY" ) {
+	print("$indent\<$open_tag   ");
+	foreach ( @{$data_struct_ref} ) {
+	    mrml_to_string($_,$itxt,$i_level,$format,$open_tag);
+	}
+	print("\>\</$open_tag\>\n");	
+
+    } elsif( ( $reftype eq "SCALAR"|| $reftype eq 'NOTREF' ) && $format ne 'noleaves' ) {
+	#print( "SCALAR\n"); if($text_fid>-1) { print($text_fid  "SCALAR\n"); }
+	my $value=$data_struct_ref;
+	if ( $reftype eq 'SCALAR') {
+	    $value=${$data_struct_ref};
+	}	
+	if ( defined $value ) { 
+	    print( "$open_tag = \"$value\"   ");# if($text_fid>-1) { print($text_fid  "$value.\n"); }
+	} else { 
+	    print("UNDEF \n");
+	}
+    } elsif( $reftype eq "CODE" ) {
+	print( $indent.$reftype."\n");# if($text_fid>-1) { print($text_fid  $indent.$reftype."\n"); }
+    } else {
+	print( "REFTYPEUNKNOWN\n");# if($text_fid>-1) { print($text_fid  "REFTYPEUNKNOWN\n"); }
+    }
+    }
+    return $xml_string;
+}
+
+sub mrml_types { 
+    my ($mrml_tree,@any)=@_;
+    #return atrib hash of mrml node.
+    if ( defined $mrml_tree->{"MRML"} && keys %{$mrml_tree} <=1  ) {
+	$mrml_tree=$mrml_tree->{"MRML"};
+    }
+    return keys %{$mrml_tree};
+    
+}
+
+
+# -------------
+sub xml_read2 {
+# -------------
+    my ( $xml_file)=@_;
+    use XML::Simple qw(XMLin);
+    use File::Slurp qw(read_file);
+    use Data::Dumper qw(Dumper); 
+    print Dumper XMLin scalar(read_file $xml_file),
+    KeyAttr => undef, ForceArray => 1, StrictMode => 1;
+    #Instead, learn XPath and access the elements you actually need:
+}
+
+# -------------
+sub xml_read3 {
+# -------------
+    my ( $xml_file)=@_;
+    use XML::LibXML qw();
+    my $xml = XML::LibXML->load_xml(location => $xml_file);
+    for ($xml->findnodes('//entry[@name="cpd:C00103"]')) {
+	print $_->getAttribute('link');
+    }
+}
+
+
+=item display_complex_data_structure
+
+displays an entire more complex data structure "prettily" from reference structure
+
+=cut
+###
+sub display_complex_data_structure { # ( $hash_ref,$indentext,$indent_level,$format,$pathtowrite ) 
+###
+    use Scalar::Util qw(looks_like_number);
+    my ($data_struct_ref,$itxt,$i_level,$format,$file)=@_;
+    if(! defined $itxt ) { $itxt='  ';}
+    if(! defined $i_level ) { $i_level=0} else { $i_level++};
+    if(! defined $format ) { $format='';}
+    my $indent=$itxt;
+    for (my $ind=0;$ind<$i_level;$ind++) {
+	$indent=$indent.$itxt; 
+    }
+    debugloc();
+#    my $value="test";
+    printd(75,"Data_Struct_Ref:<$data_struct_ref>\n");
+    #printd(55,"keys @hash_keys\n");
+    my $text_fid;#=-1;
+    #my $FH='OUT';
+    if ( defined $file ){ 
+	if ( ! looks_like_number($file) ) { 
+	    open $text_fid, ">", "$file" or croak "could not open $file" ;
+	} else {
+	    $text_fid=$file;
+	    print("PREVIOUSLY OPEN FILE\n");
+	}
+    } else {
+	$text_fid=-1;
+    }
+    my $reftype=ref($data_struct_ref); 
+    if ( ! $reftype ) {
+	$reftype='NOTREF';
+    }
+    
+    if( $reftype eq "HASH" ) {
+	print( "$indent\{\n");
+	foreach my $key (keys %{$data_struct_ref} ) {#sort 
+	    print( "$indent$key = ");
+	    display_complex_data_structure($data_struct_ref->{$key},$itxt,$i_level,$format);
+	}
+	print( "$indent}\n");
+    } elsif( $reftype eq "ARRAY" ) {
+	print("\[");	
+	foreach ( @{$data_struct_ref} ) {
+	    display_complex_data_structure($_,$itxt,$i_level,$format);
+	}
+	print("$indent\]\n");
+    } elsif( ( $reftype eq "SCALAR"|| $reftype eq 'NOTREF' ) && $format ne 'noleaves' ) {
+	#print( "SCALAR\n"); if($text_fid>-1) { print($text_fid  "SCALAR\n"); }
+	my $value=$data_struct_ref;
+	if ( $reftype eq 'SCALAR') {
+	    $value=${$data_struct_ref};
+	}	
+	if ( defined $value ) { 
+	    print( "$value \n");# if($text_fid>-1) { print($text_fid  "$value.\n"); }
+	} else { 
+	    print("UNDEF \n");
+	}
+    } elsif( $reftype eq "CODE" ) {
+	print( $indent.$reftype."\n");# if($text_fid>-1) { print($text_fid  $indent.$reftype."\n"); }
+    } elsif( defined $reftype && $reftype ne '' ) {
+	print( "REFTYPEUNKNOWN:$reftype.\n");# if($text_fid>-1) { print($text_fid  "REFTYPEUNKNOWN\n"); }
+    } else {
+	print("NOT_REF\n");
+    } 
+
+    if ( $text_fid > -1 && -f $file  ){
+        close $text_fid;
+    }
+    return ;
+
+#     my ($dataarray_ref) = @_;
+#     my $reftype=ref($dataarray_ref); 
+#     my $data;
+#     if ( $dataarray_ref ne "" && $reftype eq 'ARRAY' ) {
+#         $data=aoa_to_printline(@$dataarray_ref);
+#     } elsif ( $reftype ne 'ARRAY' ) { 
+#         confess "ref type $reftype wrong, at aoaref to singleline";
+#     } else {
+#         printd(35, "wierd problem with array ref in aoaref_to_singleline\n");
+#         $data="ERROR";
+#     }
+#     return $data;
+}
+
 # -------------
 sub remove_dot_suffix {
 # -------------
