@@ -199,6 +199,8 @@ sub error_out
       $hf_path = $HfResult->get_value('headfile_dest_path');
       if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('headfile-dest-path'); }
       if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('result-headfile-path'); }
+      my ($n,$p,$e) = fileparts($hf_path);
+      my $hf_path = $p.$n.'.err'.$e;
     $HfResult->write_headfile($hf_path);
     $HfResult = "unset";
   }
@@ -1017,9 +1019,9 @@ sub execute {
 		$c = $c;
 	    } else {
 		if ($custom_q == 1) {
-		    $c = "srun -p $my_queue ".$c;
+		    $c = "srun -s -p $my_queue ".$c;
 		} else {
-		    $c = "srun ".$c;
+		    $c = "srun -s ".$c;
 		}
 		print("SLURM MODE ENGAGED\n");
 	    }
