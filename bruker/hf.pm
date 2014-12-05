@@ -839,26 +839,29 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     my $enc2=$hf->get_value($data_prefix.'PVM_EncOrder2');
     my $objo=$hf->get_value($data_prefix.'PVM_ObjOrderList');
     my $objs=$hf->get_value($data_prefix.'PVM_ObjOrderScheme');
-    if ($enc1 ne 'LINEAR_ENC' &&  $enc1 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
+    my $encs1=$hf->get_value($data_prefix.'PVM_EncSteps1');
+    my $encs2=$hf->get_value($data_prefix.'PVM_EncSteps2');
+
+    if ($enc1 ne 'LINEAR_ENC' &&  $enc1 !~ m/NO_KEY|UNDEFINED|BLANK/x &&  $encs1 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
 	printd(35,"dim_Y encoding from PVM_EncSteps1($enc1)\n");
 	$hf->set_value('dim_Y_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps1'));
     } else { 
-	printd(35,"dim_Y encding not specified with $enc1\n");
+	printd(35,"dim_Y encoding not specified with $enc1\n");
     }
-    
-    if ( $enc2 ne 'LINEAR_ENC' && ! $enc2 =~ m/NO_KEY|UNDEFINED|BLANK/x){ 
+    # $hf->get_value($data_prefix.'PVM_EncSteps2') ne 'NO_KEY'
+    if ( $enc2 ne 'LINEAR_ENC' &&  $enc2 !~ m/NO_KEY|UNDEFINED|BLANK/x &&  $encs2 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
 	printd(35,"dim_Z encoding from PVM_EncSteps2($enc2)\n");
 	$hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps2'));
     } elsif( $objs ne 'Sequential' ) { 
-	printd(45,"EncOrder2 is $enc2");
+	printd(45,"EncOrder2 is $enc2\n");
 	#my $method = $hf->get_value($data_prefix."ACQ_method");
-	if ( $hf->get_value($data_prefix."ACQ_method") =~ m/RARE/x ) {
+	if ( $hf->get_value($data_prefix."ACQ_method") =~ m/RARE/x && $encs2 !~ m/NO_KEY|UNDEFINED|BLANK/x ) {
 	    printd(15,"RARE acq hack! setting dim_Z_encoding_order to PVM_EncSteps2\n");
-	    $hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps2'));
+	    $hf->set_value('dim_Z_encoding_order',$encs2);
 	} else {
-	    if ( $objo ne '0') { 
+	    if ( $objo ne '0' && $objo ne 'NO_KEY' ) { 
 		printd(35,"dim_Z encoding from PVM_ObjOrderList($objs)\n");
-		$hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_ObjOrderList'));
+		$hf->set_value('dim_Z_encoding_order',$objo);
 	    } else { 
 		my $string="PVM_ObjOrderScheme was not Sequential, however ".
 		    " ObjOrderList=<$objo>,\n".

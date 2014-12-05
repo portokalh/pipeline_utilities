@@ -199,6 +199,8 @@ sub error_out
       $hf_path = $HfResult->get_value('headfile_dest_path');
       if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('headfile-dest-path'); }
       if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('result-headfile-path'); }
+      my ($n,$p,$e) = fileparts($hf_path);
+      my $hf_path = $p.$n.'.err'.$e;
     $HfResult->write_headfile($hf_path);
     $HfResult = "unset";
   }
