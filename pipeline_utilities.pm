@@ -1016,9 +1016,9 @@ sub execute {
 		$c = $c;
 	    } else {
 		if ($custom_q == 1) {
-		    $c = "srun -p $my_queue ".$c;
+		    $c = "srun -s -p $my_queue ".$c;
 		} else {
-		    $c = "srun ".$c;
+		    $c = "srun -s ".$c;
 		}
 		print("SLURM MODE ENGAGED\n");
 	    }
