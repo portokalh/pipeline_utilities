@@ -1,4 +1,3 @@
-
 #pipeline_utilites.pm
 #
 # utilities for pipelines including matlab calls from perl 
@@ -14,8 +13,9 @@
 #               should add a standard headfile settings file for the required values in an engine_dependencie headfile 
 #               returns the three directories  in work result, outhf_path, and the engine_constants headfile.
 # 140717 added exporter line with list of functions
+# 141125 moved registration.pm to here, modified as necessary. Also added sbath capabilities for when running on cluster. BJA
 # be sure to change version:
-my $VERSION = "140917";
+my $VERSION = "141125";
 
 my $log_open = 0;
 my $pipeline_info_log_path = "UNSET";
@@ -25,12 +25,14 @@ my @outheadfile_comments = ();  # this added to by log_pipeline_info so define e
 my $debug_val = 5;
 use File::Path;
 use POSIX;
-use strict;
+#use strict; #temporarily turned off for sub cluster_exec
 use warnings;
 use English;
 #use seg_pipe;
 
-use vars qw($HfResult $BADEXIT $GOODEXIT);
+no warnings qw(uninitialized bareword);
+
+use vars qw($HfResult $BADEXIT $GOODEXIT $test_mode);
 my $PM="pipeline_utilities";
 use civm_simple_util qw(load_file_to_array write_array_to_file);
 
@@ -75,6 +77,7 @@ execute_indep_forks
 executeV2
 start_pipe_script
 load_engine_deps
+make_process_dirs
 new_get_engine_dependencies
 make_list_of_files
 my_ls
@@ -85,6 +88,19 @@ depath
 defile
 fileparts
 funct_obsolete
+create_transform
+apply_affine_transform
+apply_tranform
+cluster_exec
+cluster_check
+execute_log
+get_nii_from_inputs
+compare_headfiles
+symbolic_link_cleanup
+headfile_list_handler
+find_temp_headfile_pointer
+headfile_alt_keys
+data_double_check
 ); 
 }
 
@@ -134,7 +150,10 @@ sub close_log {
 # -------------
 sub log_info {
 # -------------
-   my ($log_me) = @_;
+   my ($log_me,$verbose) = @_;
+   if (! defined $verbose) {
+       $verbose = 1;
+   }
 
    if ($log_open) {
      # also write this info to headfile later, so save it up
@@ -142,8 +161,9 @@ sub log_info {
      push @outheadfile_comments, "$to_headfile";  
 
      # show to user:
-     print( "#LOG: $log_me\n");
-
+     if ($verbose) {
+	 print( "#LOG: $log_me\n");
+     }
      # send to pipeline file:
      print( PIPELINE_INFO "$log_me\n");
    }
@@ -158,11 +178,14 @@ sub log_info {
 # -------------
 sub close_log_on_error  {
 # -------------
-  my ($msg) = @_;
+  my ($msg,$verbose) = @_;
+
+  if (! defined $verbose) {$verbose = 1;}
+
   # possible you may call this before the log is open
   if ($log_open) {
       my $exit_time = scalar localtime;
-      log_info("Error cause: $msg");
+      log_info("Error cause: $msg",$verbose);
       log_info("Log close at $exit_time.");
 
       # emergency close log (w/o log dumping to headfile)
@@ -180,7 +203,10 @@ sub close_log_on_error  {
 sub error_out
 # -------------
 {
-  my ($msg) = @_;
+  my ($msg,$verbose) = @_;
+
+  if (! defined $verbose) {$verbose = 1;}
+
   print STDERR "\n<~Pipeline failed.\n";
   my @callstack=(caller(1));
   my $pm;
@@ -192,8 +218,11 @@ sub error_out
   print STDERR "  Failure cause: ".$pm.'|'.$sn." ".$msg."\n";
   print STDERR "  Please note the cause.\n";
   
+  if (! $verbose) {
+      print "Errors have been logged\n";
+  }
+  close_log_on_error($msg,$verbose);
 
-  close_log_on_error($msg);
   my $hf_path='';
   if (defined $HfResult && $HfResult ne "unset") {
       $hf_path = $HfResult->get_value('headfile_dest_path');
@@ -210,9 +239,10 @@ sub make_matlab_m_file {
 # -------------
 #simple utility to save an mfile with a contents of function_call at mfile_path
 # logs the information to the log file, and calls make_matlab_m_file_quiet to do work
-   my ($mfile_path, $function_call) = @_;
-   log_info("Matlab function call mfile created: $mfile_path");
-   log_info("  mfile contains: $function_call");
+   my ($mfile_path, $function_call,$verbose) = @_;
+   if (! defined $verbose) {$verbose = 1;}
+   log_info("Matlab function call mfile created: $mfile_path",$verbose);
+   log_info("  mfile contains: $function_call",$verbose);
    make_matlab_m_file_quiet($mfile_path,$function_call);
    return;
 }
@@ -246,10 +276,10 @@ sub make_matlab_m_file_quiet {
 sub make_matlab_command {
 # -------------
 # this calls the nohf version so we can control how matlab is launched at all times through just that function.
-   my ($function_m_name, $args, $short_unique_purpose, $Hf) = @_;
-# short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
-   my $work_dir   = $Hf->get_value('dir_work');
-   if ( $work_dir eq "NO_KEY" ) { $work_dir=$Hf->get_value('dir-work'); }
+   my ($function_m_name, $args, $short_unique_purpose, $Hf,$verbose) = @_;
+# short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir)
+   if (! defined $verbose) {$verbose =1;}
+   my ($work_dir)   = headfile_alt_keys($Hf,'dir_work','dir-work','work_dir');
    my $matlab_app  = $Hf->get_value('engine_app_matlab');
    my $matlab_opts = $Hf->get_value('engine_app_matlab_opts');
    if ($matlab_app  eq "NO_KEY" ) { $matlab_app  = $Hf->get_value('engine-app-matlab'); }
@@ -278,8 +308,9 @@ sub make_matlab_command {
 sub make_matlab_command_nohf {
 # -------------
 #  my $matlab_cmd=make_matlab_command_nohf($mfilename, $mat_args, $purpose, $local_dest_dir, $Engine_matlab_path);
-   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,$logpath,$matlab_opts) = @_;
+   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,$logpath,$matlab_opts,$verbose) = @_;
    print("make_matlab_command:\n\tengine_matlab_path:${matlab_app}\n\twork_dir:$work_dir\n") if($debug_val>=25);
+   if (! defined $verbose) {$verbose =1;}  
    my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}".".m";
    my $function_call = "$function_m_name ( $args )";
    if (! defined $matlab_opts) { 
@@ -291,7 +322,7 @@ sub make_matlab_command_nohf {
        $logpath='> '."$work_dir/matlab_${function_m_name}";
    }
 
-   make_matlab_m_file ($mfile_path, $function_call); # this seems superfluous.
+   make_matlab_m_file ($mfile_path, $function_call,$verbose); # this seems superfluous.
    #make_matlab_m_file_quiet ($mfile_path, $function_call); #### RECENTLY COMMENTED<-POSSIBLE UNNECESSARY EFFORT
    
 
@@ -306,7 +337,7 @@ sub make_matlab_command_nohf {
 
    #$PID
    ### temporaray cluster disable mode for now.
-   my $fifo_mode=`hostname -s`=~ "civmcluster1" ? 0 : 1;
+   my $fifo_mode=`hostname -s`=~ "civmcluster1" ? 0 : 1; # Debug--change back to civmcluster1
    if ( $fifo_mode ) { 
        my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$logpath);
        print STDERR ( "FIFO Log set to $fifo_log\n");
@@ -1005,12 +1036,10 @@ sub execute {
     my $rc;
     my $i = 0;
     my $ret;
-    #my $hostynamey=`hostname -s`;
-    #pchomp($hostynamey);
+
     foreach my $c (@commands) {
 	$i++;
-	if (`hostname -s` =~ /civmcluster1/ ) {
-	    #if ($hostynamey eq  "civmcluster1") { # fixme: this will need to be generalized for any given cluster name(BJA
+	if ( cluster_check() ) {
 
 	    # For running Matlab, run on Master Node for now until we figure out how to handle the license issue. Otherwise, run with SLURM
 	    if ($c =~ /matlab/) {
@@ -1025,7 +1054,6 @@ sub execute {
 	    }
 	} else {
 	    $c = $c;
-	    #print("SLURM MODE DISABLED:$hostynamey\n");
 	}
 
 	    
@@ -1076,20 +1104,7 @@ sub execute_heart {
     my $rc;
 
     # -- log the info and the specific command: on separate lines
-    my $msg;
-    #print "Logfile is: $pipeline_info_log_path\n";
-    my $skip = $do_it ? "" : "Skipped ";
-    my $info = $annotation eq '' ? ": " : " $annotation: ";
-    my $time = scalar localtime;
-    $msg = join '', $skip, "EXECUTING",$info, "--", $time , "--";
-    my $cmsg = "   $single_command";
-    log_info($msg);
-    log_info($cmsg);
-
-    if (0) {
-	my $simple_cmd = depath_annot($single_command);
-	log_info(" $simple_cmd");
-    }
+    execute_log($do_it,$annotation,$single_command);
 
     if ($do_it) {
 	$rc = system ($single_command);
@@ -1272,7 +1287,7 @@ sub load_engine_deps {
 # ------------------
 # load local engine_deps, OR load an arbitrary one, return the engine constants headfile
     my ($engine) = @_;
-    #requried_values=engine==hostname -s
+    #required_values=engine==hostname -s
     #$engine=thishost.
     
     my @errors;
@@ -1447,8 +1462,7 @@ sub new_get_engine_dependencies {
 sub make_list_of_files {
 # -------------
   my ($directory, $file_template) = @_;
-  # make a list of all files in directory fitting template
-  # don't use unix ls for checks, since it can't bring back list of 512
+  # make a list of all files in directory fitting template  # don't use unix ls for checks, since it can't bring back list of 512
   # this can handle 512, probably any
   # I hope pc "dir" can handle 512
 
@@ -1581,5 +1595,483 @@ sub funct_obsolete {
     sleep(1);
 }
 
+
+# ------------------
+sub create_affine_transform {
+# ------------------
+  my ($go, $xform_code, $A_path, $B_path, $result_transform_path_base, $ants_app_dir,$mod,$q,$r) = @_;
+
+  my ($q_string,$r_string) = ('','');
+  if ((defined $q) && ($q ne '')) {
+      $q_string = "-q $q";
+  }
+  if ((defined $r) && ($r ne '')) {
+      $r_string = "-r $r";
+  }
+  
+  my $affine_iter="3000x3000x0x0";
+  print " Test mode : ${test_mode}\n";
+  if (defined $test_mode) {
+      if ($test_mode==1) {
+	  $affine_iter="1x0x0x0";
+      }
+  }
+  my $cmd;
+  if ($xform_code eq 'rigid1') {
+      my $opts1 = "-i 0 --use-Histogram-Matching --rigid-affine true --MI-option 32x8000 -r Gauss[3,0.5]";
+      my $opts2 = "--number-of-affine-iterations $affine_iter --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4 -v";  
+      
+      $cmd = "${ants_app_dir}antsRegistration -d 3 -r [$A_path,$B_path,1] ". 
+	  "-m Mattes[$A_path,$B_path,1,32,random,0.3] -t rigid[0.1] -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 ".
+	  " ${q_string} ${r_string} ".
+	  " -u 1 -z 1 -o $result_transform_path_base --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4";
+     
+  } elsif ( $xform_code eq 'nonrigid_MSQ' ) {
+
+      my $opts1 = "-i 0 ";
+      my $opts2 = "--number-of-affine-iterations $affine_iter --affine-metric-type MSQ";  
+     $cmd = "${ants_app_dir}antsRegistration -d 3 -r [$A_path,$B_path,1] ".
+	 " -m MeanSquares[$A_path,$B_path,1,32,random,0.3] -t translation[0.1] -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
+	 " -m MeanSquares[$A_path,$B_path,1,32,random,0.3] -t rigid[0.1]       -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
+	 " -m MeanSquares[$A_path,$B_path,1,32,random,0.3] -t affine[0.1]      -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
+	 " ${q_string} ${r_string} ".
+	 "  -u 1 -z 1 -o $result_transform_path_base --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4";
+  } elsif ($xform_code eq 'full_affine') {
+
+     $cmd = "${ants_app_dir}antsRegistration -d 3 -r [$A_path,$B_path,1] ".
+	 " -m Mattes[$A_path,$B_path,1,32,random,0.3] -t affine[0.1]      -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
+	 " ${q_string} ${r_string} ".
+	 "  -u 1 -z 1 -o $result_transform_path_base --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4";
+
+  }
+  else {
+      error_out("$mod create_transform: don't understand xform_code: $xform_code\n");
+  }
+
+  my @list = split '/', $A_path;
+  my $A_file = pop @list;
+  my $jid = 0;
+  if ((cluster_check) && ($mod =~ /.*vbm\.pm$/ )) {
+      my ($dummy1,$home_path,$dummy2) = fileparts($result_transform_path_base);
+      my ($home_base,$dummy3,$dummy4) = fileparts($B_path);
+      my @home_base = split(/[_-]+/,$home_base);
+      my $Id_base = $home_base[0];
+      my $Id= "${Id_base}_create_affine_registration";
+      my $verbose = 2; # Will print log only for work done.
+      $jid = cluster_exec($go, "create $xform_code transform for $A_file", $cmd,$home_path,$Id,$verbose);     
+      if (! $jid) {
+	  error_out("$mod create_transform: could not make transform: $cmd\n");
+      }
+  } else {
+      if (! execute($go, "create $xform_code transform for $A_file", $cmd) ) {
+	  error_out("$mod create_transform: could not make transform: $cmd\n");
+      }
+  }
+ # my $transform_path = "${result_transform_path_base}Affine.txt"; # From previous version of Ants, perhaps?
+
+  my $transform_path="${result_transform_path_base}0GenericAffine.mat";
+
+  if (!-e $transform_path && $go && ($jid == 0)) {
+    error_out("$mod create_transform: did not find result xform: $transform_path");
+    print "** $mod create_transform $xform_code created $transform_path\n";
+  }
+  return($transform_path,$jid);
+}
+
+# ------------------
+sub apply_affine_transform {
+# ------------------
+
+  my ($go, $to_deform_path, $result_path, $do_inverse_bool, $transform_path, $warp_domain_path, $ants_app_dir, $interp, $mod,$native_reference_space) =@_; 
+  my $i_opt = $do_inverse_bool ? '-i' : ''; 
+  if ($go) {
+      print "i_opt: $i_opt\n";
+  }
+
+
+  my $reference='';
+  my $i_opt1;
+
+  if ($i_opt=~ m/i/) {
+    $i_opt1=1;
+    $reference=$warp_domain_path;
+  } else {
+    $i_opt1=0;
+    $reference=$to_deform_path;
+  } 
+  
+  if ($mod =~ /.*vbm\.pm$/ ) {
+      if ($native_reference_space) {
+       $reference=$to_deform_path;
+      } else {
+       $reference=$warp_domain_path;
+      }
+  }
+
+  if ($go) {
+      print "interp: $interp\n\n";
+  }
+
+  if ($interp eq '') {
+      $interp="LanczosWindowedSinc";
+      $interp="Linear";
+  } else {
+      $interp="NearestNeighbor";
+  }
+
+  if ($go) {
+      print "i_opt number: $i_opt1\n";
+      print "interpolation: $interp\n";
+      print "reference: $reference\n";
+  }
+  my $cmd="${ants_app_dir}antsApplyTransforms --float -d 3 -i $to_deform_path -o $result_path -t [$transform_path, $i_opt1] -r $reference -n $interp";
+
+  if ($go) {
+      print " \n";
+      print "****applying affine registration:\n $cmd\n";
+  }
+  my @list = split '/', $transform_path;
+  my $transform_file = pop @list;
+  
+  my $jid = 0;
+  if  ((cluster_check) && ($mod =~ /.*vbm\.pm$/ )) {
+      my ($dummy1,$home_path,$dummy2) = fileparts($transform_path);
+      my ($home_base,$dummy3,$dummy4) = fileparts($to_deform_path);
+      my @home_base = split(/[_-]+/,$home_base);
+      my $Id_base = $home_base[0];
+      my $Id= "${Id_base}_apply_affine_registration";
+      my $verbose = 2; # Will print log only for work done.
+      $jid = cluster_exec($go, "$mod: apply transform $transform_file", $cmd ,$home_path,$Id,$verbose);     
+      if (! $jid) {
+	  error_out("$mod apply_affine_transform: could not apply transform to $to_deform_path: $cmd\n");
+      }
+  } else {
+      if (! execute($go, "$mod: apply_affine_transform $transform_file", $cmd) ) {
+	  error_out("$mod apply_affine_transform: could not apply transform to $to_deform_path: $cmd\n");
+      }
+  }
+
+  if (!-e $result_path  && $go && ($jid == 0)) {
+    error_out("$mod apply_affine_transform: missing transformed result $result_path");
+  }
+  if ($go) {
+      print "** $mod apply_affine_transform created $result_path\n";
+  }
+  
+  return($jid);
+
+}
+
+# ------------------
+sub apply_transform {
+# ------------------
+    funct_obsolete("apply_transform", "apply_affine_transform");
+
+    apply_affine_transform(@_);
+}
+
+
+# ------------------
+sub cluster_exec {
+# ------------------
+    my ($do_it,$annotation,$cmd,$work_dir,$Id,$verbose) = @_;
+    my $queue_command='';
+    if (! defined $verbose) {$verbose = 1;}
+    if ($custom_q == 1) {
+	$queue_command = "-p $my_queue";
+    }
+    my $sharing_is_caring = ' -s ';
+    my ($batch_path,$batch_file,$b_file_name);
+    my $msg = '';
+    my $jid=1;
+    execute_log($do_it,$annotation,$cmd,$verbose);
+    if ($do_it) {
+	$batch_path = "${work_dir}/sbatch/";
+	$b_file_name = $Id.'.bash';
+	$batch_file = $batch_path.$b_file_name;
+	if (! -e $batch_path) {
+	    mkdir($batch_path,0777);
+	}
+
+	my $slurm_out_command = " --output=${batch_path}".'/slurm-%j.out ';
+#	my $open_jobs_path = "${batch_path}/open_jobs.txt";
+
+	open($Id,'>',$batch_file);
+	print($Id "#!/bin/bash\n");
+	print($Id "$cmd \n");
+	close($Id);
+
+	# this works, but alternate call might be nicer.
+	($msg,$jid)=`sbatch ${slurm_out_command} ${sharing_is_caring} ${queue_command} $batch_file` =~  /([^0-9]+)([0-9]+)/x;
+	if ( $msg !~  /.*(Submitted batch job).*/) {
+	    $jid = 0;
+	    print("Bad batch submit to slurm with output: $msg\n");
+	    exit;
+	}
+    }
+
+    if ($jid == 0) {
+	print STDERR "  Problem:  system() returned: $msg\n";
+	print STDERR "  * Command was: $cmd\n";
+	print STDERR "  * Execution of command failed.\n";
+	return 0;
+    }
+    if ($jid > 1) {
+	print STDOUT " Job Id = $jid.\n";
+	if ($batch_file ne '') {
+	    my $new_name = $batch_path.'/'.$jid."_".$b_file_name;
+	    print "batch_file = ${batch_file}\nnew_name = ${new_name};\n\n";
+	    rename($batch_file, $new_name);
+        }
+    }
+    return($jid);
+}
+
+
+# ------------------
+sub cluster_check {
+# ------------------
+   if (`hostname -s` =~ /civmcluster1/) {
+       return(1);
+   } else {
+       return(0);
+   }
+}
+
+
+# ------------------
+sub execute_log {
+# ------------------
+    ($do_it,$annotation,$command,$verbose)=@_;
+    if (! defined $verbose) {$verbose = 1;}
+    my $skip = $do_it ? "" : "Skipped ";
+    my $info = $annotation eq '' ? ": " : " $annotation: "; 
+    my $time = scalar localtime;
+    my $msg = join '', $skip, "EXECUTING",$info, "--", $time , "--";
+    my $cmsg = "   $command";
+    if (($verbose == 2)) {
+	if (! $do_it) {
+	    $verbose = 0;
+	} else {
+	    $verbose = 1;
+	}
+    }
+	    log_info($msg,$verbose);
+	    log_info($cmsg,$verbose);
+}
+
+# ------------------
+sub cluster_wait_for_jobs {
+# ------------------
+    my ($interval,$verbose,@job_ids)=@_;
+    my $jobs = join(',',@job_ids);
+    my $completed = 0;
+    if ($jobs ne '') {
+	print STDOUT "SLURM: Waiting for multiple jobs to complete";
+	while ($completed == 0) {
+	    if (`squeue -j $jobs -o "%i %t"` =~ /(CG|PD|R)/) {
+		if ($verbose) {print STDOUT ".";}
+		sleep($interval);
+	    } else {
+		$completed = 1;
+		print STDOUT "\n";
+	    }
+	}
+    } else {
+	$completed = 1;
+    }
+    return($completed);
+}
+
+# ------------------
+sub get_nii_from_inputs {
+# ------------------
+
+    my ($inputs_dir,$runno,$contrast) = @_;
+    opendir(DIR, $inputs_dir);
+    my @input_files = grep(/^$runno.*$contrast/ ,readdir(DIR));
+    my $input_file = $input_files[0];
+    if ($input_file ne '') {
+	my $path= $inputs_dir.'/'.$input_file;
+	return($path);
+    } else {
+	return(0);
+    }
+}
+
+# ------------------
+sub compare_headfiles {
+# ------------------
+    my ($Hf_A, $Hf_B, $include_or_exclude, @keys_of_note) = @_;
+    my @errors=();
+    my $error_msg = '';
+    my $include = $include_or_exclude;
+ 
+
+
+    foreach my $testHf ($Hf_A,$Hf_B) {	
+	if (! $testHf->check()) { # It seems that it should be assumed that the headfile is coming checked already. If not, that aint on us!
+	   # push(@errors, "Unable to open headfile referenced by ${testHf}\n");
+	}
+	if ( 0 ) {  # this causes errors for a reason which is un clear. Both headfiles have already been checked and read external to this call.
+	    if (! $testHf->read_headfile) {
+		push(@errors, "Unable to read contents from headfile referenced by ${testHf}\n");
+	    }
+	}
+	if ($errors[0] ne '') {
+	    $error_msg = join('\n',@errors);
+	    return($error_msg);
+      	}
+    }
+	
+    my @key_array = ();
+    if ($include) {
+	@key_array = @keys_of_note;
+    } else {
+	my @A_keys = $Hf_A->get_keys;
+	my @B_keys = $Hf_B->get_keys;;
+	my @all_keys = keys %{{map {($_ => undef)} (@A_keys,@B_keys)}}; # This trick is from http://www.perlmonks.org/?node_id=383950.
+	foreach my $this_key (@all_keys) {
+	    my $pattern = '('.join('|',@keys_of_note).')';
+	    if ($this_key !~ m/$pattern/) {
+		push(@key_array,$this_key) unless (($this_key eq 'hfpmcnt') || ($this_key eq 'version_pm_Headfile'));
+	    }
+	}
+    }
+
+    if ($key_array[0] ne '') {
+	foreach my $Key (@key_array) {
+	    my $A_val = $Hf_A->get_value($Key);
+	    my $B_val = $Hf_B->get_value($Key);
+	    if ($A_val ne $B_val) {
+		my $msg = "Non-matching values for key \"$Key\":\n\tValue 1 = ${A_val}\n\tValue 2 = ${B_val}\n";
+		push (@errors,$msg);
+	    }
+	}
+    }
+  
+    if ($errors[0] ne '') {
+	$error_msg = join('\n',@errors);
+	$error_msg = "Headfile comparison complete, headfiles are not considered identical in this context.\n".$error_msg."\n";
+    }
+    
+    return($error_msg); # Returns '' if the headfiles are found to be "equal", otherwise returns message with unequal values.
+}
+
+# ------------------
+sub symbolic_link_cleanup {
+#
+    my ($folder) = @_;
+    my $link_path;
+    my $temp_path = "$folder/temp_file";
+    if (! -d $folder) {
+	print " Folder $folder does not exist.  No work was done to cleanup symbolic links in non-existent folder.\n";
+	return;
+    }
+    opendir(DIR,$folder);
+    my @files = grep(/.*/,readdir(DIR));
+    foreach my $file (@files) {
+	$file_path = "$folder/$file";
+	if (-l $file_path) {
+	    $link_path = readlink($file_path);
+	    `mv ${link_path} ${file_path}`;
+	}
+    }
+
+}
+
+
+# ------------------
+sub headfile_list_handler {
+#
+    my ($current_Hf,$key,$new_value,$invert) = @_;
+    if (! defined $invert) { $invert = 0;}
+
+    my $list_string = $current_Hf->get_value($key);
+    if ($list_string eq 'NO_KEY') {
+	$list_string = '';
+    }
+
+    my @list_array = split(',',$list_string);
+   
+    if ($invert) {
+	push(@list_array,$new_value);
+	#$list_string=$list_string.",".$new_value;
+    } else {
+	unshift(@list_array,$new_value);
+	#$list_string=$new_value.",".$list_string;
+    }
+
+    $list_string = join(',',@list_array);
+    $current_Hf->set_value($key,$list_string);
+}
+# ------------------
+sub find_temp_headfile_pointer {
+# ------------------
+    my ($location) = @_;
+    if (! -e  $location) {
+	return(0);
+    } else {
+	opendir(DIR,$location);
+	my @headfile_list = grep(/.*\.headfile$/ ,readdir(DIR));
+	if ($#headfile_list > 0) {
+	    error_out(" $PM: more than one temporary headfile found in folder: ${current_path}.  Unsure of which one accurately reflects previous work done.\n"); 
+	}
+	if ($#headfile_list < 0) {
+	    print " $PM: No temporary headfile found in folder ${current_path}.  Any existing data will be removed and regenerated.\n";
+	    return(0);
+	} else {
+	    my $tempHf = new Headfile ('rw', "${location}/${headfile_list[0]}");
+	    if (! $tempHf->check()) {
+		print " Unable to open temporary headfile ${headfile_list[0]}. Any existing data in ${current_path} will be removed and regenerated.\n";
+		return(0);
+	    }
+	    if (! $tempHf->read_headfile) {
+		print " Unable to read temporary headfile ${headfile_list[0]}. Any existing data in ${current_path} will be removed and regenerated.\n";
+		return(0);
+	    }
+    
+	    return($tempHf); 
+	}
+    }
+}
+
+# ------------------
+sub headfile_alt_keys { # Takes a list of headfile keys to try and returns the first value found.
+# ------------------
+    my ($local_Hf,@keys)=@_;
+    my $value="NO_KEY";
+    my $counter = 0;
+    for (my $key = shift(@keys); ($value eq  "NO_KEY") ; $key = shift(@keys)) {
+	$counter++;
+	if ($#keys == -1) {
+	    return("NO_KEY",0);
+	}
+	$value  =  $local_Hf->get_value($key);
+    }
+    return($value,$counter);
+}
+
+sub data_double_check { # Checks a list of files; if a file is a link, double checks to make sure that it eventually lands on a real file.
+# ------------------    # Subroutine returns number of files which point to null data; "0" is a successful test.
+    my (@file_list)=@_;
+    my $number_of_bad_files = 0;
+
+    for (my $file_to_check = shift(@file_list); ($#file_list > -1) ; $file_to_check = shift(@file_list)) {
+
+#  The following is based on: http://snipplr.com/view/67842/perl-recursive-loop-symbolic-link-final-destination-using-unix-readlink-command/
+	$file_to_check;
+	
+	while (-l $file_to_check) {
+	    $file_to_check = readlink($file_to_check);
+	}
+
+	if (! -e $file_to_check) {
+	    $number_of_bad_files++;
+	}
+    }
+
+    return($number_of_bad_files);
+}
 
 1;
