@@ -308,5 +308,3 @@ if ( $find_tags ) {
 printd(0,"initiate archive using \n\narchiveme $civm_id ".join(" ",keys(%taglist))."\n\n");
 }
 exit $GOODEXIT;
-=======
->>>>>>> Stashed changes
