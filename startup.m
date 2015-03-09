@@ -55,7 +55,9 @@ genpaths={
     [ workstation_home '/shared/mathworks']
     [ workstation_home '/shared/matlab_img_processing']
     [ workstation_home '/recon/mat_recon_pipe/filter' ]
+    [ workstation_home '/recon/mat_recon_pipe/get_data' ]
     [ workstation_home '/recon/mat_recon_pipe/grid' ]
+    [ workstation_home '/recon/mat_recon_pipe/mat_wrappers' ]
     [ workstation_home '/recon/External/grid/mri_unbound']
     };
 
