@@ -6,6 +6,10 @@
 #
 # printd(print only if devbugval high enough)
 # load_file_to_array(loads a file at path, to an array of lines at ref)
+# write_array_to_file inverse of load_file_to_array
+#get_engine_constants_path  these two may be better suited to pipeline_utilities
+#get_engine_hosts
+# get_script_loc
 # whoami(functname)
 # whowasi(callingfunctionname)
 # debugloc(show partofcallstack if debug_val>debug_loc)
@@ -92,17 +96,15 @@ sub write_array_to_file { # (path,array_ref[,debug_val]) writes text to array re
     civm_simple_util::whoami();
     civm_simple_util::printd(30,"Opening file $file.\n");
     open my $text_fid, ">", "$file" or croak "could not open $file";
-#  open SESAME_OUT, ">$outpath"; 
     croak "file <$file> not Text\n" unless -T $text_fid ;
-    foreach ( @all_lines ) 
-    {
+    foreach ( @all_lines ) {
 	print  $text_fid $_;  # write out every line modified or not 
     }
-#    @all_lines =  <$text_fid> ;
     close  $text_fid;
-#    push (@{$array_ref}, @all_lines);
-    return;# $#all_lines+1;
+
+    return;
 }
+
 =item constant_path=get_engine_constants_path { # (hostname[,debug_val])
 
 =cut
