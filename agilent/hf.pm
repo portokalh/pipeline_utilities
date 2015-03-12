@@ -399,7 +399,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     if ( $cycles ne 1  && $hf->get_value("ray_blocks")==1 ) { 
 #	$vol_type="2D";
 	$hf->set_value("ray_blocks",$cycles);
-	carp("\n\nwarning:\n\tCIVM RECONSTRUCTION HAS NEVER HAD SUCESS RECONSTRUCTING IMAGES WITH acqcycles > 1!\n\n");# JAMES HAS FORCED THIS TO BE A FAILURE.\n\n");
+	#carp("\n\nwarning:\n\tCIVM RECONSTRUCTION HAS NEVER HAD SUCESS RECONSTRUCTING IMAGES WITH acqcycles > 1!\n\n");# JAMES HAS FORCED THIS TO BE A FAILURE.\n\n");
 	sleep_with_countdown(4);
     } elsif ( $cycles > 1 && $hf->get_value("ray_blocks") > 1 )  { 
 	carp("acqcycles>1 and ray_blocks>1, un expected condition see JAMES!");
@@ -863,7 +863,8 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     # if we have more than one echo of data, lets look to see if we should be swapping them.
     if ( $hf->get_value('ne') >= 2 ) {
 	# set echo reversing option to on.
-	if ( $hf->get_value('alternate_echo_reverse') !~ /^(nn|yy)$/x ) {
+	if ( ( $hf->get_value('alternate_echo_reverse') !~ /^NO_KEY$/x ) 
+	     && ( $hf->get_value('alternate_echo_reverse') !~ /^(nn|yy)$/x ) ) {
 	    # n is normal conditions, yy  has never been seen, only nn and yn have been seen, and it actually seems to indicate that we start swaping on the second echo not the first, This needs to be confirmed by gary. 
 	    # we're going to convert this to a binary(logical) value for now, If it turns out that we could also be swapping after the second echo we weill go to a flag variable with 3 states( 0, 1 or 2), if the yy condition exists we'll go to 4 states.
 	    if (  $hf->get_value('alternate_echo_reverse') =~ /^(yn)$/x ) {

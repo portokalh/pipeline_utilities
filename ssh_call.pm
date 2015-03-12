@@ -53,7 +53,7 @@ sub get_file {
 	$dest="$dest/".basename($file);
     } #allow empty file, in case we have the full path in our sourcedir
 
-    my @args  = ("scp", $src, $dest);
+    my @args  = ("scp","-C", $src, $dest);
     my $cmd=join(" ",@args);
     print STDERR "   Beginning ".$cmd." at $date...\n" if $verbose>0;#    print STDERR "Beginning scp of $src at $date...";
     my $start = time;
@@ -185,6 +185,7 @@ sub get_dir_i { # the internal get_dir which does either the dir or its contents
     }
     
     unshift(@args,"-r"); # put -r on beinning of arglist,
+    unshift(@args,"-C"); # add the compression.
     unshift(@args,"scp");# put scp(our program name) on beginning of arglist
     push(@args,$dest);   # put our destination at the end of the arglist
     #@args = ("scp", $src, $dest);

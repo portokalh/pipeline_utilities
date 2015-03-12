@@ -183,6 +183,8 @@ sub nifti_ize_util
   $args = "\'$src_image_path\', \'$image_prefix\', \'$image_suffix\', \'$dest_nii_path\', $xdim, $ydim, $zdim, $nii_datatype_code, $xvox,$yvox,$zvox, $flip_y, $flip_z, $zstart, $zstop, \'$roll_string\'";
 
   my $cmd =  make_matlab_command ($NIFTI_MFUNCTION, $args, "$setid\_", $Hf); 
+  if ( ! -e $dest_nii_path && -e $dest_nii_path.".gz") { 
+      $dest_nii_path=$dest_nii_path.".gz";  }
   if ( ! -e $dest_nii_path) { 
       if (! execute($ggo, "nifti conversion", $cmd) ) {
 	  error_out("Matlab could not create nifti file from runno $runno:\n  using $cmd\n");

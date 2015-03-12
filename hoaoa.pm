@@ -263,7 +263,7 @@ sub aoaref_get_subarray { # ( $ref_to_AoA )
 #defined  $bruker_header_ref->{$key} 
 #    if ( $#{$dataarray_ref} >=1 ){
     if ( $dataarray_ref ne "" && $reftype eq 'ARRAY' ) {
-	if ( defined @{$dataarray_ref->[($n-1)]} )
+	if ( defined @{$dataarray_ref->[($n-1)]} ) #depreciated warning, perhaps just omit defined keyword?
 	{
 	    @data=@{$dataarray_ref->[($n-1)]};
 	} else {
