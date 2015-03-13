@@ -224,6 +224,28 @@ endif
 # ============ make a list of (001 ... 100) xxxxxxxxx
 # ============ make a list of (001 ... ALL)
 
+@ num_digits = (`echo $flist[1]:r | wc -c `  - 2  ) - ( `echo $basename | wc -c ` - 1 ) 
+# echo "cin $flist[1]:r - c in $basename num digits $num_digits" # debug display
+set newbase = $runno"rsimx"
+set ext = $flist[1]:e
+
+foreach file (`ls $basename*$ext`)
+  set c_num = `echo $file:t | cut -d '.' -f 2 | sed 's/^0*//g'` 
+  #echo  "$file " $c_num - $new_top
+  @ num = $c_num - $new_top
+  if ( $num < $start ) then
+    @ num = $c_num - $new_top + $nslices
+  endif
+  set np=""
+  while ( ( `echo $np$num |wc -c ` - 1 ) < $num_digits ) 
+    set np="0$np"
+  end
+  echo -n "." 
+  cp $file $newbase.$np$num.$ext
+  # previously copied, i dont know why i think is should just move
+end
+set error = "script end"
+goto endoriginalcpagl
 #
 #set start = 1 # moved higher to allow for alternate stat number(0 or 1) 
 #check start at 0 bool
@@ -311,6 +333,8 @@ while ($oldslice < $new_top)
   @ new ++
   @ oldslice ++
 end
+endoriginalcpagl:
+
 #
 # ========== successful completion 
 #
