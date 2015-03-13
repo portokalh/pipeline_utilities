@@ -87,17 +87,23 @@ else
     case delos:
             set recon_dirs = (/delosspace)
             breaksw
-    case naxos:
-            set recon_dirs = (/naxosspace)
-            breaksw
     case manta:
             set recon_dirs = (/reconma)
             breaksw
-    case wallace:
-            set recon_dirs = (/reconwa)
+    case naxos:
+            set recon_dirs = (/naxosspace)
+            breaksw
+    case piper:
+            set recon_dirs = (/piperspace)
             breaksw
     case syros:
             set recon_dirs = (/syrosspace)
+            breaksw
+    case vidconfmac:
+            set recon_dirs = (/vidconfmacspace)
+            breaksw
+    case wallace:
+            set recon_dirs = (/reconwa)
             breaksw
   default:    
 	    set error = "Unknown: $engine (as recon computer name)"  
