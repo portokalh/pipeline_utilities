@@ -24,7 +24,7 @@ set do_it = 1
 set headext = headfile
 #
 # ======== check input parameters 
-if (($#argv < 3) || ($#argv > 4)) then
+if (($#argv < 3) || ($#argv > 5)) then
    echo " "
    echo "   Script to restack 3D image slice set so new slice is on top."
    echo "usage: lxrestack  runno  new_top_slice  nslices  [optional dir_name]"
@@ -39,6 +39,8 @@ if (($#argv < 3) || ($#argv > 4)) then
    echo "             location.  Give the (mounted) directory of the runno dir."
    echo "             By default script looks in /reconXta /reconXt/omega for"
    echo "             runno, where X is determined by recon_computer_name."
+   echo "   op_type:  cp or mv, which program to run, are we copying or moving."
+   echo "             default is to copy."
    echo " Output files are named RUNNOrsimx.NNN; the rs is for restack."
    echo " Assumes dataset numbering starts from slice number 1."
    echo " This script expects the conventional locations for images," 
@@ -63,7 +65,7 @@ if (! $?RECON_HOSTNAME) then
 endif
 set engine = $RECON_HOSTNAME
 #
-if ($#argv == 4) then
+if ($#argv >= 4) then
   set recon_dirs = ($4)
   set special_dir = 1
 else
@@ -110,6 +112,10 @@ else
 	    goto errorend
             breaksw
   endsw
+endif
+set op_type="cp"
+if ($#argv >= 5) then
+  set  op_type="$5"
 endif
 #
 # ======== Try to find the recon dir on the list of locations 
@@ -181,14 +187,15 @@ set flist = `cat $temp_file`
 @ n001 = 0 
 foreach f ($flist)
   @ n001 = $n001 + 1
+  echo "from dir file list: $f"
 end
 unalias rm
 rm $temp_file
 switch ($n001)
 case 0:
-       echo "  WARNING: Couldn't find .000$start.raw image in $image_dir."
-       echo "  This script requires file numbering to start from 1."
-       set error = "Image numbering does not start from 1."
+       echo "  WARNING: Couldn't find 000$start.raw image in $image_dir."
+       echo "  This script requires file numbering to start from $start."
+       set error = "Image numbering does not start from $start."
        goto errorend
        breaksw
 case 1:
@@ -225,11 +232,26 @@ endif
 # ============ make a list of (001 ... ALL)
 
 @ num_digits = (`echo $flist[1]:r | wc -c `  - 2  ) - ( `echo $basename | wc -c ` - 1 ) 
+if ( $num_digits > 5 ) then
+
+  while ( 1 ) 
+    sleep 5
+    echo "Error with num digits, got too many for some reason, $flist[1]:r vs $basename"
+  end
+endif
+
+
+
 # echo "cin $flist[1]:r - c in $basename num digits $num_digits" # debug display
 set newbase = $runno"rsimx"
 set ext = $flist[1]:e
-
+if ( -e restack_busy ) then
+  set error="Previous run busy, If no run is busy you will have to clean up the directory manually."
+  goto errorend
+endif
+touch restack_busy;
 foreach file (`ls $basename*$ext`)
+
   set c_num = `echo $file:t | cut -d '.' -f 2 | sed 's/^0*//g'` 
   #echo  "$file " $c_num - $new_top
   @ num = $c_num - $new_top
@@ -240,12 +262,13 @@ foreach file (`ls $basename*$ext`)
   while ( ( `echo $np$num |wc -c ` - 1 ) < $num_digits ) 
     set np="0$np"
   end
-  echo -n "." 
-  cp $file $newbase.$np$num.$ext
-  # previously copied, i dont know why i think is should just move
+  echo $op_type $file $newbase.$np$num.$ext
+  if ($do_it) then; $op_type $file $newbase.$np$num.$ext ; endif
+  # previously copied, i dont know why, i think is should just move
 end
+rm restack_busy;
 set error = "script end"
-goto endoriginalcpagl
+goto endoriginalloop
 #
 #set start = 1 # moved higher to allow for alternate stat number(0 or 1) 
 #check start at 0 bool
@@ -333,7 +356,7 @@ while ($oldslice < $new_top)
   @ new ++
   @ oldslice ++
 end
-endoriginalcpagl:
+endoriginalloop:
 
 #
 # ========== successful completion 

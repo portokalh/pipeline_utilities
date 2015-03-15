@@ -22,7 +22,8 @@
 #                      now find iroll_mine program in arch bin dir setup, on macs.
 #
 #          01/15/14 james added convenience prompts for rm and archive at end.      
-set version = "20140115"
+#          03/12/15 james fixed the loop to support arbitrary big 3d images
+set version = "20150312"
 #set verbose
 #
 # should be 1 for real use:
@@ -216,7 +217,7 @@ unalias rm
 rm $temp_file
 switch ($n001)
 case 0:
-       echo "  WARNING: Couldn't find .000$start image in $image_dir."
+       echo "  WARNING: Couldn't find 000$start.raw image in $image_dir."
        echo "  This script requires file numbering to start from $start."
        set error = "Image numbering does not start from $start."
        goto errorend
@@ -225,7 +226,8 @@ case 1:
        # ok 
        set onebase = 1 
        set basename = $flist[1]:r 
-       set input_suffix = $basename:r
+       set basename = $basename:r 
+       set input_suffix = $basename:t
        set nchar = `echo $runno | awk '{print length($0)}'`
        #set cind = `echo $basename | awk '{print index($0,"imx")}'` 
        #set cind = `awk "BEGIN{ print $cind-2 }"`
@@ -250,6 +252,7 @@ default:
        goto errorend
        breaksw
 endsw 
+@ num_digits = (`echo $flist[1]:r | wc -c `  - 2  ) - ( `echo $basename | wc -c ` - 1 ) 
 
 #
 # ============ figure out the dimensions of the images
@@ -374,6 +377,56 @@ foreach hundred ($hundreds)
 end
 endif
 
+# echo "cin $flist[1]:r - c in $basename num digits $num_digits" # debug display
+set newbase = $runno"roimx"
+set ext = $flist[1]:e
+echo "Guessing number of concurrent operations"
+set ostype=`uname`
+
+if ( $ostype == "Darwin" ) then
+  set max_njobs=` sysctl -n hw.ncpu`
+  @ max_njobs=$max_njobs + $max_njobs + $max_njobs + $max_njobs
+else 
+  @ max_njobs=32
+endif
+set ext = $flist[1]:e
+if ( -e roller_busy ) then
+  set error="Previous run busy, If no run is busy you will have to clean up the directory manually."
+  goto errorend
+endif
+touch roller_busy;
+foreach file (`ls $basename*$ext`)
+  set c_num = `echo $file:t | cut -d '.' -f 2` 
+  set rollfile = $runno\roimx.$c_num.$ext
+  set myargs =  "$file $ixdim $iydim $cornerX $cornerY 2"
+  if ($do_it) then
+    $iroll_name $myargs > $image_dir/$rollfile &
+    set keepstat = $status
+    jobs > $temp_file
+    @ njobs=`cat $temp_file|wc -l`
+    while ( $njobs> $max_njobs)
+      sleep 1
+      jobs > $temp_file
+      @ njobs=`cat $temp_file|wc -l`
+    end
+    #echo -n "."
+  else
+    echo fake: $iroll_name $myargs \> $rollfile
+    set keepstat = 0
+  endif
+  if ($keepstat != 0) then
+    echo "(cp status is $keepstat -- during roll an error occurred.)"
+    set error = "roll of $file in $image_dir failed."
+    goto errorend
+  endif
+  #rm $temp_file2
+  echo "  rolled $file into $image_dir/$rollfile ."
+end
+
+wait
+rm roller_busy
+set error = "script end"
+goto endoriginalloop
 # do any padded 0-999 and any thousands 
 set thousands = (0 1 2 3 4)
 set hundreds = (0 1 2 3 4 5 6 7 8 9)
@@ -393,10 +446,14 @@ foreach hundred ($hundreds)
       #set thefiles = $runno\*.$thousand$hundred$ten\?.raw
       set thefiles = $runno\*.$thousand$hundred$ten\?.raw
     endif
+    echo --- $thefiles ---
+
 
     set empty = `(ls $thefiles > $temp_file) >& /dev/null`
     set flist = `cat $temp_file`
     #echo "$thefiles have $flist";
+    set error="$flist"
+    goto errorend
     foreach f ($flist)
        set ext = $f:e
        set head = $f:r
@@ -404,8 +461,8 @@ foreach hundred ($hundreds)
        set rollfile = $runno\roimx.$nbr.$ext
        #echo "rollfile = $rollfile"
        # for possible overwrite of roimx file
-       cp $image_dir/$f $temp_file2
-       set myargs =  "$temp_file2 $ixdim $iydim $cornerX $cornerY 2"
+       #cp $image_dir/$f $temp_file2
+       set myargs =  "$f $ixdim $iydim $cornerX $cornerY 2"
        if ($do_it) then
             $iroll_name $myargs > $image_dir/$rollfile
             set keepstat = $status
@@ -419,13 +476,13 @@ foreach hundred ($hundreds)
             set error = "roll of $f in $image_dir failed."
             goto errorend
        endif
-       rm $temp_file2
-       echo "  rolled $f into $image_dir/$rollfile $multibasesignal"
+       #rm $temp_file2
+       echo "  rolled $f into $image_dir/$rollfile $rollfile
     end
   end
 end
 end
-
+endoriginalloop:
 # 
 #
 #
@@ -465,5 +522,3 @@ errorend:
   echo " "
   exit 1 
 #---------------------------------------------------------------------
-=======
->>>>>>> Stashed changes
