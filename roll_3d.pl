@@ -17,6 +17,7 @@ use warnings;
 my $GOODEXIT = 0;
 my $BADEXIT = 1;
 my $ERROR_EXIT = $BADEXIT;
+my $use_csh_scripts = 0 ; 
 #my $ARCHIVE_TAG = 1;   # select write of archive_tag file (READY_) used by CIVM archive 
 #my $READY_ARCHIVE_TAG = "READY_";  # name of file ready to be chosen for archive 
 #my $skip_gui_boolean = 0; # if 1 engage test mode and skip gui
@@ -124,7 +125,25 @@ if ( $dims==0 ) {
     
 #if ($#ARGV+1 < 3) { usage_message("Wrong number of arguments on command line");}
 my @runnos=@ARGV;
-printd(25, "INFO: Processing run numbers: ".join(" ",@runnos)."\n");
+
+
+if ( $#runnos > 1 && $use_csh_scripts) {
+    my @cmds=();
+    my $cmd_base="roll_3d -x $opts{x} -y $opts{y}  -z $opts{z} ";
+    if ( $opts{w} ne "UNDEFINED" ) {
+	$cmd_base=$cmd_base."-w $opts{w} ";
+    }
+    for my $runno (@runnos) {
+	push(@cmds,"$cmd_base $runno");
+    }
+    print("command list \n\t".join("\n\t",@cmds)."\n");
+    execute_indep_forks(1,"roll_3d on runno group ".join(" " .@runnos)."\n",@cmds);
+    #execute(1,"roll_3d on runno group ".join(" " .@runnos)."\n",@cmds);
+    exit $GOODEXIT;
+
+} else {
+    printd(25, "INFO: Processing run numbers: ".join(" ",@runnos)."\n");
+}
 
 my $cmd='';
 @error_m=("Unable to "," headfile ");
@@ -167,6 +186,9 @@ if ($#missing_runnos>=0) {
 my @rm_paths;
 my %taglist;
 my $find_tags=1;
+# doing full list at a time not terrible necessary now that we've condnesed the process.
+#my @full_list_of_work;
+#my @cleanup_commands;
 for my $runno (@runnos) {
     printd(5,"#---$runno\n");
     #find headfile.
@@ -181,9 +203,11 @@ for my $runno (@runnos) {
     $HF->set_value("roll_corner_Y",$opts{'y'});
     $HF->set_value("roll_first_Z",$opts{'z'});
     my ($name,$hfdir,$suffix)=fileparts($hfpath);    
+    open_log($hfdir);
     my $tc=$HF->get_value("scanner_tesla_image_code");
     my $ic=$HF->get_value("output_image_code");
-    if ($ic !~ /NO_KEY/x) {
+    #print("code:$tc\ncode2:$ic\n");
+    if ($ic !~ /NO_KEY/x && length($ic) == 2 ) {
 	$tc=$ic; # hack to fix US images not showing correcltly.
     }
     if ( $find_tags) {
@@ -208,6 +232,13 @@ for my $runno (@runnos) {
 	    printd(0,"WARNING: No tag file found for scan $runno\n");
 	}
     }
+    #print("code:$tc\ncode2:$ic\n");
+    my @imgs=glob("${hfdir}/*imx*");# all imx...
+    #print("$runno${tc}imx[.][0]+[1]?[.]raw");
+    my @first_imgs=grep(/$runno${tc}imx[.][0]+[1]?[.]raw/, @imgs);
+    if ( $#first_imgs> 0 ) { error_out("too many first imagse, somethingwent wrong"); }
+    
+    ### check for previous, and clean them up.
     if ( -e "${hfdir}orig" ) {
 	printd(5,"Duplicate roll run called, checking for original images in orig folder to roll those instead\n");
 	$cmd="mkdir -p ${hfdir}last";
@@ -216,95 +247,203 @@ for my $runno (@runnos) {
 	} else {
 	    #`rm -fr ${hfdir}last`;
 	    printd(5,"WARNING: Re-run multiple times, behavior uncertain!\n");
-	    `$cmd`;
-	    $cmd="cp ${hfpath} ${hfdir}last/.";
+	    #`$cmd`;
+	    $cmd="cp -f ${hfpath} ${hfdir}last/.";
 	    `$cmd`;
 	}
-	$cmd="mv ${hfdir}orig/* ${hfdir}last/.";
-	printd(45,"$cmd\n");
-	`$cmd`;
-	$cmd="mv ${hfdir}/*.raw ${hfdir}last/.";
-	printd(45,"$cmd\n");
-	`$cmd`;
+	my @o_imgs=glob("${hfdir}/*imx*");
+	#$cmd="mv ${hfdir}orig/* ${hfdir}last/.";
+	#printd(45,"$cmd\n");
+	#`$cmd`;
 
-	$cmd="mv ${hfdir}/last/$runno${tc}imx.*.raw ${hfdir}";
-	printd(45,"$cmd\n");
-	`$cmd`;
-	if ( ! -e "$hfdir".$runno.$tc."imx.0001.raw") {
-	    printd(15,"Moving original out of way\n");
-	    $cmd="mv -f $hfdir"."last/".$runno.$tc."*.*.raw ${hfdir}/.";
+	if (  $#imgs >= 0 && $#o_imgs >=0 ) { 
+	    $cmd="mv -f ${hfdir}/*imx* ${hfdir}last/.";
+	    printd(45,"$cmd\n");
 	    `$cmd`;
 	}
+	$cmd="mv ${hfdir}/orig/$runno*imx* ${hfdir}";
+	printd(45,"$cmd\n");
+	`$cmd`;
+	#if ( ! -e "$hfdir".$runno.$tc."imx.0001.raw") {
+	#    printd(15,"Moving original out of way\n");
+	#    $cmd="mv -f $hfdir"."last/".$runno.$tc."*.*.raw ${hfdir}/.";
+	#    `$cmd`;
+	#}
     }
-    my ($st,$img_suffix,@erros)=get_image_suffix($hfdir,$runno);
-    if ( ! -e "$hfdir".$runno.$tc."imx.0001.raw") {
+
+    #my @EnvListFile = 
+    #grep /EnvList\.\d{10}/,
+    #glob("$HOMEDIR/data/EnvList.*");
+
+    @imgs=glob("${hfdir}*imx*");
+    #@first_imgs=grep("$runno${tc}imx[.][0]+[1]?[.]raw", @imgs);
+    @first_imgs=grep(/$runno${tc}imx[.][0]+[1]?[.]raw/, @imgs);
+    if ( $#first_imgs!=0 && $#imgs>=0) {
+	my ($st,$img_suffix,@erros)=get_image_suffix($hfdir,$runno);
+ 	if ( ! defined $img_suffix || $st) { 
+	    error_out( " image suffix not standard and not found error.");
+	}
 	printd(5,"image code did not follow standard, had to set to $img_suffix\n");
 	$HF->set_value("output_image_code",$img_suffix);
 	$tc=$img_suffix;
-    } 
+    } else {
+	if ( $#imgs<0 ) {
+	    error_out("files not found in directory or too many. ");
+	}
+	if ( $#first_imgs!=0 ) {
+	    error_out("first images error. <".join(@first_imgs).">");
+	}
+    }
+    if ( !$use_csh_scripts ) { 
+	my $dim_z=$HF->get_value("dim_Z");
+	if ($HF->get_value("RH_xres") ne 'NO_KEY' ) {
+	    $dim_z=$HF->get_value("RH_zres");
+	}
+	if ( $dim_z eq 'NO_KEY' || $dim_z<=1) {
+	    $dim_z=0;
+	}
+	my $dim_x=$HF->get_value("dim_X");
+	if ($HF->get_value("RH_xres") ne 'NO_KEY' ) {
+	    $dim_x=$HF->get_value("RH_xres");
+	}
+	my $dim_y=$HF->get_value("dim_Y");
+	if ($HF->get_value("RH_yres") ne 'NO_KEY' ) {
+	    $dim_y=$HF->get_value("RH_yres");
+	}
+	my $o_code=$tc;
+	if ( $opts{'z'} > 0 ) {
+	    $o_code="rs";
+	} else {
+	    $o_code="ro";
+	}
+	my $trans_program="mv";
+	my $t_args="";
+	if ( $opts{'x'} > 0 || $opts{'y'} > 0) {
+	    $trans_program="iroll_mine";
+	    $t_args="$dim_x $dim_y ".$opts{'x'}." ".$opts{'y'}." 2";
+	}
 
-    if ( $opts{'x'} > 0 || $opts{'y'} > 0 ) { 
-	$cmd='roller_radish '.$runno.' '.$opts{'x'}.' '.$opts{'y'}.' '.$WORK_FOLDER_PATH;
-	printd (15, $cmd."\n");
-	`$cmd`;
-
+	my @parts=split('\.',$first_imgs[0]);
+	my $start=$parts[1];
+	my @cmd_list;
+	foreach my $img  ( @imgs ) {
+	    my @parts=split('\.',$img);
+	    my $num =$parts[1];
+	    
+	    my $newname=$runno.$o_code."imx";
+	    if ( $opts{'z'} > 0 )  {
+		if ( ($num -$opts{'z'}) < 0 ) {
+		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} + $dim_z +$start );
+		} else {
+		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} +$start);
+		}
+	    }
+	    #print("$newname");
+	    my $cmd="$trans_program $img $t_args > $hfdir$newname.$num.$parts[2]";
+	    print("$cmd\n");
+	    push(@cmd_list,$cmd);
+	}
+	execute_indep_forks(1,"roll_3d on $runno ",@cmd_list);
+	#push(@full_list_of_work,@cmd_list);
 	$cmd="mkdir -p ${hfdir}orig";
 	if ( ! -e "${hfdir}orig" ) { 
 	    `$cmd`;
 	}
-	if ( -e "$hfdir".$runno.$tc."imx.0001.raw") {
+	@imgs=glob("$hfdir".$runno."*imx.*.raw");	
+	#if ( -e "$hfdir".$runno.$tc."imx.*1.raw") {
+	if ( $#imgs>=0 && $#imgs > $dim_z ) {
 	    printd(15,"Moving original out of way\n");
 	    $cmd="mv -f $hfdir".$runno.$tc."*.*.raw ${hfdir}orig/.";
+	    #push(@cleanup_commands,$cmd);
 	    `$cmd`;
-	} elsif ( -e "$hfdir".$runno."rsimx.0001.raw") {
-	    printd(15,"Moving rolled out of way\n");
-	    $cmd="mv -f $hfdir".$runno."rs*.*.raw ${hfdir}orig/.";
-	    `$cmd`;
-	} else {
-	    printd(45,"no \n\t$hfdir".$runno.$tc."imx.0001.raw or \n\t$hfdir".$runno."rsimx.0001.raw\n");
-	}
-    }
-    my $dim_z=$HF->get_value("dim_Z");
-    if ($HF->get_value("RH_xres") ne 'NO_KEY' ) {
-	$dim_z=$HF->get_value("RH_zres");
-    }
-    if ( $dim_z eq 'NO_KEY' || $dim_z<=1) {
-	if ( $opts{'z'} > 0 ) {
-	    printd(0,"WARNING: NO_Z Ignoring z rolls. YOU ASKED FOR a z Roll of $opts{'z'} ");
-	    if ( $dim_z eq 'NO_KEY' )  {
-		printd(0,"BUT CANNOT PULL dim_Z|RH_Zres FROM HEADFILE $hfpath\n");
-	    } else {
-		printd(0,"BUT Z is <=1 IN HEADFILE $hfpath\n");
-	    }
-	}
-    } else {
-	if ( $opts{'z'} > 0 ) {
-	    $cmd='restack_radish '.$runno." ".$opts{'z'}." $dim_z ".$WORK_FOLDER_PATH;
-	    printd (15, $cmd."\n");
-	    `$cmd`;
-	    $cmd="mkdir -p ${hfdir}orig";
-	    if ( ! -e "${hfdir}orig" ) { 
-		`$cmd`;
-	    }	
-	    if ( -e "$hfdir".$runno.$tc."imx.0001.raw") {
-		printd(15,"Moving original out of way\n");
-		$cmd="mv -f $hfdir".$runno.$tc."*.*.raw ${hfdir}orig/.";
-		`$cmd`;
-	    } elsif ( -e "$hfdir".$runno."roimx.0001.raw") {
-		printd(15,"Moving rolled out of way\n");
-		$cmd="mv -f $hfdir".$runno."ro*.*.raw ${hfdir}orig/.";
-		`$cmd`;
-	    } else {
-		printd(45,"no \n\t$hfdir".$runno.$tc."*.*001.raw or \n\t$hfdir".$runno."ro*.*001.raw\n");
-	    }
-	}
+	} 
+    } else { # do old way,
+# 	if ( $opts{'x'} > 0 || $opts{'y'} > 0 ) { 
+# 	    if ( $use_csh_scripts ) {
+# 		$cmd='roller_radish '.$runno.' '.$opts{'x'}.' '.$opts{'y'}.' '.$WORK_FOLDER_PATH;
+# 		printd (15, $cmd."\n");
+# 		execute(1,"rolling ", $cmd);
+# 	    }
+
+# 	    $cmd="mkdir -p ${hfdir}orig";
+# 	    if ( ! -e "${hfdir}orig" ) { 
+# 		`$cmd`;
+# 	    }
+# 	    #if ( -e "$hfdir".$runno.$tc."imx.*1.raw") {
+# 	    @imgs=glob("$hfdir".$runno.$tc."imx.*.raw");
+# 	    if ( -e $#imgs >= 0 ) {
+# 		printd(15,"Moving original out of way\n");
+# 		$cmd="mv -f $hfdir".$runno.$tc."*.*.raw ${hfdir}orig/.";
+# 		`$cmd`;
+# 	    } 
+# 	    @imgs=glob("$hfdir".$runno."rsimx.*.raw");
+# 	    #if ( -e "$hfdir".$runno."rsimx.*1.raw") {
+# 	    if ( $#imgs>=0 ) {
+# 		printd(15,"Moving rolled out of way\n");
+# 		$cmd="mv -f $hfdir".$runno."rs*.*.raw ${hfdir}last/.";
+# 		`$cmd`;
+# 	    } else {
+# 		printd(45,"no \n\t$hfdir".$runno.$tc."imx.*1.raw or \n\t$hfdir".$runno."rsimx.*1.raw\n");
+# 	    }
+# 	}
+# 	my $dim_z=$HF->get_value("dim_Z");
+# 	if ($HF->get_value("RH_xres") ne 'NO_KEY' ) {
+# 	    $dim_z=$HF->get_value("RH_zres");
+# 	}
+# 	if ( $dim_z eq 'NO_KEY' || $dim_z<=1) {
+# 	    if ( $opts{'z'} > 0 ) {
+# 		printd(0,"WARNING: NO_Z Ignoring z rolls. YOU ASKED FOR a z Roll of $opts{'z'} ");
+# 		if ( $dim_z eq 'NO_KEY' )  {
+# 		    printd(0,"BUT CANNOT PULL dim_Z|RH_Zres FROM HEADFILE $hfpath\n");
+# 		} else {
+# 		    printd(0,"BUT Z is <=1 IN HEADFILE $hfpath\n");
+# 		}
+# 	    }
+# 	} else {
+# 	    if ( $opts{'z'} > 0 ) {
+# 		if ( $use_csh_scripts ) {
+# 		    $cmd='restack_radish '.$runno." ".$opts{'z'}." $dim_z ".$WORK_FOLDER_PATH." mv";
+# 		    printd (15, $cmd."\n");
+# 		    execute(1,"restacker",$cmd);
+# 		}
+# 		$cmd="mkdir -p ${hfdir}orig";
+# 		if ( ! -e "${hfdir}orig" ) { 
+# 		    `$cmd`;
+# 		}	
+# 		$cmd="mkdir -p ${hfdir}last";
+# 		if ( ! -e "${hfdir}last") {
+# 		    `$cmd`;
+# 		}
+# 		@imgs=glob("$hfdir".$runno.$tc."imx.*.raw");	
+# 		#if ( -e "$hfdir".$runno.$tc."imx.*1.raw") {
+# 		if ( $#imgs>=0 ) {
+# 		    printd(15,"Moving original out of way\n");
+# 		    $cmd="mv -f $hfdir".$runno.$tc."*.*.raw ${hfdir}orig/.";
+# 		    `$cmd`;
+# 		} 
+# 		@imgs=glob("$hfdir".$runno."rsimx.*.raw");
+# 		#if ( -e "$hfdir".$runno."roimx.*1.raw") {
+# 		if ( $#imgs>=0 ) {
+# 		    printd(15,"Moving rolled out of way\n");
+# 		    $cmd="mv -f $hfdir".$runno."ro*.*.raw ${hfdir}last/.";
+# 		    `$cmd`;
+# 		} else {
+# 		    printd(45,"no \n\t$hfdir".$runno.$tc."*.*1.raw or \n\t$hfdir".$runno."ro*.*1.raw\n");
+# 		}
+# 	    }
+# 	}
     }
     $HF->write_headfile($hfpath);
     print("#-- Finished $runno\n");
+    close_log(0);    
 }
+
+#execute_indep_forks(1,"roll_3d on @runnos ",@full_list_of_work);
+#execute_indep_forks(1,"preserve_original_image ",@cleanup_commands);
 
 printd(5,"Finished all numbers with rolls x=$opts{x} y=$opts{y} z=$opts{z}, Original files stashed into RUNNOimages/orig\n");
 if ( $find_tags ) {
 printd(0,"initiate archive using \n\narchiveme $civm_id ".join(" ",keys(%taglist))."\n\n");
 }
+
 exit $GOODEXIT;
