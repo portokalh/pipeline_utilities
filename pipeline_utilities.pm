@@ -33,7 +33,7 @@ use English;
 use vars qw($HfResult $BADEXIT $GOODEXIT);
 my $PM="pipeline_utilities";
 use civm_simple_util qw(load_file_to_array write_array_to_file);
-
+our $PIPELINE_INFO; #=0; # needstobe undef.#pipeline log fid. All kinds of possible trouble? should only be one log open at a time, but who knows how this'll work out.
 my $custom_q = 0; # Default is to assume that the cluster queue is not specified.
 my $my_queue = '';
 
@@ -103,12 +103,12 @@ sub open_log {
        exit $BADEXIT;
    }
    $pipeline_info_log_path = "$result_dir/pipeline_info_$PID.txt";
-   open PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file";
+   open $PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file";
    my $time = scalar localtime;
    print("# Logfile is: $pipeline_info_log_path\n");
    $log_open = 1;
 
-   log_info(" Log opened at $time.");
+   log_info(" Log opened at $time");
    return($pipeline_info_log_path);
 }
 
@@ -119,7 +119,8 @@ sub close_log {
   my $time = scalar localtime;
   if ($log_open) { 
     log_info("close at $time");
-    close(PIPELINE_INFO);
+    close($PIPELINE_INFO);
+    undef($PIPELINE_INFO);
   }
   else {
     print ("Close at $time");
@@ -148,7 +149,7 @@ sub log_info {
      print( "#LOG: $log_me\n");
 
      # send to pipeline file:
-     print( PIPELINE_INFO "$log_me\n");
+     print( $PIPELINE_INFO "$log_me\n");
    }
    else {
     print(STDERR "LOG NOT OPEN!\n");
@@ -169,7 +170,7 @@ sub close_log_on_error  {
       log_info("Log close at $exit_time.");
 
       # emergency close log (w/o log dumping to headfile)
-      close(PIPELINE_INFO);
+      close($PIPELINE_INFO);
       $log_open = 0;
       print(STDERR "  Log is: $pipeline_info_log_path\n");
       return (1);
@@ -1101,7 +1102,12 @@ sub execute_heart {
     }
 
     if ($do_it) {
-	$rc = system ($single_command);
+	#if ($do_it<=1){
+	    $rc = system ($single_command);
+	#} else {
+	#    exec($single_command);
+	#}
+	#$rc=$rc/256;
     }
     else {
 	$rc = 0; # fake ok
@@ -1126,63 +1132,117 @@ sub execute_indep_forks {
   my ($do_it, $annotation, @commands) = @_;
   my @children;
   my $nforked=0;
-  my$total_forks =0;
+  my $total_forks =0;
 
-
+  my $ncores=2;
+  if ( "$OSNAME" =~ 'darwin' ){
+      $ncores=`sysctl -n hw.ncpu 2>/dev/null`;
+  } elsif ("$OSNAME" =~ 'Linux' ){
+   warn('indep_fork linux handling incomplete');   
+  } elsif ("$OSNAME" =~ 'MSWin32' ){
+   warn('indep_fork windows handling incomplete');   
+  } else {
+      warn('indep_fork unknown os handling incomplete('.$OSNAME.')');   
+  }
+  #$ncores=20000000; # fail conditional for many procs.
+##### 
+#INDEP FORK REAPER
+  $SIG{CHLD} = sub {# this reaps all COMPLETED children but does not wait on uncompleted
+      while () {
+	  my $child = waitpid -1, POSIX::WNOHANG;
+	  last if $child <= 0;
+	  my $localtime = localtime;
+	  my $ev=$?>> 8;
+	  #print "Parent: Child $child was reaped - $localtime. \n";
+	  if ( $ev ) {
+	      error_out( "Parent: Child $child was reaped - $localtime with error code:$ev \n");
+	  }
+	  $nforked-=1;
+      }
+  };
+#####
+  print("forking with up to ".(2*$ncores)." processes");
   while($#commands>=0) {
       #foreach my $c (@commands) {
       my $c=shift(@commands);
-
-      
+      my $msg;
+      #print "Logfile is: $pipeline_info_log_path\n";
+      my $skip = $do_it ? "" : "Skipped ";
+      my $info = $annotation eq '' ? ": " : " $annotation: ";
+      my $time = scalar localtime;
+      $msg = join '', $skip, "EXECUTING",$info, "--", $time , "--";
+      my $cmsg = "   $c";
       my $pid = fork();
-      if ($pid) { # parent
+      if ($pid) { 
+# parent
 	  push(@children, $pid);
 	  $total_forks ++;
 	  $nforked ++;
-      } elsif ($pid == 0) { # child
-	  print "child fork $$\n";
-	  my $ret = execute_heart($do_it, $annotation, $c);
+	  while ($nforked > $ncores ) # this will allow about twice the number of cores worth of work to be scheduled.
+	  {
+# 	      $SIG{CHLD} = sub {# this reaps all COMPLETED children but does not wait on uncompleted
+# 		  while () {
+# 		      my $child = waitpid -1, POSIX::WNOHANG;
+# 		      last if $child <= 0;
+# 		      my $localtime = localtime;
+# 		      print "Parent: Child $child was reaped - $localtime.\n";
+# 		      $nforked-=1;
+# 		  }
+# 	      };
+#	      print('.');
+	  } 
+####
+
+      } elsif ($pid == 0) { 
+# child
+#	  print "child fork $$\n";
+	  if ( 1 ) {
+#### cut execute_heart
+#execute_heart DIT NOT perform well here for fast tasks.	      
+	      if ($do_it) {
+		  log_info($msg);
+		  log_info($cmsg);      
+		  #if ($do_it<=1){
+		  exec($c); 
+		  exit 0;
+	      }
+	  } else {
+	      my $ret = execute_heart($do_it, $annotation, $c);
+	      exit 0;
+	  }
 	  #print "Forked child $$ finishes ret = $ret\n";
 	  exit 0;
-      } else {
-	  die "couldn\'t fork: $!\n";
-      }
-      while ($nforked > 50 ) 
-      {
-
-	  $SIG{CHLD} = sub {
-	      while () {
+####
+      }else {
+	  warn "couldn\'t fork: $!\n";
+	  push (@commands,$c);
+	  #### change this to a warn condition, and push command back on stack?
+	  $SIG{CHLD} = sub {#reap any available children? or reap all open children?
+	      while () {# this reaps all COMPLETED children but does not wait on uncompleted
 		  my $child = waitpid -1, POSIX::WNOHANG;
 		  last if $child <= 0;
 		  my $localtime = localtime;
-		  print "Parent: Child $child was reaped - $localtime.\n";
+		  print "nf:Parent: Child $child was reaped - $localtime.\n";
 		  $nforked-=1;
 	      }
 	  };
       }
-  }
+  } # end of commmand dispatch
+
+
   #print "All $nforked command forks made, parent to assure all childen have finished...\n";
 # if i'm reading this loop right it will wait for each child in turn for it to finish, meaning it wont say anything until the first cihld finishes, and will report closed children in order of opening not in their order of closing, essentially it will hang on waitpid for the first kid to finish, then it will check the second, and so on until its' checked each child exaclty once. 
 # suffice it to say, not the perfect loop for childre checkup, but certainly functional
-
-$SIG{CHLD} = sub {
-    while () {
-	my $child = waitpid -1, POSIX::WNOHANG;
-	last if $child <= 0;
-	my $localtime = localtime;
-	print "Parent: Child $child was reaped - $localtime.\n";
-    }
-};
   if ( 0  ) {
-foreach (@children) {
-        print "  parent checking/waiting on child pid $_ ...";
-        my $tmp = waitpid($_, 0);
-        $nforked -= 1;
-        print "pid $tmp done, $nforked child forks left.\n";
-  }
+      foreach (@children) {
+	  print "  parent checking/waiting on child pid $_ ...";
+	  my $tmp = waitpid($_, 0);
+	  $nforked -= 1;
+	  print "pid $tmp done, $nforked child forks left.\n";
+      }
   }
   print "Execute: waited for all $total_forks command forks to finish; fork queue size $nforked...zombies eliminated.\n";
-
+  
   return($$);
 }
 
