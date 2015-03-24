@@ -127,6 +127,7 @@ BEGIN { #require Exporter;
 parse_header
 determine_volume_type
 read_til_next_keyline
+input_files
 @knownmethods
 );
 }    
@@ -137,7 +138,12 @@ my $VERSION = "2013/03/04";
 my $COMMENT = "Agilent meta data functions";
 my @knownmethods= qw(  ); # tested acquisition methods for agilent extract. might be good to pull this out to configuration variables. 
 
-
+sub input_files { 
+    my $data_file="fid";
+    my $header="procpar";
+    my @files=($header,$data_file);
+    return @files;
+}
 ###
 sub parse_header {   #( \@agilentheaderarrayoflines,$debug_val )
 ###
