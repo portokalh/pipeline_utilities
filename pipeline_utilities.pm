@@ -22,17 +22,21 @@ my $pipeline_info_log_path = "UNSET";
 
 my @outheadfile_comments = ();  # this added to by log_pipeline_info so define early
 #my $BADEXIT = 1;
-my $debug_val = 5;
+#my $debug_val = 5;
 use File::Path;
 use POSIX;
 #use strict; #temporarily turned off for sub cluster_exec
 use warnings;
 use English;
 #use seg_pipe;
+use Getopt::Long qw(GetOptionsFromString); # For use with antsRegistration_memory_estimator
 
 no warnings qw(uninitialized bareword);
 
-use vars qw($HfResult $BADEXIT $GOODEXIT $test_mode);
+use vars qw($HfResult $BADEXIT $GOODEXIT $test_mode $debug_val);
+if (! $debug_val) {
+    $debug_val = 5;
+}
 my $PM="pipeline_utilities";
 use civm_simple_util qw(load_file_to_array write_array_to_file);
 
@@ -45,7 +49,7 @@ if ((defined $ENV{'PIPELINE_QUEUE'}) && ($my_queue ne '') ) {
     $custom_q = 1;
 }
 
-
+ 
 BEGIN {
     use Exporter;
     our @ISA = qw(Exporter); # perl cricit wants this replaced with use base; not sure why yet.
@@ -101,6 +105,14 @@ headfile_list_handler
 find_temp_headfile_pointer
 headfile_alt_keys
 data_double_check
+antsRegistration_memory_estimator
+format_transforms_for_command_line
+get_bounding_box_from_header
+read_refspace_txt
+write_refspace_txt
+compare_two_reference_spaces
+hash_summation
+memory_estimator
 ); 
 }
 
@@ -1046,7 +1058,7 @@ sub execute {
 		$c = $c;
 	    } else {
 		if ($custom_q == 1) {
-		    $c = "srun -p $my_queue ".$c;
+		    $c = "srun -s --memory 20480 -p $my_queue ".$c;
 		} else {
 		    $c = "srun ".$c;
 		}
@@ -1688,6 +1700,12 @@ sub apply_affine_transform {
       print "i_opt: $i_opt\n";
   }
 
+  if ((! defined $mod) || ($mod eq '')) {
+      $mod = "registration_pm_living_in_pipeline_utilties.pm";
+  }
+  if ((! defined $native_reference_space) || ($native_reference_space eq '')) {
+      $native_reference_space = 0; # Not sure if we want atlas space to be our default reference space.
+  }
 
   my $reference='';
   my $i_opt1;
@@ -1712,7 +1730,7 @@ sub apply_affine_transform {
       print "interp: $interp\n\n";
   }
 
-  if ($interp eq '') {
+  if ((! defined $interp) || ($interp eq '')) {
       $interp="LanczosWindowedSinc";
       $interp="Linear";
   } else {
@@ -1774,17 +1792,36 @@ sub apply_transform {
 # ------------------
 sub cluster_exec {
 # ------------------
-    my ($do_it,$annotation,$cmd,$work_dir,$Id,$verbose) = @_;
+    my ($do_it,$annotation,$cmd,$work_dir,$Id,$verbose,$memory,$test) = @_;
+   # my $memory=25600;
+    my $node_command=''; # Currently a one-off.
+ 
     my $queue_command='';
+    my $memory_command='';
+    my $time_command = '';
+    my $default_memory = 24870;#int(154000);# 40960; # This is arbitrarily set at 40 Gb at first, now 150 Gb for Premont study.
     if (! defined $verbose) {$verbose = 1;}
-    if ($custom_q == 1) {
+
+    if ($test) {
+	$queue_command = "-p overload";
+	$time_command = "-t 15";     
+    } elsif ($custom_q == 1) {
 	$queue_command = "-p $my_queue";
     }
-    my $sharing_is_caring = ' -s ';
+    if (! defined $memory) {
+	$memory_command = " --mem ${default_memory} ";
+    } else {
+	$memory_command = " --mem $memory ";
+    }
+
+
+    my $sharing_is_caring = ' -s ';  # Not sure if this is still needed.
     my ($batch_path,$batch_file,$b_file_name);
     my $msg = '';
     my $jid=1;
-    execute_log($do_it,$annotation,$cmd,$verbose);
+    if (! $test) {
+	execute_log($do_it,$annotation,$cmd,$verbose);
+    }
     if ($do_it) {
 	$batch_path = "${work_dir}/sbatch/";
 	$b_file_name = $Id.'.bash';
@@ -1802,7 +1839,9 @@ sub cluster_exec {
 	close($Id);
 
 	# this works, but alternate call might be nicer.
-	($msg,$jid)=`sbatch ${slurm_out_command} ${sharing_is_caring} ${queue_command} $batch_file` =~  /([^0-9]+)([0-9]+)/x;
+	my $bash_call = "sbatch ${slurm_out_command} ${sharing_is_caring} ${node_command} ${queue_command} ${memory_command} ${time_command} ${batch_file}";
+	print "sbatch command is: ${bash_call}\n";
+	($msg,$jid)=`$bash_call` =~  /([^0-9]+)([0-9]+)/x;
 	if ( $msg !~  /.*(Submitted batch job).*/) {
 	    $jid = 0;
 	    print("Bad batch submit to slurm with output: $msg\n");
@@ -1888,14 +1927,22 @@ sub get_nii_from_inputs {
 # ------------------
 
     my ($inputs_dir,$runno,$contrast) = @_;
-    opendir(DIR, $inputs_dir);
-    my @input_files = grep(/^$runno.*$contrast/ ,readdir(DIR));
-    my $input_file = $input_files[0];
-    if ($input_file ne '') {
-	my $path= $inputs_dir.'/'.$input_file;
-	return($path);
+    my $error_msg='';
+    
+    if (-d $inputs_dir) {
+	opendir(DIR, $inputs_dir);
+	my @input_files = grep(/$runno.*$contrast/ ,readdir(DIR));
+	my $input_file = $input_files[0];
+	if ($input_file ne '') {
+	    my $path= $inputs_dir.'/'.$input_file;
+	    return($path);
+	} else {
+	    $error_msg="pipeline_utilities function get_nii_from_inputs: Unable to locate file using the input criteria:\n\t\$inputs_dir: ${inputs_dir}\n\t\$runno: $runno\n\t\$contrast: $contrast.\n";
+	    return($error_msg);
+	}
     } else {
-	return(0);
+	$error_msg="pipeline_utilities function get_nii_from_inputs: The input directory $inputs_dir does not exist.\n";
+	return($error_msg);
     }
 }
 
@@ -1951,7 +1998,7 @@ sub compare_headfiles {
     }
   
     if ($errors[0] ne '') {
-	$error_msg = join('\n',@errors);
+	$error_msg = join("\n",@errors);
 	$error_msg = "Headfile comparison complete, headfiles are not considered identical in this context.\n".$error_msg."\n";
     }
     
@@ -1961,7 +2008,11 @@ sub compare_headfiles {
 # ------------------
 sub symbolic_link_cleanup {
 #
-    my ($folder) = @_;
+    my ($folder,$log) = @_;
+    if (! defined $log) {$log=0;}
+    if ($folder !~ /\/$/) {
+	$folder=$folder.'/';
+    }
     my $link_path;
     my $temp_path = "$folder/temp_file";
     if (! -d $folder) {
@@ -1974,7 +2025,22 @@ sub symbolic_link_cleanup {
 	$file_path = "$folder/$file";
 	if (-l $file_path) {
 	    $link_path = readlink($file_path);
-	    `mv ${link_path} ${file_path}`;
+	    my ($dummy1,$link_folder,$dummy2)=fileparts($link_path);
+	    my $action;
+	    if ($link_folder ne $folder) {
+		$action = "cp";
+		print "\$link_folder ${link_folder}  ne \$folder ${folder}\n";
+	    } else {
+		print "\$link_folder ${link_folder}  eq \$folder ${folder}\n";
+		$action = "mv";
+	    }
+	    my $echo = `${action} ${link_path} ${file_path}`;
+	    if ($log) {
+		my $annotation = "Cleaning up symbolic links.";
+		my $command =  "${action} ${link_path} ${file_path}";
+		$command = $command.$echo;
+		execute(1,$annotation,$command,$verbose);
+	    }
 	}
     }
 
@@ -1983,7 +2049,7 @@ sub symbolic_link_cleanup {
 
 # ------------------
 sub headfile_list_handler {
-#
+# ------------------
     my ($current_Hf,$key,$new_value,$invert) = @_;
     if (! defined $invert) { $invert = 0;}
 
@@ -2056,22 +2122,310 @@ sub data_double_check { # Checks a list of files; if a file is a link, double ch
 # ------------------    # Subroutine returns number of files which point to null data; "0" is a successful test.
     my (@file_list)=@_;
     my $number_of_bad_files = 0;
-
-    for (my $file_to_check = shift(@file_list); ($#file_list > -1) ; $file_to_check = shift(@file_list)) {
+ 
+    for (my $file_to_check = shift(@file_list); ($file_to_check ne '') ; $file_to_check = shift(@file_list)) {
 
 #  The following is based on: http://snipplr.com/view/67842/perl-recursive-loop-symbolic-link-final-destination-using-unix-readlink-command/
-	$file_to_check;
-	
-	while (-l $file_to_check) {
-	    $file_to_check = readlink($file_to_check);
-	}
-
-	if (! -e $file_to_check) {
+	if ($file_to_check =~/[\n]+/) {
 	    $number_of_bad_files++;
+	} else {
+	    while (-l $file_to_check) {
+		$file_to_check = readlink($file_to_check);
+	    }
+	    
+	    if (! -e $file_to_check) {
+		$number_of_bad_files++;
+	    }
 	}
     }
-
+ 
     return($number_of_bad_files);
+}
+
+sub antsRegistration_memory_estimator { # Takes in an antsRegistration command, converts to test mode, sbatchs, and returns the MaxRSS used by the job.
+# ------------------    
+    my ($ants_command,$test_downsample)=@_;
+    if (! defined $test_downsample) {$test_downsample=8;}
+    my $mod = 'tester';
+    my $memory;
+
+    my $total_free = `free -m | grep Mem`;
+    my @total_free = split(" ",$total_free);
+    $total_free = $total_free[2];    
+    $memory = int($total_free * 0.8);
+#    print "Memory = $memory\n";
+
+#    print "\n\nOld ants command = ${ants_command}\n";
+#    $test_downsample = 1;
+    $ants_command =~ s/(?<=-f\s)(.*?)(?=[\s]+-[A-Za-z-])/${test_downsample}/;
+    my $boblob = $1;
+    my @boblob = split('x',$boblob);
+    print "Boblob = $boblob\n";
+    my $lowest_downsample = pop(@boblob);
+    my $ratio = ($test_downsample/$lowest_downsample);
+    my $memory_ratio = ($ratio*$ratio*$ratio);
+#    print "Memory ratio = ${memory_ratio}\nTest downsample = ${test_downsample}\n";
+
+    $ants_command =~ s/(?<=-s\s)(.*x)([0-9]+.*?)(?=[\s]+-[A-Za-z-])/$2/;
+    
+    $ants_command =~ s/(?<=\[) ([\sx0-9]*) (?=,) /2000/x;
+   #    my $blah = $1;   
+
+
+   # $blah =~ s/[0]*[1-9]+[0-9]*/1/g;
+   # $blah =~ s/[0]+/0/g;
+   # $ants_command =~ s/marytylermoore/$blah/;
+
+    $ants_command =~ s/(?<=-o)([\s]+)(\/|~\/|)(([^\/\s]*\/)+)([^\s]*)(?=\s)/ $2$3pilot_/xg;
+    my $temp_path = "$2/$3";
+    $ants_command =~ s/;[.\n]*//;
+
+    print "\nNew ants command = ${ants_command}\n";
+    
+    if (cluster_check()) {
+	my $cmd = $ants_command.";\n".
+	    "rm ${temp_path}/pilot*;\n";
+	my $go_message = "Estimating memory needs for $mod. Running antsRegistration in test mode.";
+	my $stop_message = "Unable to estimate memory needs for $mod. antsRegistration has failed in test mode."; 
+	my $home_path = $temp_path;
+	my $Id= "${mod}_antsRegistration_pilot_run";
+	my $verbose = 2; # Will print log only for work done.
+	my $test = 1;
+	print " temp_path = $temp_path\n";
+	$jid = cluster_exec(1,$go_message , $cmd ,$home_path,$Id,$verbose,$memory,$test);     
+
+	print "Job ID = $jid\n";
+	if (! $jid) {
+	    error_out($stop_message);
+	}
+	my $interval = 1;
+	#my $verbose = 0;
+	my $done_waiting = cluster_wait_for_jobs($interval,0,$jid);
+
+	if ($done_waiting) {
+	   sleep(1);
+	   my $kilos =`sacct -j $jid -o MaxRSS | grep K | sed 's/K//g'`;
+	   my $megas = int($kilos / 1024);
+	   my $predicted_memory = $megas*$memory_ratio;
+#	   print "kilos = $kilos\n";
+#	   print "megas = $megas\n";
+#	   print "predicted_memory = ${predicted_memory}\n";
+
+	   return($megas);	
+	}
+
+    
+    #' -p overload ';
+    } else {
+
+	`rm ${temp_path}/pilot*`;
+    }
+}
+
+# ------------------
+sub format_transforms_for_command_line {
+# ------------------    
+    my ($comma_string,$option_letter,$start,$stop) = @_;
+    my $command_line_string='';
+    my @transforms = split(',',$comma_string);
+    my $total = $#transforms + 1;
+
+    if (defined $option_letter) {
+	$command_line_string = "-${option_letter} ";
+    }
+
+    if (! defined $start) {
+	$start = 1;
+	$stop = $total;
+    }
+
+    if (! defined $stop) {
+	$stop = $total;
+    }
+
+    my $count = 0;
+    foreach my $transform (@transforms) {
+	$count++;
+	if (($count >= $start) && ($count <= $stop)) {
+	    if (($transform =~ /\.nii$/g) || ($transform =~ /\.nii\.gz$/g)) { # We assume diffeos are in the format of .nii or .nii.gz
+		$command_line_string = $command_line_string." $transform ";	
+	    } 
+	    if (($transform =~ /\.mat$/g) || ($transform =~ /\.txt$/g)) { # We assume affines are in .mat or .txt formats
+		if ($transform =~ m/-i[\s]+(.+)/) {
+		    $command_line_string = $command_line_string." [$1,1] "; 
+		} else {
+		    $command_line_string = $command_line_string." [$transform,0] ";
+		}
+	    }
+	}
+    }
+    return($command_line_string);
+}
+
+#---------------------
+sub get_bounding_box_from_header {
+#---------------------
+    my ($in_file,$ants_path) = @_;
+    my $bounding_box;
+    my $header_output = `${ants_path}PrintHeader ${in_file}`;
+    if ($header_output =~ /(\{[^}]*\})/) {
+	$bounding_box = $1;
+	chomp($bounding_box);
+#	print "$bounding_box\n";
+    } else {
+	$bounding_box = 0;
+    }
+    return($bounding_box);
+}
+
+#---------------------
+sub read_refspace_txt {
+#---------------------
+    my ($refspace_folder,$split_string,$custom_filename)=@_;
+    my $refspace_file;
+    my ($existing_refspace,$existing_refname);
+
+    if (defined $custom_filename) {
+	$refspace_file = "${refspace_folder}/${custom_filename}";
+    } else { 
+	$refspace_file = "${refspace_folder}/refspace.txt";
+    }
+    
+    if (! data_double_check($refspace_file)) {
+	my $array_ref = load_file_to_array($refspace_file);
+	my @existing_refspace_and_name = $$array_ref;
+	($existing_refspace,$existing_refname) = split("$split_string",$existing_refspace_and_name[0]); 
+    } else {
+	$existing_refspace=0;
+	$existing_refname=0;
+    }
+    return($existing_refspace,$existing_refname);
+}
+
+#---------------------
+sub write_refspace_txt {
+#---------------------
+    my ($refspace,$refname,$refspace_folder,$split_string,$custom_filename)=@_;
+    my $refspace_file;
+    my $contents;
+
+    my $array = join("$split_string",($refspace,$refname));
+    
+    if (defined $custom_filename) {
+	$refspace_file = "${refspace_folder}/${custom_filename}";
+    } else { 
+	$refspace_file = "${refspace_folder}/refspace.txt";
+    }
+    #my @array = ($array);
+    $contents = [$array];
+    write_array_to_file($refspace_file,$contents);
+    return(0);
+}
+
+
+#---------------------
+sub compare_two_reference_spaces {
+#---------------------
+    my ($file_1,$file_2) = @_; #Refspace may be entered instead of file path and name.
+    my ($bb_1,$bb_2);
+    my ($sp_1,$sp_2);
+    
+    if (data_double_check($file_1)){
+	my @array = split(' ',$file_1);
+	$sp_1 = pop(@array);
+	$bb_1 = join(' ',@array);
+    } else {
+	$bb_1 = get_bounding_box_from_header($file_1);
+	$sp_1 = `PrintHeader ${file_1} 1`;
+	chomp($sp_1);
+   }
+
+
+   if (data_double_check($file_2)){
+       my @array = split(' ',$file_2);
+       $sp_2 = pop(@array);
+       $bb_2 = join(' ',@array);
+   } else {
+       $file_2 = $file_2_or_refspace;
+       $bb_2 = get_bounding_box_from_header($file_2);
+       $sp_2 = `PrintHeader ${file_2} 1`;
+       chomp($sp_2);
+   }
+
+    my $check_1=0;
+    my $check_2=0;
+#    print "$bb_1\n$bb_2\n";
+    if ($bb_1 eq $bb_2) {
+	$check_1 = 1;
+    }
+#    print "Check one = ${check_1}\n";
+#    print "$sp_1\n$sp_2\n";
+    if ($sp_1 eq $sp_2) {
+	$check_2 = 1;
+    }
+
+#    print "Check two = ${check_2}\n";
+    my $result = $check_1*$check_2;
+
+#    print "Result = $result\n";
+    return($result);
+}
+
+
+#---------------------
+sub recenter_nii_function {
+#---------------------
+    my ($file,$out_path,$skip,$temp_Hf,$verbose)= @_;
+    if (! defined $skip) {$skip = 0 ;}
+    if (! defined $verbose) {$verbose=1;}
+
+    my ($name,$in_path,$ext) = fileparts($file);	
+    my $nifti_args = "\'${in_path}\', \'$name\', \'nii\', \'${out_path}/$name$ext\', 0, 0, ".
+	" 0, 0, 0,0,0, ${flip_x}, ${flip_z},0,0";
+    if (! $skip) {
+	my $nifti_command = make_matlab_command('civm_to_nii',$nifti_args,"${name}_",$temp_Hf,0); # 'center_nii'
+	execute(1, "Recentering nifti images from tensor inputs", $nifti_command);	         
+    }
+}
+
+#---------------------
+sub hash_summation {
+#---------------------
+
+    my ($hash_pointer)=@_;
+    my %hashish = %$hash_pointer;
+    my $sum = 0;
+    my $errors = 0;
+    foreach my $k (keys %hashish) {
+	if (ref($hashish{$k}) eq "HASH") {
+	    foreach my $j (keys %{$hashish{$k}}) {
+		my $string = $hashish{$k}{$j};
+		if ($string =~ /^[0-9]*$/) {
+		    $sum = $sum + $string;
+		} else {
+		    $errors++;
+		}
+	    }
+	} else {
+	    my $string = $hashish{$k};
+	    if ($string =~ /^[0-9]*$/) {
+		$sum = $sum + $string;
+	    } else {
+		$errors++;
+	    }
+	}
+    }
+    return($sum,$errors);
+}
+
+#---------------------
+sub memory_estimator {
+#---------------------
+
+    my ($jobs,$nodes) = @_;
+    my $node_mem = 244000;
+    my $memory =int(($nodes*$node_mem)/$jobs);
+    return($memory);
 }
 
 1;
