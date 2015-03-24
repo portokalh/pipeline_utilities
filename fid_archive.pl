@@ -345,6 +345,8 @@ our $verbose=0;
     my $modality='research';
     if ( $vtd =~ /[Dd][Tt][Ii]/x ) {
 	$modality=$modality." DTI";
+    } else { 
+	$modality=$modality." MRM";
     }
     $Hfile->set_value('U_rd_modality',$modality);# U_rd_modality=research DTI;
     
