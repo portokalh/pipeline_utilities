@@ -137,10 +137,11 @@ our $verbose=0;
 
     my $rm_hfpath='NULL';
     ### check if directory is the scanner header file instead of the directory from the magnet
+	my ($name,$extension);
     if ( -f $runno){ # && ! -d $directory) { 
 	#printd(15,"You specifid the scanner header file directly instead of the directory it sits in. This is an unproven method best suited for testing different ways to fool the header parse script \n");
 	#push (@infiles,$directory);
-	my ($name,$extension);
+
 	$rm_hfpath="$runno";
 	($name,$directory,$extension)=fileparts( $runno); # directory not used, ... bad idea?.
 	if ( $extension ne '.headfile' ) {
@@ -155,6 +156,16 @@ our $verbose=0;
 	} else {
 	    printd(1,"root_runno indetermintate will use output runno");
 	    $root_runno="USEOUT";
+	}
+    } elsif ( ! -d "$Engine_work_dir/$runno") {
+	my @dirs=glob("$Engine_work_dir/$runno*");
+	@dirs=grep(!/$runno(?:\.work|_fid)/, @dirs);
+	#print(join("\n", @dirs)."\n");
+	($name,$directory,$extension)= fileparts($dirs[0]);
+	#print("$name,$directory,$extension\n");
+	if ( $name ne $runno ) { 
+	    $runno=$name;
+	    $root_runno=$name;
 	}
     }
     $directory="$Engine_work_dir/$runno.work/"; 
@@ -318,10 +329,10 @@ our $verbose=0;
     $Hfile->set_value('archivesource_computer',$WORKSTATION_HOSTNAME);# archivesource_computer=andros
     $Hfile->set_value('archivesource_directory',$Engine_work_dir);# archivesource_directory=/androsspace
     $Hfile->set_value('archivesource_item',$outrunno);# archivesource_item=N51667_fid
-    $Hfile->set_value('archivedestination_project_direcyory_name',$input_headfile->get_value('U_code'));
+    $Hfile->set_value('archivedestination_project_directory_name',$input_headfile->get_value('U_code'));
     #                   archivedestination_project_directory_name=13.gaj.32
     $Hfile->set_value('archivedestination_unique_item_name',$outrunno);# archivedestination_unique_item_name=N51667_DTI_FIDRaw
-    $Hfile->set_value('U_date',);# U_date=15-03-05
+    $Hfile->set_value('U_date',strftime("%F",localtime));# U_date=15-03-05
     my $opt_text=$input_headfile->get_value('U_optional');
     if ( $opt_text eq '' || $opt_text eq 'NOKEY' || $opt_text eq 'UNDEFINED_VALUE') {
 	$opt_text='$scanner_vendor fid archive for $scanner';
@@ -344,8 +355,8 @@ our $verbose=0;
     if (! $Hfile->write_headfile ($hf_path)) {
 	error_out("Could not write Headfile -> $hf_path");
     } else { 
-	print("Start archive with command\n\n");
-	print("ssh safe@deepthought archiveresearch $person $hf_path\n\n");
+	print("\nStart archive with command\n\n");
+	print("ssh safe\@deepthought archiveresearch $person $hf_path\n\n");
 
     }
     
@@ -355,6 +366,8 @@ sub usage_message  {
     my ($msg)=@_;
     print( STDERR "\ndumpHeader PROBLEM: $msg\n");
     print STDERR "$0 <options> person runno\n".
+	" person= you, \n".
+	" runno= runno to attach raw data to\n".
 	"fid_archive : . \n".
 	" Options: \n".
 	"  -o overwrite enable\n".
