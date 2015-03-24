@@ -343,6 +343,10 @@ our $verbose=0;
 ###
     if (! $Hfile->write_headfile ($hf_path)) {
 	error_out("Could not write Headfile -> $hf_path");
+    } else { 
+	print("Start archive with command\n\n");
+	print("ssh safe@deepthought archiveresearch $person $hf_path\n\n");
+
     }
     
 }
