@@ -2029,9 +2029,9 @@ sub symbolic_link_cleanup {
 	    my $action;
 	    if ($link_folder ne $folder) {
 		$action = "cp";
-		print "\$link_folder ${link_folder}  ne \$folder ${folder}\n";
+		# print "\$link_folder ${link_folder}  ne \$folder ${folder}\n";
 	    } else {
-		print "\$link_folder ${link_folder}  eq \$folder ${folder}\n";
+		# print "\$link_folder ${link_folder}  eq \$folder ${folder}\n";
 		$action = "mv";
 	    }
 	    my $echo = `${action} ${link_path} ${file_path}`;
@@ -2424,7 +2424,16 @@ sub memory_estimator {
 
     my ($jobs,$nodes) = @_;
     my $node_mem = 244000;
-    my $memory =int(($nodes*$node_mem)/$jobs);
+    my $memory;
+    if ($jobs) {
+	$memory = int(($nodes*$node_mem)/$jobs);
+	if ($memory > 0.9*$node_mem) {
+	    $memory = 0.9*$node_mem;
+	}
+	print "Memory requested per job: $memory MB\n";
+    } else {
+	$memory = 2440; # Just some non-zero value; arbitrary, since the code shouldn't actually be using it.
+    }
     return($memory);
 }
 
