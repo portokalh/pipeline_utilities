@@ -1052,7 +1052,6 @@ sub execute {
     foreach my $c (@commands) {
 	$i++;
 	if ( cluster_check() ) {
-
 	    # For running Matlab, run on Master Node for now until we figure out how to handle the license issue. Otherwise, run with SLURM
 	    if ($c =~ /matlab/) {
 		$c = $c;
