@@ -127,6 +127,10 @@ if ( $dims==0 ) {
 my @runnos=@ARGV;
 
 
+
+###
+# csh v parallel
+###
 if ( $#runnos > 1 && $use_csh_scripts) {
     my @cmds=();
     my $cmd_base="roll_3d -x $opts{x} -y $opts{y}  -z $opts{z} ";
@@ -316,10 +320,12 @@ for my $runno (@runnos) {
 	} else {
 	    $o_code="ro";
 	}
-	my $trans_program="mv";
+	my $trans_program="ln"; #switched from mv because we want to keep the "pristine" data so its easier to re-roll. Alternatively could go through the hoops to roll cumulatively. Might want that to be an option.
+	my $trans_op="";
 	my $t_args="";
 	if ( $opts{'x'} > 0 || $opts{'y'} > 0) {
 	    $trans_program="iroll_mine";
+	    $trans_op=">";
 	    $t_args="$dim_x $dim_y ".$opts{'x'}." ".$opts{'y'}." 2";
 	}
 
@@ -337,13 +343,15 @@ for my $runno (@runnos) {
 		} else {
 		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} +$start);
 		}
+		print("length:".length($num)."\n");
 	    }
 	    #print("$newname");
-	    my $cmd="$trans_program $img $t_args > $hfdir$newname.$num.$parts[2]";
+	    my $cmd="$trans_program $img $t_args $trans_op $hfdir$newname.$num.$parts[2]";
 	    print("$cmd\n");
 	    push(@cmd_list,$cmd);
 	}
 	execute_indep_forks(1,"roll_3d on $runno ",@cmd_list);
+	#execute(1,"roll_3d on $runno ",@cmd_list);
 	#push(@full_list_of_work,@cmd_list);
 	$cmd="mkdir -p ${hfdir}orig";
 	if ( ! -e "${hfdir}orig" ) { 
