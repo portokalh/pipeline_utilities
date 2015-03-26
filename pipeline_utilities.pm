@@ -2423,7 +2423,16 @@ sub memory_estimator {
 
     my ($jobs,$nodes) = @_;
     my $node_mem = 244000;
-    my $memory =int(($nodes*$node_mem)/$jobs);
+    my $memory;
+    if ($jobs) {
+	$memory =int(($nodes*$node_mem)/$jobs);
+	my $limit = 0.9*$node_mem;
+	if ($memory > $limit) {
+	    $memory = $limit;
+	} 
+    } else {
+	$memory = 2440; # This number is not expected to be used so it can be arbitrary.
+    }
     return($memory);
 }
 
