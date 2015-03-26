@@ -2028,9 +2028,9 @@ sub symbolic_link_cleanup {
 	    my $action;
 	    if ($link_folder ne $folder) {
 		$action = "cp";
-		print "\$link_folder ${link_folder}  ne \$folder ${folder}\n";
+#		print "\$link_folder ${link_folder}  ne \$folder ${folder}\n";
 	    } else {
-		print "\$link_folder ${link_folder}  eq \$folder ${folder}\n";
+#		print "\$link_folder ${link_folder}  eq \$folder ${folder}\n";
 		$action = "mv";
 	    }
 	    my $echo = `${action} ${link_path} ${file_path}`;
