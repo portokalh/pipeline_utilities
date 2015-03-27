@@ -2289,10 +2289,11 @@ sub read_refspace_txt {
     } else { 
 	$refspace_file = "${refspace_folder}/refspace.txt";
     }
-    
+    print "$refspace_file\n\n";
     if (! data_double_check($refspace_file)) {
-	my $array_ref = load_file_to_array($refspace_file);
-	my @existing_refspace_and_name = $$array_ref;
+	my @existing_refspace_and_name =();
+	my $array_ref = load_file_to_array($refspace_file, \@existing_refspace_and_name);
+
 	($existing_refspace,$existing_refname) = split("$split_string",$existing_refspace_and_name[0]); 
     } else {
 	$existing_refspace=0;
@@ -2425,13 +2426,14 @@ sub memory_estimator {
     my $node_mem = 244000;
     my $memory;
     if ($jobs) {
-	$memory = int(($nodes*$node_mem)/$jobs);
-	if ($memory > 0.9*$node_mem) {
-	    $memory = 0.9*$node_mem;
-	}
+	$memory =int(($nodes*$node_mem)/$jobs);
+	my $limit = 0.9*$node_mem;
+	if ($memory > $limit) {
+	    $memory = $limit;
+	} 
 	print "Memory requested per job: $memory MB\n";
     } else {
-	$memory = 2440; # Just some non-zero value; arbitrary, since the code shouldn't actually be using it.
+	$memory = 2440; # This number is not expected to be used so it can be arbitrary.
     }
     return($memory);
 }
