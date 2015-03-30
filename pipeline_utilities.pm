@@ -2289,7 +2289,7 @@ sub read_refspace_txt {
     } else { 
 	$refspace_file = "${refspace_folder}/refspace.txt";
     }
-    print "$refspace_file\n\n";
+   # print "$refspace_file\n\n";
     if (! data_double_check($refspace_file)) {
 	my @existing_refspace_and_name =();
 	my $array_ref = load_file_to_array($refspace_file, \@existing_refspace_and_name);
