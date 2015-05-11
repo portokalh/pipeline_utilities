@@ -333,7 +333,7 @@ sub set_volume_type { # ( agilent_headfile[,$debug_val] )
     $x=$hf->get_value($data_prefix."np")/2;
     $y=$hf->get_value($data_prefix."nv");
     $z=$hf->get_value($data_prefix."nv2");
-    if ( $z eq 'NO_KEY' ) { 
+    if ( $z==0 || $z eq 'NO_KEY' ) { 
      	$z=$hf->get_value("${data_prefix}ns");
     }
     if ( $z==0 || $z eq 'NO_KEY') { 
