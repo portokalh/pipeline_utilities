@@ -294,7 +294,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     my $paravision_string = $hf->get_value($data_prefix."META_TITLE");
     #my ($type,$swname,$ver)=
     $paravision_string =~ m/^([^,]+),\s+([^\s]+)(.*)$/x ;
-    if( defined $1 && defined $2 && defined $3 && ) {
+    if( defined $1 && defined $2 && defined $3 ) {
 	printd(50,"pvstring;$paravision_string -> \n\tjnk:$1|||name:$2|||ver:$3\n");
 	if ($3 =~ /6\.0/ && $extraction_mode_bool) {
 	    $bit_depth=16;
