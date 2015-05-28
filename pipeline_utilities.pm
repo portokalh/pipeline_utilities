@@ -22,7 +22,7 @@ my $pipeline_info_log_path = "UNSET";
 
 my @outheadfile_comments = ();  # this added to by log_pipeline_info so define early
 #my $BADEXIT = 1;
-my $debug_val = 5;
+#my $debug_val = 5;
 use File::Path;
 use POSIX;
 use strict;
@@ -30,7 +30,6 @@ use warnings;
 use English;
 use Carp;
 #use seg_pipe;
-
 
 #scrapped from xml reader slicer_read_xml thingy... 
 #use lib ".";
@@ -44,7 +43,11 @@ use XML::Rules;
 
 
 
-use vars qw($HfResult $BADEXIT $GOODEXIT);
+use vars qw($HfResult $BADEXIT $GOODEXIT $debug_val);
+if ( ! defined $debug_val){
+    $debug_val=5;
+    
+}
 my $PM="pipeline_utilities";
 use civm_simple_util qw(load_file_to_array write_array_to_file);
 our $PIPELINE_INFO; #=0; # needstobe undef.#pipeline log fid. All kinds of possible trouble? should only be one log open at a time, but who knows how this'll work out.
@@ -659,6 +662,7 @@ sub stop_fifo_program {
     my $file_path=shift(@out);
     @out = split(' ',$out[0]);
     print STDERR ("\twatched_file = $file_path\n");
+    # <= BUG ?
     for (my $on=0;$on<$#out;$on++){ 
 	if ($out[$on]!~ m/[0-9]+/x ) {
 	    shift(@out);
@@ -734,7 +738,7 @@ sub get_image_suffix {
     my ($runno_headfile_dir,$runno)=@_;
     my ($ok,$img_suffix);
     my @err_buffer;
-
+    printd(15,"get_image_suffix dirty function Please notify james if you see this.\n "); 
     my @files = glob("$runno_headfile_dir/${runno}*.*.*"); # lists all files named $runnosomething.something.something. This should match any civm formated images, and only their images.
     #@first_imgs=grep(/$runno${tc}imx[.][0]+[1]?[.]raw/, @imgs);
     my @first_files=grep (/^$runno_headfile_dir\/$runno.*[sim|imx][.][0]+[1]?[.].*$/x, @files ) ;
@@ -756,7 +760,8 @@ sub get_image_suffix {
 	File::Spec->splitpath( $first_files[0] );
     my @parts=split('[.]',$firstfile);
     #print("\n\n".join(' ',@parts)."\n\n\n");
-    for(my $iter=0;$iter<3 ;$iter++) {
+    # <= BUG ?
+    for (my $iter=0;$iter<3 ;$iter++) {
 	$img_suffix = pop @parts;
     }
     if ( length($img_suffix) >= 5 ){
@@ -784,8 +789,9 @@ sub matlab_fifo_cleanup {
 	exit();
     } else { 
 	print STDERR "FIFO Cleanup Running on dir, $fifo_registry\n";
-	my @fifo_registry_contents = <$fifo_registry/*>;
-	for(my $fnum=0;$fnum<$#fifo_registry_contents;$fnum++) {
+	my @fifo_registry_contents = <$fifo_registry/*>; # GLOB SUBSTITUE?
+	# <= BUG ?
+	for (my $fnum=0;$fnum<$#fifo_registry_contents;$fnum++) {
 	    my $FIFO_regfile =$fifo_registry_contents[$fnum];
 	    if ( $FIFO_regfile =~ m/^.*_fifo$/x ) {
 		my @fifo_reg_path;
@@ -1722,13 +1728,14 @@ sub mrml_find_by_name {
 # 
 sub mrml_attr_search {
 # 
-# find the mrml node in the loaded xml tree by id
+# find the mrml node in the loaded xml tree by attr and its value
     my ($mrml_tree,$attr,$value,$type)=@_;
     #ref to mrml tree. when 
     #$mrml_tree->{"MRML"};
     my @mrml_types;
     my @refs;
     die unless ( defined $attr);# print("attr undef") 
+    die unless ( defined $value);# print("attr undef") 
 
     if ( defined $mrml_tree->{"MRML"} && keys %{$mrml_tree} <=1  ) {
 	$mrml_tree=$mrml_tree->{"MRML"};
@@ -1747,8 +1754,8 @@ sub mrml_attr_search {
 	    print("$type Singleton.\n") if ($debug_val>=95);
 	    push(@hash_array,$a_ref);
 	}
-	#for( my $ha_i=0; $ha_i<$#{$mrml_tree->{$type}};$ha_i++ ){#when all arrays this works, but some are not so we trick this by makeing those cases arrays also.
-	for( my $ha_i=0; $ha_i<$#hash_array;$ha_i++ ){
+	#for ( my $ha_i=0; $ha_i<$#{$mrml_tree->{$type}};$ha_i++ ){#when all arrays this works, but some are not so we trick this by makeing those cases arrays also.
+	for ( my $ha_i=0; $ha_i<=$#hash_array;$ha_i++ ){
 	    #foreach my $ref (@hash_array) {
 	    my $ref=$hash_array[$ha_i];# this is just to simplify reading the code.
 	    if ( defined $ref->{$attr}) {
@@ -1756,12 +1763,9 @@ sub mrml_attr_search {
 		    #print($ref." ".$ref->{$attr}."\n");
 		    #push(@refs,${$mrml_tree->{$type}}[$ha_i]);#when all ar arrays this works, but some are not. 
 		    push(@refs,$hash_array[$ha_i]);
-		    
- 		} 
+		} 
  	    }
-	    
 	}
-
     }
     my $count=$#refs+1;
     print("got ".$count." match(es)\n")if ($debug_val>=50);;
@@ -1792,8 +1796,8 @@ sub mrml_clear_nodes {
 # 	    print("$type Singleton.\n") if ($debug_val>=95);
 # 	    push(@hash_array,$a_ref);
 # 	}
-# 	#for( my $ha_i=0; $ha_i<$#{$mrml_tree->{$type}};$ha_i++ ){#when all arrays this works, but some are not so we trick this by makeing those cases arrays also.
-# 	for( my $ha_i=0; $ha_i<$#hash_array;$ha_i++ ){
+# 	#for ( my $ha_i=0; $ha_i<$#{$mrml_tree->{$type}};$ha_i++ ){#when all arrays this works, but some are not so we trick this by makeing those cases arrays also.
+# 	for ( my $ha_i=0; $ha_i<$#hash_array;$ha_i++ ){
 # 	    #foreach my $ref (@hash_array) {
 # 	    my $ref=$hash_array[$ha_i];# this is just to simplify reading the code.
 # 	    if ( defined $ref->{$attr}) {
@@ -2006,6 +2010,7 @@ sub mrml_to_file { # ( $hash_ref,$indentext,$indent_level,$format,$pathtowrite )
     }
     #my $debug_val=66;
     my $indent=$itxt;
+    ### expand indent to level, we dont include i_level because we start with one indent.
     for (my $ind=0;$ind<$i_level;$ind++) {
 	$indent=$indent.$itxt; 
     }
@@ -2106,6 +2111,7 @@ sub mrml_to_string { # ( $hash_ref,$indentext,$indent_level,$format,$pathtowrite
     if(! defined $xml_string) { $xml_string=''; }
     #my $debug_val=66;
     my $indent=$itxt;
+    ### expand indent to level, we dont include i_level because we start with one indent.
     for (my $ind=0;$ind<$i_level;$ind++) {
 	$indent=$indent.$itxt; 
     }
@@ -2192,6 +2198,7 @@ sub mrml_to_string1 { # ( $hash_ref,$indentext,$indent_level,$format,$pathtowrit
     if(! defined $open_tag) { $open_tag='';}
     my $indent=$itxt;
     my $xml_string='';
+    ### expand indent to level, we dont include i_level because we start with one indent.
     for (my $ind=0;$ind<$i_level;$ind++) {
 	$indent=$indent.$itxt; 
     }
@@ -2374,6 +2381,7 @@ sub display_complex_data_structure { # ( $hash_ref,$indentext,$indent_level,$for
     if(! defined $i_level ) { $i_level=0} else { $i_level++};
     if(! defined $format ) { $format='';}
     my $indent=$itxt;
+    ### expand indent to level, we dont include i_level because we start with one indent.
     for (my $ind=0;$ind<$i_level;$ind++) {
 	$indent=$indent.$itxt; 
     }
