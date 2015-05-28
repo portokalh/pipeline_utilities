@@ -104,9 +104,9 @@ my $VERSION = "2013/04/29";
 my $COMMENT = "Bruker meta data functions";
 use vars qw(@knownmethods);
 
-my @cartesian_3D_methods= qw( MGE RARE MSME DtiStandard dtiStandard_1 GEFC); 
+my @cartesian_3D_methods= qw( MGE RARE MSME DtiStandard dtiStandard_1 GEFC ); 
 my @cartesian_2D_methods= qw(MDEFT ) ;
-my @radial_methods=qw( UTE UTE3D ute3d_keyhole);
+my @radial_methods=qw( UTE UTE3D ute3d_keyhole Bruker:SPIRAL Bruker:DtiSpiral);
 push(@knownmethods,@cartesian_3D_methods);
 push(@knownmethods,@cartesian_2D_methods);
 push(@knownmethods,@radial_methods);
@@ -678,6 +678,9 @@ returns the array
     } 
     $subarraysize=$subarraysize-1;# have to take one off because our subarray matches are 1 element optionally followed by separator $element up to subarraysize
     my $varchar_length=$subarraysize+2; # special for varchar strings, just makes syntax easier below
+    if ( $subarraysize>2048 ) {
+        $subarraysize=1;
+    }
 ### pick regex
 # foreach thing there are two regexs, one which matches a single element of the subarrays, 
 # and antoehr which is matches an entire subarray.
