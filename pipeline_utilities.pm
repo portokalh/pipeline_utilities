@@ -7,7 +7,7 @@
 # propose, a log_utilities, maybe a matlab_utilities, maybe an external call utilities
 #
 # created 09/10/15  Sally Gewalt CIVM
-#                   based on t2w pipeline  
+#                   based on t2w pipemline  
 # 110308 slg open_log returns log path
 # 130731 james, added new function new_get_engine_dependencies, to replace that chunk of code used all the damn time.
 #               takes an output identifier, and an array of required values in the constants file to be checked. 
@@ -254,14 +254,14 @@ sub make_matlab_m_file_quiet {
    #print MATLAB_M 'fprintf([datestr(now, \'HH:MM:SS\'),\'\n\n\']);'."\n";
    print MATLAB_M 'fprintf(\'%s\n\n\',datestr(now, \'HH:MM:SS\'));'."\n";
    my ($fn) = $function_call =~ /^\s*([^ (]+).*$/x ;
-   print MATLAB_M 'path=which(\''.$fn.'\');'."\n";
-   print MATLAB_M 'fprintf(\'calling %s \n\',path);'."\n";
    if ( defined $WKS_SHARED) { 
        if ( -e "$WKS_SHARED/pipeline_utilities/startup.m") 
        {
 	   print MATLAB_M "run('$WKS_SHARED/pipeline_utilities/startup.m');\n";
        }
    }
+   print MATLAB_M 'path=which(\''.$fn.'\');'."\n";
+   print MATLAB_M 'fprintf(\'calling %s \n\',path);'."\n";
    print MATLAB_M "$function_call\;"."\n";
    print MATLAB_M 'fprintf(['."\'${mfile_path}_DONE\'".' \'\n\']);'."\n";
    close MATLAB_M;

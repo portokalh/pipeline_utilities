@@ -291,6 +291,17 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     } else { 
 	warn("cannot find bit depth at RECO_wordtype");
     }
+    my $paravision_string = $hf->get_value($data_prefix."META_TITLE");
+    #my ($type,$swname,$ver)=
+    $paravision_string =~ m/^([^,]+),\s+([^\s]+)(.*)$/x ;
+    if( defined $1 && defined $2 && defined $3 && ) {
+	printd(50,"pvstring;$paravision_string -> \n\tjnk:$1|||name:$2|||ver:$3\n");
+	if ($3 =~ /6\.0/ && $extraction_mode_bool) {
+	    $bit_depth=16;
+	    $data_type="Unsigned";
+	print("PV6 found! It appears all PV6.0 images are 16-bit unsigned short ints!\n");
+	}
+    }
     if ( $extraction_mode_bool ) { 
 	$hf->set_value("B_image_bit_depth",$bit_depth);
 	$hf->set_value("B_image_data_type",$data_type);
@@ -415,7 +426,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		croak "PVM_NSPacks should equal NSLICES"; 
 	    }
 	    if ("$slice_pack_size" ne "1" ) {
-		confess "Slab data never saw PVM_SPackArrNSlcies array with values other than 1";
+		confess "Slab data never saw PVM_SPackArrNSlices array with values other than 1";
 	    }
 	    if ("$n_slice_packs" ne "$list_size" ){
 		confess "PVM_NSPacks should equal ACQ_O1_list_size with slab data";
@@ -523,8 +534,9 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     printd(45,"vol_type:$vol_type, $vol_detail\n");
     $debug_val=$old_debug;
     my $method_ex="<(".join("|",@knownmethods).")>";
-    if ( $method !~ m/^$method_ex$/x ) { 
-        croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
+    my $method_ex_2="<(Bruker[:]".join("|Bruker[:]",@knownmethods).")>"; # PV6 adds Bruker: to each method.
+    if ( $method !~ m/^$method_ex$/x && $method !~ m/^$method_ex_2$/x ) {
+	croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
 #\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
     }
     return "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth}:${data_type}:${order}";
@@ -623,7 +635,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			   ],
 			   "${s_tag}NRepetitions"=>[
 			       1,
-			       'NR',                      # repetitions, from ACQ
+#			       'NR',                      # repetitions, from ACQ
 			       'PVM_NRepetitions',        # repetitions, from method, not always the same thing as acq, notably for dti sets. # might be number of tr's in multi tr set...
 			   ],
  			   "rays_per_volume"=>[    # number of rays acquried in a scan. NOT the length of fid
