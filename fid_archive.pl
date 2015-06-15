@@ -178,7 +178,7 @@ our $verbose=0;
 	#print(join("\n", @dirs)."\n");
 	($name,$directory,$extension)= fileparts($dirs[0]);
 	#print("$name,$directory,$extension\n");
-	if ( $name ne $runno ) { 
+	if ( $name ne $runno && defined $name && $name ne "" ) { 
 	    $runno=$name;
 	    $root_runno=$name;
 	}
