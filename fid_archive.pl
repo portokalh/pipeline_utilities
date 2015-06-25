@@ -43,6 +43,11 @@ if (! defined($RECON_HOSTNAME) && ! defined($WORKSTATION_HOSTNAME)) {
     exit $ERROR_EXIT;
 }
 
+if ( ! defined($WORKSTATION_HOSTNAME)) {
+    $WORKSTATION_HOSTNAME=$RECON_HOSTNAME;
+}
+
+
 use lib split(':',$RADISH_PERL_LIB);
 require Headfile;
 #require hoaoa;
@@ -63,6 +68,7 @@ our $person;
 our $runno;
 our $root_runno;
 our $archive_suffix="_fid";
+our $scanner_vendor;
 our $outrunno;
 our @infiles;
 our $hf_path;
@@ -74,7 +80,7 @@ our $cmdopts='';
 our $verbose=0;
 
 { # optcheck
-    if (! getopts('od:s:', \%opt)) {
+    if (! getopts('od:s:x:', \%opt)) {
 	usage_message("Problem with command line options.\n");
     }
     if ( defined $opt{d} ) { # -d debug mins
@@ -103,17 +109,26 @@ our $verbose=0;
 	$outrunno="${runno}$archive_suffix";
 	print("OutputRunno will be $outrunno ( preliminary )\n");
     }
+    if (defined $opt{x}) {  # -s suffix
+	print("\nAlternate scanner_vendor specified.\n");
+	$scanner_vendor=$opt{'x'};
+	$cmdopts="${cmdopts}s $scanner_vendor";
+	print("\tusing $scanner_vendor\n");
+    }
 #     if (defined $opt{e}) { # -e
 # 	$data_exists = 1; # if data has already been copied, we'll work with local data
 # 	$cmdopts="${cmdopts}e";
 #     }
 }
-
 { # main
+    printd(50,"Person is $person\n");
+    printd(50,"Runno is $runno\n");
+    printd(15,"Looking up runno in local dir...\n");
 ###
 # Read Dependencies
 ###
     my $engine_file ;
+    $engine_file = join("_","engine","$RECON_HOSTNAME","radish_dependencies");
     my $this_engine_constants_path ;
 #    my $scanner_file_name               = join("_","scanner",$scanner,"radish_dependencies");
 #    my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name);
@@ -125,7 +140,7 @@ our $verbose=0;
 	$this_engine_constants_path = join("/",$RADISH_RECON_DIR, $engine_file);
 #    printd(5,"using old constants $this_engine_constants_path\n");
     }
-    $engine_file = join("_","engine","$RECON_HOSTNAME","radish_dependencies");
+
     my $Engine_constants = new Headfile ('ro', $this_engine_constants_path);
     if (! $Engine_constants->check())       { 
 	error_out("Unable to open recon engine constants file $this_engine_constants_path\n"); }
@@ -137,7 +152,7 @@ our $verbose=0;
 
     my $rm_hfpath='NULL';
     ### check if directory is the scanner header file instead of the directory from the magnet
-	my ($name,$extension);
+    my ($name,$extension);
     if ( -f $runno){ # && ! -d $directory) { 
 	#printd(15,"You specifid the scanner header file directly instead of the directory it sits in. This is an unproven method best suited for testing different ways to fool the header parse script \n");
 	#push (@infiles,$directory);
@@ -163,15 +178,19 @@ our $verbose=0;
 	#print(join("\n", @dirs)."\n");
 	($name,$directory,$extension)= fileparts($dirs[0]);
 	#print("$name,$directory,$extension\n");
-	if ( $name ne $runno ) { 
+	if ( $name ne $runno && defined $name && $name ne "" ) { 
 	    $runno=$name;
 	    $root_runno=$name;
 	}
+    } else {
+	#error_out("runno $runno not found in $Engine_work_dir, and wasnt a headfile specifed direclty");
+	printd(60,"runno $runno not found in $Engine_work_dir, and wasnt a headfile specifed direclty");
     }
     $directory="$Engine_work_dir/$runno.work/"; 
     # check if runno was an m0(or other suffix) directory, if it was, and the .work doesnt exist, try a base run dir.
     my $insuffix='';
-    if ( ! -e $directory && ! -f $runno) { 
+    if ( ! -e $directory && ! -f $runno) {
+	printd(25,"not exist $directory, and not file $runno\n");
 	my $ldir=$directory;
 	($runno,$insuffix)=$runno =~ /([A-Za-z][0-9]{5,})(.*)/x;
 	$directory="$Engine_work_dir/$runno.work/";
@@ -181,7 +200,12 @@ our $verbose=0;
 	}
 	$rm_hfpath="$directory/rad_mat.headfile";
     } else {
-	
+	printd(25,"found $directory, or $runno\n");
+    }
+    # make sure the input headfile exists
+    if ( ! -f $rm_hfpath ) {
+	printd(5,"Switching to image dir headfile\n");
+	$rm_hfpath="$Engine_work_dir/$runno/${runno}images/$runno.headfile";
     }
     if ( $runno.$archive_suffix ne $outrunno ) {
 	$outrunno=$runno.$archive_suffix;
@@ -206,14 +230,16 @@ our $verbose=0;
 	error_out("Unable to open recon headfile $rm_hfpath\n"); }
     if (! $input_headfile->read_headfile) { 
 	error_out("Unable to read from file $rm_hfpath\n"); }
-    my $scanner_vendor;
-    $scanner_vendor               = $input_headfile->get_value('scanner_vendor') or $scanner_vendor="";
+
+    if ( ! defined ($scanner_vendor) ) {
+	$scanner_vendor               = $input_headfile->get_value('scanner_vendor') or $scanner_vendor="";
+    }
     
 ###
 # check for unexpected scanner_vendor
 ###    
 # agilent,aspect,bruker are expected
-    my @scanner_vendors= qw/agilent aspect bruker/;
+    my @scanner_vendors= qw/agilent aspect bruker ge/;
     my $odd_scanner;
     my $scanner_regex=join('|',@scanner_vendors);
     if ( $scanner_vendor !~  /^($scanner_regex)$/ ) {
@@ -294,6 +320,18 @@ our $verbose=0;
 	require bruker;
 	import bruker qw(parse_header input_files);
 	require bruker::hf ;
+    } elsif($scanner_vendor eq 'ge') {
+	if ($#infiles == -1 ) { 
+	    push(@infiles,glob($directory.'/'."P*"));
+#	    push(@infiles,$directory.'/'."acqp");
+#	    push(@infiles,$directory.'/'."method");
+	} else {
+	    printd(15,"the scanner input file was specified directly, bruker headers are normally in three parts, you need to have combined those into one to specify the headfile to use directly.(subject,acqp,method)");
+	}
+#	$hf_prefix='z_Bruker_';
+	$hf_short_prefix="S_";
+	$data_filename="*.rp";
+
     } else {
 	error_out("unexpected scanner_vendor OR scanner_vendor unspecifed!");
     }
@@ -305,13 +343,24 @@ our $verbose=0;
 ###
 # parse files
 ###
+    #my @errors=();
     foreach ( @infiles) {
 	my ($fname,$fdir)=fileparse( $_);
-	link ( $directory.$_,$out_dir.$fname );
-	print ( "$directory$_ -> $out_dir$fname \n");
-	
+	my $dtmp="";
+	if ( ! -f $_ ) {
+	    $dtmp=$directory;
+	}
+	my $ipath=$dtmp.$_;
+	if ( -f $ipath ) {
+	link ( $ipath,$out_dir.$fname );
+	print ( "$ipath -> $out_dir$fname \n");
+	} else {
+	    #printd(5,"WARNING: file $ipath not found\n");
+	    push(@errors,"file $ipath not found");
+	}
     }
 
+    
 #    $Hfile->get_value("kspace_data_path")); # glob resolves the * in aspectnames  : )
 #    $Hfile->set_value("U_prefix",${hf_prefix});
 #    $Hfile->set_value("S_tag",$hf_short_prefix);
@@ -351,6 +400,9 @@ our $verbose=0;
     $Hfile->set_value('U_rd_modality',$modality);# U_rd_modality=research DTI;
     
     $Hfile->print_headfile($outrunno);
+    if ( $#errors>=0 ) {
+	error_out("process stop before write headfile".join("\n",@errors));
+    }
 ###
 # save header
 ###
