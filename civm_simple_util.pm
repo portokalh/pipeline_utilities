@@ -4,6 +4,7 @@
 # simple utilities with some minor pod documentation
 # helpful for much and many perl projects
 #
+# file_exists  check for file existence allowing regex in name
 # printd(print only if devbugval high enough)
 # load_file_to_array(loads a file at path, to an array of lines at ref)
 # write_array_to_file inverse of load_file_to_array
@@ -36,6 +37,7 @@ write_array_to_file
 get_engine_constants_path
 get_engine_hosts
 get_script_loc
+file_exists
 printd 
 whoami 
 whowasi 
@@ -204,6 +206,30 @@ sub get_script_loc { # ($script_path,[debug_val])
     }
     return $script_path;
 }
+=item file_exists
+
+check if a files exists using read dir 
+filepath can include regular expession bits except for / because we use basename to get the directory.
+
+=cut
+sub file_exists { 
+    my ($fullname)=@_; 
+    my $status = 0;
+#    use File::Basename;
+#    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
+    my ($n,$p,$s) = fileparse($fullname,qr/\.[^.]*$/);
+
+    opendir(DIR, "$p") or die $!;
+    my @matches = grep(/^$n$s/, readdir(DIR));
+    closedir(DIR);
+
+    if ($#matches>=0) {
+	$status=1;
+    }
+    
+    return $status;
+}
+
 =item printd
     
 prints if globaldebug >= debuglevel
