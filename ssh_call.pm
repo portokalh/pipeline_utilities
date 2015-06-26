@@ -43,16 +43,28 @@ sub get_file {
     
     my $date = `ssh -Y $system date`;
     chop ($date);
-    my $src = "$system:$source_dir";
+
+    # this src/dest code needs to be cleaned up for future sanity.
+    my $src = "$source_dir";
     my $dest  = "$local_dest_dir";
     if ( !defined $verbose) { 
 	$verbose=1;
     }
     if ( $file ne "" ) {
-	$src="$src/$file"; 
-	$dest="$dest/".basename($file);
+	$src="$src$file"; # maybe we should have / inbetweeen may be we shouldnt
     } #allow empty file, in case we have the full path in our sourcedir
+    # update source_dir , file and local_dest to make ssh call more sane.
 
+    my ($tn,$tp,$te) = fileparse($src,qr/\.[^.]*$/);
+    #my ($tn,$tp,$te)=fileparts($src);
+    $source_dir=$tp;
+    $file=$tn.$te;
+    $src="$system:$src";
+    if ( $file ne "" ) {
+	$dest="$dest/".basename($file);
+    }
+
+    
     # this scp does not preserve links, here is an example of preserving links.
     # this example sends a file, to retrieve a file
     #$ tar cf - /usr/local/bin | ssh server.example.com tar xf -
@@ -60,8 +72,8 @@ sub get_file {
     # ssh server.example.com tar cf - /usr/local/bin | tar -xf -
     # ssh crete '(cd /Volumes/workstation_data/data/atlas/rat/; tar -pcjf - rat_labels.nii.gz )' | tar -xjf -
     my @args  = ("scp","-C", $src, $dest); #the former solution which duplicated linked files, 
-    @args  = ("cd $local_dest_dir; ssh $system '(cd $source_dir ; tar -pcjf - $file )'| tar -xjf - ";# the new solution which does not duplicate links.
     my $cmd=join(" ",@args);
+    $cmd  = ("cd $local_dest_dir; ssh $system '(cd $source_dir ; tar -pcjf - $file )'| tar -xjf - ");# the new solution which does not duplicate links.
     print STDERR "   Beginning ".$cmd." at $date...\n" if $verbose>0;#    print STDERR "Beginning scp of $src at $date...";
     my $start = time;
 
@@ -112,7 +124,9 @@ sub get_file {
     }
     my $end   = time;
     my $xfer_time = $end - $start;
-
+    if ( ! -e $dest ) {
+	print "transfer failure, $dest not found.\n" and return 0;
+    }
 
     print STDERR "Successful scp took $xfer_time second(s).\n" if $xfer_time > 5;
     return 1;
