@@ -66,6 +66,8 @@ get_image_suffix
 matlab_fifo_cleanup
 file_over_ttl
 data_integrity
+file_checksum
+link_checksum
 make_matlab_command_V2
 rp_key_insert
 make_matlab_command_V2_OBSOLETE
@@ -900,8 +902,13 @@ sub data_integrity {
 
     my ($n,$p,$ext) = fileparts($file);
     my $checksumfile=$p.$n.".md5";
-
-    my @md5 = (file_checksum($file));
+    
+    my @md5 = (); 
+    if (! -l $file ) {
+	@md5=(file_checksum($file));	
+    } else {
+	@md5=(link_checksum($file));	
+    }
     my @stored_md5;
     if ( ! -e $checksumfile ) { 
 	write_array_to_file($checksumfile,\@md5);
@@ -931,6 +938,23 @@ sub file_checksum {
     #my $md5 = $md_calc->digest;
     my $md5 = $md_calc->hexdigest;
     close $data_fid or warn "error on file close $file";
+    #print("md5:$md5\n");
+    return $md5;
+}
+
+# -------------
+sub link_checksum {
+# -------------
+    # run checksum on link and return checksum result.
+    my ($file) = @_;
+    use Digest::MD5 qw(md5 md5_hex md5_base64); 
+    my $data = readlink $file or die "could not open $file";
+    #print("md5 calc on $file\n");
+    my $md_calc=Digest::MD5->new ;
+    $md_calc->add($data);
+    #my $md5 = $md_calc->b64digest;
+    #my $md5 = $md_calc->digest;
+    my $md5 = $md_calc->hexdigest;
     #print("md5:$md5\n");
     return $md5;
 }
