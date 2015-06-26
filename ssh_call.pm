@@ -53,7 +53,14 @@ sub get_file {
 	$dest="$dest/".basename($file);
     } #allow empty file, in case we have the full path in our sourcedir
 
-    my @args  = ("scp","-C", $src, $dest);
+    # this scp does not preserve links, here is an example of preserving links.
+    # this example sends a file, to retrieve a file
+    #$ tar cf - /usr/local/bin | ssh server.example.com tar xf -
+    # i think this would retrieve remote.
+    # ssh server.example.com tar cf - /usr/local/bin | tar -xf -
+    # ssh crete '(cd /Volumes/workstation_data/data/atlas/rat/; tar -pcjf - rat_labels.nii.gz )' | tar -xjf -
+    my @args  = ("scp","-C", $src, $dest); #the former solution which duplicated linked files, 
+    @args  = ("cd $local_dest_dir; ssh $system '(cd $source_dir ; tar -pcjf - $file )'| tar -xjf - ";# the new solution which does not duplicate links.
     my $cmd=join(" ",@args);
     print STDERR "   Beginning ".$cmd." at $date...\n" if $verbose>0;#    print STDERR "Beginning scp of $src at $date...";
     my $start = time;
