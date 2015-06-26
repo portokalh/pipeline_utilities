@@ -144,7 +144,7 @@ for my $remote_data_file (@list ) {
 	    my $integrity=data_integrity($local_data_dir.$rel_path);
 	    my @local_md5;
 	    if ( $integrity ) {
-		# in integrity same, check against remote.	
+		# if local integrity same, check against remote.	
 		load_file_to_array($local_data_dir.$rel_md5,\@local_md5);
 		if ( $remote_md5[0] eq $local_md5[0]) {
 		    #no work
@@ -173,7 +173,6 @@ for my $remote_data_file (@list ) {
 
 
 	if ( $cp_file ) {
-	    
 	    if ( ! -d dirname($local_data_dir.$rel_path) ) {
 		mkdir(dirname($local_data_dir.$rel_path),0777) or die("Local atlas dir missing for ".dirname($local_data_dir.$rel_path)."and could not be created\n");
 	    }

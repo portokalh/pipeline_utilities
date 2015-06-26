@@ -27,8 +27,8 @@ require Headfile;
 #require image_math;
 #require registration;
 
-require apply_coil_bias_to_all;
-require apply_noise_reduction_to_all;
+#require apply_coil_bias_to_all;
+#require apply_noise_reduction_to_all;
 
 
 my $file_pat=".*\.nii(?:\.gz)?\$";
@@ -55,9 +55,18 @@ foreach (make_list_of_files($EC->get_value("engine_data_directory")."/atlas",$fi
 my @atlas_dir_contents=make_list_of_files($EC->get_value("engine_data_directory")."/atlas","[^.]+");
 my @dirs_to_check=();
 for(my $fn=0;$fn<=$#atlas_dir_contents;$fn++){
-    if ( -d $EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn] ) {
-	push(@dirs_to_check,$EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn]);
+    my $thing=$EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn];
+    if ( -d $thing && !  -l $thing ) {
+	if (-r $thing ){
+	    push(@dirs_to_check,$thing);
+	} else {
+	    print("Ignoring $thing: could not read.\n");
+	}
     } else {
+	if ( -l $thing) {
+	    print("Adding link $thing\n");
+	    push (@list,$thing);
+	}
     }
 }
 print(join(" ",@dirs_to_check)."\n");
