@@ -1171,18 +1171,30 @@ sub execute_indep_forks {
   #$ncores=20000000; # fail conditional for many procs.
 ##### 
 #INDEP FORK REAPER
-  $SIG{CHLD} = sub {# this reaps all COMPLETED children but does not wait on uncompleted
+  $SIG{CHLD} = sub {
+# this reaps ALL COMPLETED children each time a child completes,
+# this means sometimes it will run with no children because an earlier run cleaned up all the children.
+# THIS DOES NOT wait for uncompleted children
+      my $completed=0;
       while () {
+	  #waitpid returns child PID if child has stopped.
+	  #waitpid returns -1 on a failure
+	  #waitpid returns 0 on child still running. 
+	  # this is a sig chld handler, so it should never still be running.
 	  my $child = waitpid -1, POSIX::WNOHANG;
 	  last if $child <= 0;
-	  my $localtime = localtime;
 	  my $ev=$?>> 8;
 	  #print "Parent: Child $child was reaped - $localtime. \n";
+	  my $localtime = localtime;
 	  if ( $ev ) {
-	      error_out( "Parent: Child $child was reaped - $localtime with error code:$ev \n");
+	      error_out( "Parent: Child ended with error code! $localtime - $child was reaped with error code:$ev \n");
+	      #error_out( "Parent: Child $child was reaped - $localtime with error code:$ev \n");
 	  }
 	  $nforked-=1;
+	  $completed++;
       }
+      my $endtime = localtime;
+      print("\tcollected $completed finished process(es). - $endtime \n"); # test print to show when the reaper has killed a child.
   };
 #####
   print("forking with up to ".(2*$ncores)." processes");
@@ -1220,6 +1232,7 @@ sub execute_indep_forks {
       } elsif ($pid == 0) { 
 # child
 #	  print "child fork $$\n";
+	  #sleep(5+int(rand(10)));# a test sleep of 5-15 seconds to make sure our children all end at different times.
 	  if ( 1 ) {
 #### cut execute_heart
 #execute_heart DIT NOT perform well here for fast tasks.	      
@@ -1247,6 +1260,8 @@ sub execute_indep_forks {
 		  last if $child <= 0;
 		  my $localtime = localtime;
 		  print "nf:Parent: Child $child was reaped - $localtime.\n";
+		  print("ERROR CONDITION< ALTENRATE CHILD REAPER USED\n\t SLEEPING FOR 60!!!!!!\n");
+		  sleep(60);
 		  $nforked-=1;
 	      }
 	  };
@@ -1265,7 +1280,12 @@ sub execute_indep_forks {
 	  print "pid $tmp done, $nforked child forks left.\n";
       }
   }
-  print "Execute: waited for all $total_forks command forks to finish; fork queue size $nforked...zombies eliminated.\n";
+  #wait 1 second at a time for any remaining children to finish.
+  while ( $nforked> 0 ) {
+      sleep(1);
+      #print STDERR ("."); # just too keep us interested. bad idea, some of our commands have valid output to look at.
+  }
+  print "Execute: waited for all $total_forks command forks to finish; fork queue remainder $nforked. \n";
   
   return($$);
 }
