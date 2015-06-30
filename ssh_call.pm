@@ -40,7 +40,7 @@ sub works {
 
 sub get_file {
     my ($system, $source_dir, $file, $local_dest_dir,$verbose)  =@_;
-    
+    #print("SSH CALL: sys:$system sourcedir:$source_dir file:$file local_dest:$local_dest_dir verbosity:$verbose\n");
     my $date = `ssh -Y $system date`;
     chop ($date);
 
@@ -51,7 +51,7 @@ sub get_file {
 	$verbose=1;
     }
     if ( $file ne "" ) {
-	$src="$src$file"; # maybe we should have / inbetweeen may be we shouldnt
+	$src="$src/$file"; # maybe we should have / inbetweeen may be we shouldnt
     } #allow empty file, in case we have the full path in our sourcedir
     # update source_dir , file and local_dest to make ssh call more sane.
 
