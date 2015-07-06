@@ -113,6 +113,7 @@ write_refspace_txt
 compare_two_reference_spaces
 hash_summation
 memory_estimator
+make_identity_warp
 ); 
 }
 
@@ -1924,14 +1925,34 @@ sub cluster_wait_for_jobs {
 # ------------------
 sub get_nii_from_inputs {
 # ------------------
+# Update to only return hdr/img/nii/nii.gz formats.
+# Case insensitivity added.
+# Order of selection (using contrast = 'T2' and 'nii' as an example):
+#        1)  ..._contrast.nii     S12345_T2.nii         but not...   S12345_T2star.nii 
+#        2)  ..._contrast_*.nii   S12345_T2_masked.nii  but not...   S12345_T2star.nii or S12345_T2star.nii
+#        3)  ..._contrast*.nii    S12345_T2star.nii  or S12345_T2star_masked.nii, etc
+#        4)  Returns error if nothing matches any of those formats
 
     my ($inputs_dir,$runno,$contrast) = @_;
     my $error_msg='';
     
     if (-d $inputs_dir) {
 	opendir(DIR, $inputs_dir);
-	my @input_files = grep(/$runno.*$contrast/ ,readdir(DIR));
-	my $input_file = $input_files[0];
+	my @input_files_1= grep(/($runno).*_($contrast)\.(hdr|img|nii){1}(\.gz)?$/i ,readdir(DIR));
+
+	my $input_file = $input_files_1[0];
+	print "input file = ${input_file}\n\n";
+	if (($input_file eq '') || (! defined $input_file)) {
+	opendir(DIR, $inputs_dir);
+	my @input_files_2= grep(/($runno).*_($contrast)_.*\.(hdr|img|nii){1}(\.gz)?$/i ,readdir(DIR));
+	    $input_file = $input_files_2[0];
+	    if (($input_file eq '') || (! defined $input_file)) {
+		opendir(DIR, $inputs_dir);
+		my @input_files_3= grep(/($runno).*_($contrast).*\.(hdr|img|nii){1}(\.gz)?$/i ,readdir(DIR));
+		$input_file = $input_files_3[0];
+	    }
+	}
+
 	if ($input_file ne '') {
 	    my $path= $inputs_dir.'/'.$input_file;
 	    return($path);
@@ -2123,13 +2144,17 @@ sub data_double_check { # Checks a list of files; if a file is a link, double ch
     my $number_of_bad_files = 0;
  
     for (my $file_to_check = shift(@file_list); ($file_to_check ne '') ; $file_to_check = shift(@file_list)) {
-
+	my ($name,$path,$ext) = fileparts($file_to_check);
 #  The following is based on: http://snipplr.com/view/67842/perl-recursive-loop-symbolic-link-final-destination-using-unix-readlink-command/
 	if ($file_to_check =~/[\n]+/) {
 	    $number_of_bad_files++;
 	} else {
 	    while (-l $file_to_check) {
+		($name,$path,$ext) = fileparts($file_to_check);
 		$file_to_check = readlink($file_to_check);
+		if ($file_to_check !~ /^\//) {
+		    $file_to_check = $path.$file_to_check;
+		}
 	    }
 	    
 	    if (! -e $file_to_check) {
@@ -2235,7 +2260,7 @@ sub format_transforms_for_command_line {
 
     if (! defined $start) {
 	$start = 1;
-	$stop = $total;
+	#$stop = $total;
     }
 
     if (! defined $stop) {
@@ -2243,13 +2268,14 @@ sub format_transforms_for_command_line {
     }
 
     my $count = 0;
+#for(count=start;cont<stop&&count<maxn;count++)
+#trans=transforms[count]
     foreach my $transform (@transforms) {
 	$count++;
 	if (($count >= $start) && ($count <= $stop)) {
-	    if (($transform =~ /\.nii$/g) || ($transform =~ /\.nii\.gz$/g)) { # We assume diffeos are in the format of .nii or .nii.gz
+	    if (($transform =~ /\.nii$/) || ($transform =~ /\.nii\.gz$/)) { # We assume diffeos are in the format of .nii or .nii.gz
 		$command_line_string = $command_line_string." $transform ";	
-	    } 
-	    if (($transform =~ /\.mat$/g) || ($transform =~ /\.txt$/g)) { # We assume affines are in .mat or .txt formats
+	    } elsif (($transform =~ /\.mat$/) || ($transform =~ /\.txt$/)) { # We assume affines are in .mat or .txt formats
 		if ($transform =~ m/-i[\s]+(.+)/) {
 		    $command_line_string = $command_line_string." [$1,1] "; 
 		} else {
@@ -2423,10 +2449,15 @@ sub memory_estimator {
 #---------------------
 
     my ($jobs,$nodes) = @_;
+    if ((! defined $nodes) || ($nodes eq '') || ($nodes == 0)) { $nodes = 1;}
+
     my $node_mem = 244000;
     my $memory;
+    my $jobs_per_node = int($jobs/$nodes + 0.99999);
     if ($jobs) {
-	$memory =int(($nodes*$node_mem)/$jobs);
+
+
+	$memory =int($node_mem/$jobs_per_node);
 	my $limit = 0.9*$node_mem;
 	if ($memory > $limit) {
 	    $memory = $limit;
@@ -2436,6 +2467,36 @@ sub memory_estimator {
 	$memory = 2440; # This number is not expected to be used so it can be arbitrary.
     }
     return($memory);
+}
+
+
+#---------------------
+sub make_identity_warp {
+#---------------------
+
+    my ($source_image,$Hf,$optional_dir,$optional_name) = @_;
+    my $output_name='';
+#    my ($name,$in_path,$ext) = fileparts($source_image);
+    if (defined $optional_name) {
+	$output_name = $optional_dir.'/'.$optional_name;
+#	$in_path = $optional_dir.'/';
+    } elsif (defined $optional_dir) {
+	$output_name = $optional_dir.'/';
+#	$in_path = $optional_dir.'/';
+    }
+
+
+    my $nifti_args;
+    if ($output_name ne '') {
+	$nifti_args="\'${source_image}\', \'${output_name}\'";
+    } else {
+	$nifti_args="\'${source_image}\'";
+    }
+
+    my $nifti_command = make_matlab_command('create_identity_warp',$nifti_args,"",$Hf,0);
+    execute(1, "Creating identity warp from  ${source_image}", $nifti_command);
+
+    return(0);
 }
 
 1;
