@@ -1941,7 +1941,6 @@ sub get_nii_from_inputs {
 	my @input_files_1= grep(/($runno).*_($contrast)\.(hdr|img|nii){1}(\.gz)?$/i ,readdir(DIR));
 
 	my $input_file = $input_files_1[0];
-	print "input file = ${input_file}\n\n";
 	if (($input_file eq '') || (! defined $input_file)) {
 	opendir(DIR, $inputs_dir);
 	my @input_files_2= grep(/($runno).*_($contrast)_.*\.(hdr|img|nii){1}(\.gz)?$/i ,readdir(DIR));
