@@ -34,8 +34,8 @@ sub apply_noise_reduction {
   if($in_nii eq "NO_KEY" || $in_nii eq "EMPTY_VALUE" || $in_nii eq "UNDEFINED_VALUE") {
       my @in_setid_list=split(',',$Hf_out->get_value("${hf_nii_id}"));
       
-      if ( $#in_setid_list<=6 ) { # assume that if we dont have a long enough list we dont have the right info.
-	  error_out("$in_nii, could not find input nii in headfile. KEY:  ${hf_nii_id}-nii-path");
+      if ( $#in_setid_list<6 ) { # assume that if we dont have a long enough list we dont have the right info.
+	  error_out("$in_nii, could not find input nii in headfile. KEY:  ${hf_nii_id}-nii-path\n data ".join(':',@in_setid_list).".");
       } else {
 	  print("WARNING: EXPERIMENTAL MANY NOISE CORRETION AT ONCE CODE!\n");
 	  sleep(5);
