@@ -114,6 +114,8 @@ compare_two_reference_spaces
 hash_summation
 memory_estimator
 make_identity_warp
+get_spacing_from_header
+get_bounding_box_and_spacing_from_header
 ); 
 }
 
@@ -2287,18 +2289,15 @@ sub format_transforms_for_command_line {
 }
 
 #---------------------
-sub get_bounding_box_from_header {
+sub get_bounding_box_from_header {  ## This may still hang out in older VBM_pipeline code, so we support it be invoking get_bounding_box_and_spacing_from_header
 #---------------------
-    my ($in_file,$ants_path) = @_;
+    my ($in_file) = @_;
     my $bounding_box;
-    my $header_output = `${ants_path}PrintHeader ${in_file}`;
-    if ($header_output =~ /(\{[^}]*\})/) {
-	$bounding_box = $1;
-	chomp($bounding_box);
-#	print "$bounding_box\n";
-    } else {
-	$bounding_box = 0;
-    }
+    my $bb_and_spacing = get_bounding_box_and_spacing_from_header($in_file);
+    my @array = split(' ',$bb_and_spacing);
+    my $sp = pop(@array);
+    $bounding_box = join(' ',@array);
+
     return($bounding_box);
 }
 
@@ -2352,47 +2351,34 @@ sub write_refspace_txt {
 sub compare_two_reference_spaces {
 #---------------------
     my ($file_1,$file_2) = @_; #Refspace may be entered instead of file path and name.
-    my ($bb_1,$bb_2);
-    my ($sp_1,$sp_2);
+    my ($bb_and_sp_1,$bb_and_sp_2);
+ #   my ($sp_1,$sp_2);
     
     if (data_double_check($file_1)){
-	my @array = split(' ',$file_1);
-	$sp_1 = pop(@array);
-	$bb_1 = join(' ',@array);
+	$bb_and_sp_1 = $file_1;
+#	$sp_1 = pop(@array);
+#	$bb_1 = join(' ',@array);
     } else {
-	$bb_1 = get_bounding_box_from_header($file_1);
-	$sp_1 = `PrintHeader ${file_1} 1`;
-	chomp($sp_1);
+	$bb_and_sp_1 = get_bounding_box_and_spacing_from_header($file_1);
+#	$sp_1 = get_spacing_from_header($file_1);
+#	chomp($sp_1);
    }
 
 
    if (data_double_check($file_2)){
-       my @array = split(' ',$file_2);
-       $sp_2 = pop(@array);
-       $bb_2 = join(' ',@array);
+       $bb_and_sp_2 = $file_2;
+#       $sp_2 = pop(@array);
+#       $bb_2 = join(' ',@array);
    } else {
-       $file_2 = $file_2_or_refspace;
-       $bb_2 = get_bounding_box_from_header($file_2);
-       $sp_2 = `PrintHeader ${file_2} 1`;
-       chomp($sp_2);
+       $bb_and_sp_2 = get_bounding_box_and_spacing_from_header($file_2);
    }
 
-    my $check_1=0;
-    my $check_2=0;
-#    print "$bb_1\n$bb_2\n";
-    if ($bb_1 eq $bb_2) {
-	$check_1 = 1;
-    }
-#    print "Check one = ${check_1}\n";
-#    print "$sp_1\n$sp_2\n";
-    if ($sp_1 eq $sp_2) {
-	$check_2 = 1;
+    my $result=0;
+
+    if ($bb_and_sp_1 eq $bb_and_sp_2) {
+	$result = 1;
     }
 
-#    print "Check two = ${check_2}\n";
-    my $result = $check_1*$check_2;
-
-#    print "Result = $result\n";
     return($result);
 }
 
@@ -2496,6 +2482,110 @@ sub make_identity_warp {
     execute(1, "Creating identity warp from  ${source_image}", $nifti_command);
 
     return(0);
+}
+
+
+
+#---------------------
+sub get_spacing_from_header { ## Easier to just call bb_and_spacing code and then take what we need.
+#---------------------
+    my ($in_file) = @_;
+    my $spacing;
+    my $bb_and_spacing = get_bounding_box_and_spacing_from_header($in_file);
+    my @array = split(' ',$bb_and_spacing);
+    my $spacing = pop(@array);
+   
+    return($spacing);
+}
+
+#---------------------
+sub get_bounding_box_and_spacing_from_header {
+#---------------------
+
+    my ($file,$ants_not_fsl) = @_;
+    my $bb_and_spacing;
+    my ($spacing,$bb_0,$bb_1);
+    my $success = 0;
+    my $header_output;
+
+    if (! defined $ants_not_fsl) {
+	$ants_not_fsl = 0;
+    }
+
+    if (! $ants_not_fsl) {
+	my $fsl_cmd = "fslhd $file";
+       
+	$header_output = `${fsl_cmd}`;#`fslhd $file`;
+
+	my $dim = 3;
+	my @spacings;
+	my @bb_0;
+	my @bb_1;
+
+	if ($header_output =~ /^dim0[^0-9]([0-9]{1})/) {
+	    $dim = $1;
+
+	}
+	for (my $i = 1;$i<=$dim;$i++) {
+	    my $spacing_i;
+	    my $bb_0_i;
+	    my $array_size_i;
+	    if ($header_output =~ /pixdim${i}[\s]*([0-9\.\-]+)/) {
+		$spacing_i = $1;
+		$spacing_i =~ s/([0]+)$//;
+		$spacing_i =~ s/(\.)$/\.0/;
+		$spacings[($i-1)]=$spacing_i;
+	    }
+	   
+	    if ($header_output =~ /sto_xyz\:${i}([\s]*[0-9\.\-]+)+/) {
+		$bb_0_i = $1;
+		$bb_0_i =~ s/([0]+)$//;
+		$bb_0_i =~ s/(\.)$/\.0/;
+		$bb_0_i =~ s/^(\s)+//;
+		$bb_0[($i-1)]=$bb_0_i;
+	    }
+	    if ($header_output =~ /dim${i}[\s]*([0-9]+)/) {
+		$array_size_i = $1;
+		$array_size[($i-1)] = $array_size_i;
+	    }
+	    $bb_1_i= $bb_0[($i-1)]+$array_size[($i-1)]*$spacings[($i-1)];
+	    $bb_1_i =~ s/([0]+)$//;
+	    $bb_1_i =~ s/(\.)$/\.0/;
+	    $bb_1_i =~ s/^(\s)+//;
+	    $bb_1[($i-1)]= $bb_1_i;
+	}
+
+	$bb_0 = join(' ',@bb_0);
+	$bb_1 = join(' ',@bb_1);
+	$spacing = join('x',@spacings);
+	
+	$bb_and_spacing = "\{\[${bb_0}\], \[${bb_1}\]\} $spacing"; 
+
+	if ($spacing eq '') {
+	    $success = 0;
+	} else {
+	    $success = 1;
+	}
+    }
+
+    if ($ants_not_fsl || (! $success)) {
+	#Use ANTs (slow version)
+	my $bounding_box;
+
+	if ($header_output =~ /(\{[^}]*\})/) {
+	    $bounding_box = $1;
+	    chomp($bounding_box);
+	    $success = 1;
+	} else {
+	    $bounding_box = 0;
+	}
+	$spacing = `PrintHeader $file 1`;
+	chomp($spacing);
+
+	$bb_and_spacing = join(' ',($bounding_box,$spacing));
+    }
+
+    return($bb_and_spacing);
 }
 
 1;
