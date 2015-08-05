@@ -450,7 +450,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		$current_offset=sprintf("%.9f",$current_offset);
 #		printd(85,"num1 (".($slice_offsets[$offset_num]).")  num-1(".($slice_offsets[($offset_num-1)]).")\n");
 		printd(85,"num_a:$num_a, num_b:$num_b\n");
-		
+
+		# Due to very minimal discrepancy in calculation error, we have seen a bad decimal of precision when testing for contiguous slices. 
+		# these sprintf's should help prevent that error from foring us into multi-volume when we only want one..
+#                                        0.235548400
+#                                        0.235548401
+		$first_offset=sprintf("%0.8f",$first_offset);
+		$current_offset=sprintf("%0.8f",$current_offset);
+
 		if("$first_offset" ne "$current_offset") { # for some reason numeric comparison fails for this set, i dont understnad why.
 		    printd(85,"diff bad  num:$offset_num  out of cur, <$current_offset> first, <$first_offset>\n");
 		    $first_offset=-1000; #force bad for rest
