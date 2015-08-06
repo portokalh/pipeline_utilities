@@ -1062,8 +1062,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     ($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
     ($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov")); 
     $fov_f=$fov_f*10;
-    $fov_p=$fov_p*10;
-    $fov_z=$fov_z*10;
+    if(defined $fov_p) {
+	$fov_p=$fov_p*10; }
+    if ( defined $fov_z ) {
+	$fov_z=$fov_z*10;}
     if ( $hf->get_value($data_prefix."PVM_SpatResol") ne 'NO_KEY') {
 #	($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
 	if ( $fov_f!=$df*$thick_f )
