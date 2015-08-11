@@ -33,7 +33,10 @@ use Getopt::Long qw(GetOptionsFromString); # For use with antsRegistration_memor
 
 no warnings qw(uninitialized bareword);
 
-use vars qw($HfResult $BADEXIT $GOODEXIT $test_mode $debug_val);
+use vars qw($HfResult $BADEXIT $GOODEXIT $test_mode $debug_val $valid_formats_string);
+$valid_formats_string = 'hdr|img|nii';
+
+
 if (! $debug_val) {
     $debug_val = 5;
 }
@@ -1940,16 +1943,16 @@ sub get_nii_from_inputs {
     
     if (-d $inputs_dir) {
 	opendir(DIR, $inputs_dir);
-	my @input_files_1= grep(/($runno).*_($contrast)\.(hdr|img|nii){1}(\.gz)?$/i ,readdir(DIR));
+	my @input_files_1= grep(/($runno).*_($contrast)\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR));
 
 	my $input_file = $input_files_1[0];
 	if (($input_file eq '') || (! defined $input_file)) {
 	opendir(DIR, $inputs_dir);
-	my @input_files_2= grep(/($runno).*_($contrast)_.*\.(hdr|img|nii){1}(\.gz)?$/i ,readdir(DIR));
+	my @input_files_2= grep(/($runno).*_($contrast)_.*\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR));
 	    $input_file = $input_files_2[0];
 	    if (($input_file eq '') || (! defined $input_file)) {
 		opendir(DIR, $inputs_dir);
-		my @input_files_3= grep(/($runno).*_($contrast).*\.(hdr|img|nii){1}(\.gz)?$/i ,readdir(DIR));
+		my @input_files_3= grep(/($runno).*_($contrast).*\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR));
 		$input_file = $input_files_3[0];
 	    }
 	}
@@ -2461,13 +2464,11 @@ sub make_identity_warp {
 
     my ($source_image,$Hf,$optional_dir,$optional_name) = @_;
     my $output_name='';
-#    my ($name,$in_path,$ext) = fileparts($source_image);
+
     if (defined $optional_name) {
 	$output_name = $optional_dir.'/'.$optional_name;
-#	$in_path = $optional_dir.'/';
     } elsif (defined $optional_dir) {
 	$output_name = $optional_dir.'/';
-#	$in_path = $optional_dir.'/';
     }
 
 
@@ -2511,7 +2512,7 @@ sub get_bounding_box_and_spacing_from_header {
     if (! defined $ants_not_fsl) {
 	$ants_not_fsl = 0;
     }
-
+    #$ants_not_fsl = 1;
     if (! $ants_not_fsl) {
 	my $fsl_cmd = "fslhd $file";
        
@@ -2571,7 +2572,7 @@ sub get_bounding_box_and_spacing_from_header {
     if ($ants_not_fsl || (! $success)) {
 	#Use ANTs (slow version)
 	my $bounding_box;
-
+	$header_output = `PrintHeader $file`;
 	if ($header_output =~ /(\{[^}]*\})/) {
 	    $bounding_box = $1;
 	    chomp($bounding_box);
