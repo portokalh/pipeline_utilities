@@ -206,7 +206,14 @@ sub db_listing {
 sub exists_in_db {
 # ------------
   my ($dbh, $column, $value, $full_table_name) = @_;
-  my $sql = "select $column from $full_table_name where $column=\'$value\'";
+
+  my $sql ;
+  if ( $value =~ /%/x) {
+      $sql = "select $column from $full_table_name where $column like \'$value\'";
+  } else {
+      $sql = "select $column from $full_table_name where $column=\'$value\'";
+  }
+
   #print "sql = $sql\n";
   my $query = new Query ($dbh);
   my ($result, $msg) = $query->sql_on_fly_single_result($sql);
