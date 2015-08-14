@@ -104,7 +104,7 @@ my $VERSION = "2013/04/29";
 my $COMMENT = "Bruker meta data functions";
 use vars qw(@knownmethods);
 
-my @cartesian_3D_methods= qw( MGE RARE MSME DtiStandard dtiStandard_1 GEFC ); 
+my @cartesian_3D_methods= qw( FLASH MGE RARE MSME DtiStandard dtiStandard_1 GEFC ); 
 my @cartesian_2D_methods= qw(MDEFT fLASH_MRE) ;
 my @radial_methods=qw( UTE UTE3D ute3d_keyhole Bruker:SPIRAL Bruker:DtiSpiral);
 push(@knownmethods,@cartesian_3D_methods);
@@ -312,7 +312,14 @@ sub determine_volume_type_old { # ( \%bruker_header_ref[,$debug_val] )
     printd(45, "Method:$method\n");
     my $method_ex="<(".join("|",@knownmethods).")>";
     if ( $method !~ m/^$method_ex$/x ) { 
-        croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); #\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
+        my $msg="NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n";
+
+	if ( $debug_val<50 ) { 
+	    croak($msg.$debug_val); 
+	} else {
+	    carp($msg."\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES, THEIR DIMENSIONS, ESPECIALLY Z\n");
+	}	
+	
     }
 ### keys which may help
 ### multi2d
