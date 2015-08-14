@@ -1712,6 +1712,10 @@ sub fileparts {
     my ($fullname) = @_;
     use File::Basename;
 #    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
+    if ( ! defined $fullname ||  $fullname eq "") { 
+	
+	return("","","");
+    }
     my ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
     return($name,$path,$suffix);
 }
