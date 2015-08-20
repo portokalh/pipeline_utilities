@@ -1797,9 +1797,9 @@ sub apply_transform {
 # ------------------
 sub cluster_exec {
 # ------------------
-    my ($do_it,$annotation,$cmd,$work_dir,$Id,$verbose,$memory,$test) = @_;
+    my ($do_it,$annotation,$cmd,$work_dir,$Id,$verbose,$memory,$test,$node) = @_;
    # my $memory=25600;
-    my $node_command=''; # Currently a one-off.
+    my $node_command=''; # Was a one-off ---> now turned on for handling diffeo identity warps.
  
     my $queue_command='';
     my $memory_command='';
@@ -1813,6 +1813,12 @@ sub cluster_exec {
     } elsif ($custom_q == 1) {
 	$queue_command = "-p $my_queue";
     }
+
+    if (! defined $node) {
+	$node_command = "-w $node";
+    }
+
+
     if (! defined $memory) {
 	$memory_command = " --mem ${default_memory} ";
     } else {
@@ -2494,7 +2500,7 @@ sub get_spacing_from_header { ## Easier to just call bb_and_spacing code and the
     my $spacing;
     my $bb_and_spacing = get_bounding_box_and_spacing_from_header($in_file);
     my @array = split(' ',$bb_and_spacing);
-    my $spacing = pop(@array);
+    $spacing = pop(@array);
    
     return($spacing);
 }
@@ -2585,7 +2591,6 @@ sub get_bounding_box_and_spacing_from_header {
 
 	$bb_and_spacing = join(' ',($bounding_box,$spacing));
     }
-
     return($bb_and_spacing);
 }
 
