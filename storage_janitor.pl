@@ -49,6 +49,8 @@ my $min_size="5M";     #minimum size. If there are no small files present, will 
 my $files_found=0;     #result, number of files matching criteria. a scan count.
 my $disk_safety_threshold=0.8;  # disk must be at least this % full before we start moving.
 my $disk_cleaning_threshold=0.5;   # if disk is at least this % full email users to clean up with the summary of who's the biggest.
+my $safety=0; # SAFETY variable, if set to 1 will not remove, will just build an rm script.
+
 
 my $SCAN_DIR=$ENV{'BIGGUS_DISKUS'}; # directory we're testing for old files.
 if( ! defined $SCAN_DIR && defined $ARGV[0] ){ 
@@ -64,7 +66,7 @@ my $interval_seconds=($test_age*24*60*60);
 my $current_epoc_time=time;
 my $dt = DateTime->from_epoch(epoch => $current_epoc_time );
 
-my $debug_val=40;
+my $debug_val=0;
 my $ref=df($SCAN_DIR);
 my $TOTALKS=0;
 my $USEDKS=0;
@@ -146,7 +148,17 @@ sub option_process {
 =end comment
     
 =cut
-
+sub command_batch { 
+    my ($c_list_ref)=@_;
+    #my @cmd_list=@_;
+    my $ret_val=0;
+    
+    for my $cmd ( @{$c_list_ref}) {
+	printf("firing off \n",$cmd);
+	#$ret_val=$ret_val.qx($cmd);
+    }
+    return $ret_val;
+}
 sub file_discovery { 
 #$SCAN_DIR="/glusterspace"
     #option_process;
@@ -268,11 +280,11 @@ sub summarize_data {
     #for each user dir, 
     printf("Summary Processing\n");
     while ( my $d_name=readdir($DIR) ) {
-	if ( $d_name !~ /^[.]+$/ ) {
+	if ( $d_name !~ /^([.])|(Elimination)+$/ ) {
 	    my $sum=0;
 	    printf("  $d_name\n");
 	    #    for each interval category
-	    if ($d_name =~ /($user_regex)/ ) {
+	    if ($d_name =~ /($user_regex)/ && -d $janitor_dir.'/'.$d_name  ) {
 		$user_usage{$d_name}=sum_files($janitor_dir.'/'.$d_name,"filelist");
 		#$user_usage{$d_name."warning"}=sum_files($janitor_dir.'/'.$d_name,"filelist_warning");
 		#$user_usage{$d_name."critical"}=sum_files($janitor_dir.'/'.$d_name,"filelist_critical");
@@ -295,9 +307,14 @@ sub summarize_data {
     #print("summary_return\n");
     
     return \%user_usage;
-
+    printf("THE NEVER NEVER LAND OF DEEP SLEEP\n");
+    printf("THE NEVER NEVER LAND OF DEEP SLEEP\n");
+    printf("THE NEVER NEVER LAND OF DEEP SLEEP\n");
+    printf("THE NEVER NEVER LAND OF DEEP SLEEP\n");
+    printf("THE NEVER NEVER LAND OF DEEP SLEEP\n");
+    printf("THE NEVER NEVER LAND OF DEEP SLEEP\n");
     while ( 1 ) {
-	printf("THE NEVER NEVER LAND OF DEEP SLEEP\n");
+
 	printf(".");
 	sleep 1;
     }
@@ -331,7 +348,7 @@ sub summarize_data {
     sort_users(\@users,\@usage,\%end_totals);
     set_top_users(\@users,\@usage,\@biggest,\@second);
     my $cleanable_size=hash_sum(\%end_totals);
-    printf("Total cleanable %0.2f%s. pct of used : %0.2f. pct of total %0.2f.\n",
+    printf("Total cleanable %0.2f%s. pct of used : %0.2f. pct of disk %0.2f.\n",
 	   $cleanable_size/$disk_units{$unit},$unit,
 	   $cleanable_size/$used_size*100,
 	   $cleanable_size/$total_size*100);
@@ -431,7 +448,7 @@ sub make_summary {
 	#$user_totals{$d_name}=hash_sum($user_usage{$d_name});
 	if ( $d_name !~ /TOTAL/x ) {
 	    if ( ($user_totals{$d_name}/$used_size*100) > $min_pct ) {# the primary summary is only for users taking up more than 5% of the used space.
-		$summary=sprintf("%sUser %s Total ( %ib ), %0.2f%s's. pct of used : %0.2f. pct of total %0.2f.\n",
+		$summary=sprintf("%sUser %s Total ( %ib ), %0.2f%s's. pct of used : %0.2f. pct of disk %0.2f.\n",
 				 $summary,$d_name,$user_totals{$d_name},
 				 ($user_totals{$d_name}/$disk_units{$unit}),$unit,
 				 ($user_totals{$d_name}/$used_size*100),
@@ -441,7 +458,7 @@ sub make_summary {
     }
 
 #    my $d_name="TOTAL";
-    $summary=sprintf("%sTOTAL ( %ib ), %0.2f%s's. pct of used : %0.2f. pct of total %0.2f.\n",
+    $summary=sprintf("%s-----\nTOTAL ( %ib ), %0.2f%s's. pct of used : %0.2f. pct of disk %0.2f.\n",
 		     $summary,hash_sum(\%user_totals),
 		     (hash_sum(\%user_totals)/$disk_units{$unit}),$unit,
 		     (hash_sum(\%user_totals)/$used_size*100),
@@ -451,9 +468,12 @@ sub make_summary {
 
 sub queue_transfers {
     
-    my ($janitor_dir,$usage_ref,%user_totals)=@_;
+    my ($janitor_dir,$usage_ref,$filter)=@_;
     my %user_usage=%{$usage_ref};
-    %user_totals=%{$user_usage{"TOTAL"}};
+    if ( ! defined $filter ) { 
+	$filter=".*";
+    }
+    my %user_totals=%{$user_usage{"TOTAL"}};
     my @remove_list;     # list of files to have their contents transfered and removed.
     my %remove_summary;  # summary of how much data is being removed per user.
 
@@ -473,7 +493,19 @@ sub queue_transfers {
     # duplcaate user totals so we can play more later. 
     #my %end_totals=%user_totals; # simple copy is just a reference copy!
     my %end_totals=%{ clone ( \%user_totals) };
-        
+    
+    ###
+    # filter entries
+    ###
+    # this is a pass filter, anything fitting gets to continue processing.
+    for my $entry (keys %end_totals) {
+	if ( $entry !~ /$filter/x ) {
+	    printf("Filtering etnry $entry\n");
+	    delete ${end_usage{$entry}};
+	    delete ${end_totals{$entry}};
+
+	}
+    } 
     my $used_size=$USEDKS*1024; # used disk space in bytes
     my $total_size=$TOTALKS*1024; # total disk space in bytes
     my $cleanable_size=hash_sum(\%end_totals);
@@ -516,7 +548,7 @@ sub queue_transfers {
 		    my %fhash=%{$end_usage{$biggest[0]}}; # get the list of files for the biggest user.
 
 		    $biggest[1]=$biggest[1]-$fhash{$b_file};  # take 
-		    $ending_size=$fhash{$b_file};
+		    $ending_size=$ending_size-$fhash{$b_file};
 		    push(@remove_list,$file_path);
 		    # remove summary, a hash with a hash per user of removed files and their sums.
 		    ${$remove_summary{$biggest[0]}}{$b_file}=$fhash{$b_file};
@@ -549,11 +581,11 @@ sub queue_transfers {
 	    #$ending_size=hash_sum(\%end_totals);# only works when we process all
 	} while ( $ending_size/$total_size > $disk_cleaning_threshold 
 		  && $cleanable ) ;
-
-	printf("Ending free space %0.2f%s. pct of used : %0.2f. pct of total %0.2f.\n",
-	       $ending_size/$disk_units{$unit},$unit,
-	       $ending_size/$used_size*100,
-	       $ending_size/$total_size*100);
+	my $ending_free=$used_size-$ending_size;
+	printf("\nEnding space avail %0.2f%s. pct of disk %0.2f.\n",# pct of used : %0.2f. 
+	       $ending_free/$disk_units{$unit},$unit,
+	       #$ending_free/$used_size*100,
+	       $ending_free/$total_size*100);
 	#printf("Ending free space %0.2f ( \n", $ending_size/$total_size*100);
 	sleep 2; 
 	
@@ -722,54 +754,79 @@ sub set_top_users {
 
 sub transfer_user_data {
     my ($elimination_queue,$t_ref)=@_;
-    my %transfer_info=%{$t_ref};
+    my %transfer_info=%{$t_ref};#<<<< copies hash?
     
 #    my @remove_list=$transfer_info{"remove_list"};
     #nmy @remove_list=@transfer_info{"remove_list"};
     
-    #for my $transfer_file (@remove_list) { #(@transfer_info{"remove_list"}) {
-    printf("Transfer queue is %i files\n", ( $#{$transfer_info{"remove_list"}}+1));
+    #for my $index_file (@remove_list) { #(@transfer_info{"remove_list"}) {
+    printf("Transfer queue is %i list files\n", ( $#{$transfer_info{"remove_list"}}+1));
     sleep 1;
-    for my $transfer_file (@{$transfer_info{"remove_list"}}) {
-	printf("moving contents of $transfer_file \n");
-	if ( ! -e $transfer_file) { 
+    for my $index_path (@{$transfer_info{"remove_list"}}) {
+	printf("moving contents of $index_path \n");
+	if ( ! -e $index_path) { 
 	    printf("bad file name\n");
 	} else {
-	#my($p,$n,$e)=fileparts($transfer_file);
-	my ($n,$p,$e) = fileparse($transfer_file,qr/\.[^.]*$/);
-	my $u=basename($p);
-	my $status_file= $elimination_queue."/".$u.$n."_transfered".$e;
-
-	#printf("Looking up filesize with %s, %s\n", $u, $n.$e);
-	my $s=${$transfer_info{$u}}{$n.$e};
-	if ( defined $s ) {
-	    #my $status=transfer_data_group($u,$s,$transfer_file,$status_file);
-	    my $status=1;
-	    printf("( %0.2f%s ) ",$s/$disk_units{$unit},$unit);
-	    if ( $status ) {
-		printf("  transfer sucess!\n");
-		delete ${$transfer_info{$u}}{$transfer_file};
-	    } else { 
-		printf("  transfer failed??!?!\n");
+	#my($p,$n,$e)=fileparts($index_path);
+	    my ($n,$p,$e) = fileparse($index_path,qr/\.[^.]*$/);
+	    my $u=basename($p);
+	    if ( ! -d $elimination_queue) {
+		make_path($elimination_queue); }
+	    my $transfer_log= $elimination_queue."/".$u.$n."_transfered".$e;
+	    my $cleanup_script= $elimination_queue."/".$u.$n."_cleanup.bash";
+	    my $idxout=$u.$n.$e;
+	    my $index_ending_path=$elimination_queue."/".$idxout;
+	    #printf("Looking up filesize with %s, %s\n", $u, $n.$e);
+	    my $s=${$transfer_info{$u}}{$n.$e};
+	    if ( defined $s ) {
+		my $status=1;
+		#if ( $debug_val<50 ) {
+		    $status=transfer_data_group($u,$s,$index_path,$transfer_log,$cleanup_script);
+		#}
+		printf("\t( %0.2f%s ) ",$s/$disk_units{$unit},$unit);
+		if ( $status ) {
+		    printf("  transfer sucess!\n");
+		    #### MOVE THE INDEX FILE, 
+		    if (  $debug_val<50 ) {
+			rename($index_path,    $index_ending_path);
+		    } else {
+			printf("mv %s %s\n",$index_path,$index_ending_path);
+		    }
+		    #${$transfer_info{$u}}{$idxout}=${$transfer_info{$u}}{$n};
+                    #${$transfer_info{$u}}{$idxout}=$transfer_info{$u}->{$n};
+		    #delete ${end_usage{$biggest[0]}};
+		    #delete ${$end_usage{$u}}{$n};
+                    ${$transfer_info{$u}}{$idxout}=${$transfer_info{$u}}{$n.$e};
+		    #printf("\tPull %s off the transfer queue add info for %s\n",$n.$e,$index_ending_path);
+		    delete ${$transfer_info{$u}}{$n.$e};
+		    #delete ${$transfer_info{$u}}{$index_path};#remove the file from the transfer info... maybe we dont need that
+		} else { 
+		    printf("  transfer failed??!?!\n");
+		}
+	    } else {
+		printf("\n\tCannot transfer %s/%s%s because cannot find details.\n",$p,$n,$e);
 	    }
-	} else {
-	    printf("\n\tCannot transfer %s/%s%s because cannot find details.\n",$p,$n,$e);
-	}
 	}
     }
-    
     
     return 0;
 }
 
 sub transfer_data_group {
-    my ($u,$s,$input,$output) =@_;
+    my ($u,$s,$input,$output,$cleanup_script) =@_;
+    # input a path to a filelist file
+    # output , a path to save a workdone log
+    # cleanup,a path to a file which will ahve rm commands if we're in safety mode, otherwise its unused
     my $sum=0;
     if ( ! defined $output ) {
-	my ($p,$n,$e) = fileparse($input,qr/\.[^.]*$/);	
-	$output=$p.$u.$n."_transfer".$e;
+	my ($n,$p,$e) = fileparse($input,qr/\.[^.]*$/);	
+	$output=$p.$u.$n."_transfered".$e;
     }
-	
+    if ( ! defined $cleanup_script ) {
+	my ($n,$p,$e) = fileparse($output,qr/\.[^.]*$/);	
+	$cleanup_script=$p.$u.$n."_cleanup.bash";
+    }
+    
     my ($rname,$rhost,$rdest)=@{$user_definitions{$u}};
     #my ($rname,$rhost,$rdest)=$user_definitions{$u};
     
@@ -778,7 +835,10 @@ sub transfer_data_group {
     my %ssh_opts=(
 	copy_attrs => 1 );
     $ossh->error and warn "Couldnt establish SSH Connection: ". $ossh->error and return 0;
-    my $scp_start=remote_check_free($s,$rdest,$ossh);
+    my $scp_start=1;
+    if ( $debug_val < 50 ) {
+	 $scp_start=remote_check_free($s,$rdest,$ossh) ;
+    }
     if ( ! $scp_start) {
 	printf("Not enough space on %s for user %s at path %s .\n",$rhost,$rname,$rdest);
 	sleep 1;
@@ -786,6 +846,10 @@ sub transfer_data_group {
     } elsif(1) {
 	open ( my $FILE,  '<', "$input") or die $!;
 	open ( my $OFILE,  '>', "$output") or die $!;
+	my $SFILE;
+	if ( $safety) {
+	    open ( $SFILE ,  '>', "$cleanup_script") or die $!;
+	}
 	while (my $entry = readline($FILE) ) {
 	    chomp($entry);
 	    #my ($size,$path) =(0,"/testfile.txt");#= split('|',$_);
@@ -796,48 +860,66 @@ sub transfer_data_group {
 		$size= -s $path || 0 ;
 	    }
 	    my $d_path=$rdest."/Storage_janitor/".$path;
-	    #printf("    add file $path\n");
 	    $sum=$sum+$size;
-	    #if ( remote_check_free($rname,$rhost,$rdest,$size,$ossh) ) {
-	    if ( remote_check_free($size,$rdest,$ossh) ) {
+	    my $single_copy_proceede=1;
+	    if ( $debug_val<50 ) {
+		$single_copy_proceede = remote_check_free($size,$rdest,$ossh);
+	    } 
+	    if ( $single_copy_proceede ) {
 		my $r_dir=dirname($d_path);
 		my $status=0;
+		if ( $debug_val<50 ) {
 		my @capture=$ossh->capture("mkdir -p $r_dir") and $status=1;
+		}
 		if (! $status ) {
-		    printf("%s",join(' ',@capture)); 
-		    warn "ssh mkdir issue: " . $ossh->error;  } 
-		#printf("scp $path $rname\@$rhost:$d_path\n");
-		$status=0;
-		$ossh->scp_put(\%ssh_opts,"$path", "$d_path") and $status=1 ;
+		    #printf("%s",join(' ',@capture)); 
+		    #warn "ssh mkdir issue: " . $ossh->error;  
+		} 
+
+		$status=1;
+		if ( $debug_val<50){
+		    #printf("scp $path $rname\@$rhost:$d_path\n");
+		    $ossh->scp_put(\%ssh_opts,"$path", "$d_path") and $status=1 ; 
+		}
 		if ( $status ) {
 		    #printf $OFILE ("scp -p %s %s@%s:%s/%s \n",$path,$rname,$rhost,$rdest,$path)
 		    printf $OFILE ("%s\|%s\|%s\n",$size,$d_path,$path);
-
+		    if ( ! $safety ) { 
+			unlink $path or warn "Problem removing $path\n";
+		    } else {
+			printf $SFILE ("rm %s\n",$path);
+		    }
 		} else { 
 		    warn "scp failed: " . $ossh->error;  } 
 	    }
 	    
 	}
 	close( $FILE);
-	#close( $OFILE);
+	close( $OFILE);
+	if ( $safety) {
+	    close ( $SFILE);
+	}
     } else {
     }
     return 1;
 }
+
 #
-sub notify_users {
+sub prepare_email {
     # for each user
     my ($out_dir,$summary_txt,$t_ref)=@_;
     
     #my %user_usage=%{$hr};
     #my %user_totals=%{$user_usage{"TOTAL"}};
-    
+    my @mail_call;
     my %transfer_info=%{$t_ref};
     my $used_size=$USEDKS*1024; # used disk space in bytes
     my $total_size=$TOTALKS*1024; # total disk space in bytes
-    $out_dir="/tmp/";
+    #out_dir="/tmp/";
     my %out_hash; # a hash of open fileid's in theory we can have a lot of open file identifiers. 
-    printf("Notify Users\n");
+    printf("----------\n");
+    printf("prepare_email\n");
+    printf("----------\n");
     for my $d_name ( keys(%transfer_info) ) {
 	if ( $d_name !~ /remove_list/x ) {
 	    printf("Preparing email to %s.\n",$d_name);
@@ -845,22 +927,26 @@ sub notify_users {
 	    my $c_fh=-1;
 	    if ( ! defined ($out_hash{"$d_name"} ) ) {
 		open ( $out_hash{"$d_name"},  '>', "$out_file") or die "Cannot open $out_file.  ".$!;
-		$c_fh=$out_hash{"$d_name"};
 	    } elsif (defined $out_hash{"$d_name"}) {
-		$c_fh=$out_hash{"$d_name"};
 	    }
+	    $c_fh=$out_hash{"$d_name"};
 	    #open ( $out_hash{"$user$interval"},  '>', "$out_file") or die "Cannot open $out_file.";
 	    #moving files 
 	    my @tfiles=reverse sort by_number keys(%{$transfer_info{$d_name}});
-	    printf $c_fh ( "%s %s is nearly full! \n"
-			   ."%s\n"
-			   ."moving contents of files: %s\n",
-			   $d_name,$SCAN_DIR,$summary_txt, join("\n\t",@tfiles) ) ;
-	    
+	    printf $c_fh ( "Subject: %s is nearly full! \n"
+			   ."Top offender summary: \n %s \n\n"
+			   ."%s, \n\tI found %0.2f%siB's of old data.( I dont count \"new data\" or \"small data\").\n"
+			   ."I have moved the contents of these files (in this order) : \n",#%s\n",
+			   $SCAN_DIR,$summary_txt,$d_name,
+			   hash_sum($transfer_info{$d_name})/$disk_units{$unit},$unit);#, join("\n\t",@tfiles) ) ;
+	    for my $t_file ( @tfiles ) {#,$SCAN_DIR,$t_file,
+		#my $transfer_log= $elimination_queue."/".$u.$n."_transfered".$e;
+		my $t_path=$t_file;
+		printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$t_path,${$transfer_info{$d_name}}{$t_file}/$disk_units{$unit},$unit);
+	    }
+	    print $c_fh (" use cat file to get a listing of the contents. \n");
 	    #use diagnostics;
 	    #print ${out_hash{$d_name}} ($txt) unless ! defined ($out_hash{$d_name} );
-
-
 	}
     }
 
@@ -868,17 +954,19 @@ sub notify_users {
 	print("Closing file $_\n");
 	close $out_hash{"$_"};
     }
-    for my $d_name ( keys(%transfer_info) ) {
+    for  my $d_name ( keys(%transfer_info) ) {
 	if ( $d_name !~ /remove_list/x ) {
-	#"$user$interval"
-	my $out_file=sprintf("%s/disk_info_%s.txt",$out_dir,$d_name);
-	my $email_address=sprintf("%s\@duke.edu",$d_name);
-	my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
-	printf "mail:$email_address:$subject:$out_file\n";
-	#mail $email_address $subject $out_file 
+	    #"$user$interval"
+	    my $out_file=sprintf("%s/disk_info_%s.txt",$out_dir,$d_name);
+	    my $email_address=sprintf("%s\@duke.edu",$d_name);
+	    my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
+	    #printf "send mail:$email_address:$subject:$out_file\n";
+	    push(@mail_call,sprintf ("sendmail $email_address\ < $out_file\n") );
+	    
+	    #mail $email_address $subject $out_file 
 	}
     }
-    return ;
+    return \@mail_call;
 }
 
 sub process_elimination_queue { 
@@ -891,7 +979,7 @@ sub process_elimination_queue {
 	my $cur = $elimination_queue."_".$elim;
 	my $nxt = $elimination_queue."_".($elim+1);
 	if ( -d $cur ) { 
-	    move $cur,$nxt;
+	    move($cur,$nxt);
 	}
     }
 
@@ -901,7 +989,7 @@ sub process_elimination_queue {
 	hunt_and_kill_remote($elimination_queue."_".$found);
 	$found++;
     }
-    return; 
+    return ""; 
 }
 
 sub hunt_and_kill_remote {
@@ -939,24 +1027,32 @@ sub main {
     my $elimination_queue=$out_dir."/Elimination";
     #my $files_found=file_discovery($SCAN_DIR,$out_dir);
     print("files $files_found found at least $test_age days old\n");
-    #my $summary_ref = summarize_data($out_dir);# while testing use jjc29|hw|luc
+    my $summary_ref = summarize_data($out_dir);# while testing use jjc29|hw|luc
     #my $summary_ref = summarize_data($out_dir,'jjc29|hw|luc|abade');# while testing use jjc29|hw|luc
-    my $summary_ref = summarize_data($out_dir,'jjc29');# while testing use jjc29|hw|luc
+    #my $summary_ref = summarize_data($out_dir,'jjc29');# while testing use jjc29|hw|luc
     
     my $summary_txt=make_summary($min_pct,$summary_ref);# this is more for the cronjob output to lucy and james.
+    my $summary_file=sprintf("%s/Summary_%i.txt",$out_dir,$current_epoc_time);
     print("\n".$summary_txt);
+    open ( my $SUMMARY,  '>', $summary_file );
+    printf $SUMMARY ("\n".$summary_txt);
+    close ( $SUMMARY) ;
+
     #sleep 2;
-    my $transfer_info_ref = queue_transfers($out_dir,$summary_ref);
+    my $transfer_info_ref = queue_transfers($out_dir,$summary_ref,'jjc29');
     #sleep 2;
     # NOTIFIY USERS!!!!!
-    #notify_users($summary_ref);
-    notify_users($out_dir,$summary_txt,$transfer_info_ref);
+    
     #sleep 2;
-
+    
     my $status = transfer_user_data($elimination_queue,$transfer_info_ref);
     #sleep 2;
-    process_elimination_queue($elimination_queue);
-
+    my $elimination_summary=process_elimination_queue($elimination_queue);
+    
+    my $mail_commands=prepare_email($out_dir,$summary_txt,$transfer_info_ref,$elimination_queue);
+    printf("%s\n",join(" ",@{$mail_commands}));
+    command_batch($mail_commands);
+    
     print("storage janitor complete!");
 }
 
