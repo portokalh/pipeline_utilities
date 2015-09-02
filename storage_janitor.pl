@@ -300,11 +300,12 @@ sub summarize_data {
     #for each user dir, 
     printf("Summary Processing\n");
     while ( my $d_name=readdir($DIR) ) {
-	if ( $d_name !~ /^([.].*)|(old)|(Elimination.*)$/ ) {
+	if ( $d_name !~ /^([.].*)|(old)|(Elimination.*)$/ && -d $janitor_dir.'/'.$d_name  ) {
+        # ignore old and elimination completely, ignore any non directory entries
 	    my $sum=0;
 	    printf("  $d_name\n");
 	    #    for each interval category
-	    if ($d_name =~ /($user_regex)/ && -d $janitor_dir.'/'.$d_name ) { # && $d_name !~ //x
+	    if ($d_name =~ /($user_regex)/ ) { # && $d_name !~ //x
 		$user_usage{$d_name}=sum_files($janitor_dir.'/'.$d_name,"filelist");
 		#$user_usage{$d_name."warning"}=sum_files($janitor_dir.'/'.$d_name,"filelist_warning");
 		#$user_usage{$d_name."critical"}=sum_files($janitor_dir.'/'.$d_name,"filelist_critical");
