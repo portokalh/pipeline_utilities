@@ -45,14 +45,14 @@ use Net::OpenSSH;
 ##### inputs
 my $test_age="7";      #test age in days, starting with 1 week.
 my $max_intervals="5"; #max file age in test_age intervals. may want to push this to 10.
-my $min_size="1M";     #minimum size. If there are no small files present, will change min size.
+my $min_size="1M";     #minimum size. If there are no small files present, will change min size. THIS HAS BEEN REMOVED.
 my $files_found=0;     #result, number of files matching criteria. a scan count.
 my $disk_safety_threshold=0.8;  # disk must be at least this % full before we start moving.
 my $disk_cleaning_threshold=0.5;   # if disk is at least this % full email users to clean up with the summary of who's the biggest.
 my $safety=0; # SAFETY variable, if set to 1 will not remove, will just build an rm script.
 
 ##### globals
-my $CLEANABLE_USERS='jjc29|mf177';
+my $CLEANABLE_USERS='.*';
 my $SCAN_DIR=$ENV{'BIGGUS_DISKUS'}; # directory we're testing for old files.
 if( ! defined $SCAN_DIR && defined $ARGV[0] ){ 
     $SCAN_DIR=$ARGV[0];
@@ -60,8 +60,6 @@ if( ! defined $SCAN_DIR && defined $ARGV[0] ){
     die "No scan location specified!\n";
 }
 my $HOST=$ENV{'HOSTNAME'};
-
-
 
 
 my $interval_seconds=($test_age*24*60*60);
@@ -313,7 +311,7 @@ sub summarize_data {
 		#my $user_sum=hash_sum($user_usage{$d_name."warning"})+hash_sum($user_usage{$d_name."critical"});
 		#$user_totals{$d_name}=hash_sum($user_usage{$d_name."warning"})+hash_sum($user_usage{$d_name."critical"});
 		#$user_totals{$d_name}=hash_sum($user_usage{$d_name});
-		${$user_usage{"TOTAL"}}{$d_name}=hash_sum($user_usage{$d_name});
+		${$user_usage{"TOTAL"}}{$d_name}=hash_sum($user_usage{$d_name},"critical");
 		if( 0 ) {
 		    printf("  Total ( %i b ) %s's: %0.2f. pct of used : %0.2f. pct of total %0.2f.\n",
 		       $user_totals{$d_name},$unit,
@@ -349,7 +347,7 @@ sub make_summary {
 	#$user_totals{$d_name}=hash_sum($user_usage{$d_name});
 	if ( $d_name !~ /TOTAL/x ) {
 	    if ( ($user_totals{$d_name}/$used_size*100) > $min_pct ) {# the primary summary is only for users taking up more than 5% of the used space.
-		$summary=sprintf("%sUser %s Total ( %ib ), %0.2f%s's. pct of used : %0.2f. pct of disk %0.2f.\n",
+		$summary=sprintf("%sUser %s Old Total ( %ib ), %0.2f%siB's. pct of used : %0.2f. pct of disk %0.2f.\n",
 				 $summary,$d_name,$user_totals{$d_name},
 				 ($user_totals{$d_name}/$disk_units{$unit}),$unit,
 				 ($user_totals{$d_name}/$used_size*100),
@@ -408,13 +406,14 @@ sub queue_transfers {
     # filter entries
     ###
     # this is a pass filter, anything fitting gets to continue processing.
+    if ( 0  ) {
     for my $entry (keys %end_totals) {
 	if ( $entry !~ /$filter/x ) {
 	    printf("Filtering entry $entry\n");
 	    delete ${end_usage{$entry}};
 	    delete ${end_totals{$entry}};
 	}
-    } 
+    } }
     my $used_size=$USEDKS*1024; # used disk space in bytes
     my $total_size=$TOTALKS*1024; # total disk space in bytes
     my $cleanable_size=hash_sum(\%end_totals);
@@ -442,23 +441,25 @@ sub queue_transfers {
 		#test order is a sorted list of file groups owned by the biggest user. It is sorted oldest to newest.
 		@test_order=reverse sort by_number grep (/critical/, keys(%{$end_usage{$biggest[0]}}) );
 	    }
-	    
 	    if ( $#test_order>=0 && ( $test_order[0] =~ /critical/x )  ) {
             # if there are files&& those files are critical list.
 		my $b_file=shift(@test_order);
 		my $file_path=$janitor_dir.'/'.$biggest[0].'/'.$b_file;
 		if ( $b_file =~ /critical/x ) {#we're only looking at critical files so this is redundant.
 		    my %fhash=%{$end_usage{$biggest[0]}}; # get the list of files for the biggest user.
-
 		    $biggest[1]=$biggest[1]-$fhash{$b_file};  # take 
 		    $ending_size=$ending_size-$fhash{$b_file};
-		    push(@remove_list,$file_path);
 		    # remove summary, a hash with a hash per user of removed files and their sums.
 		    ${$remove_summary{$biggest[0]}}{$b_file}=$fhash{$b_file};
-		    $end_totals{$biggest[0]}=hash_sum($end_usage{$biggest[0]});
-
-		    delete ${$end_usage{$biggest[0]}}{$b_file};
-		    printf("\tqueued %04.2f%s \n",${$remove_summary{$biggest[0]}}{$b_file}/$disk_units{$unit},$unit);
+		    #$end_totals{$biggest[0]}=hash_sum($end_usage{$biggest[0]});
+		    if ( $biggest[0] =~ /$filter/x ) {
+			push(@remove_list,$file_path);
+			delete ${$end_usage{$biggest[0]}}{$b_file};
+			$end_totals{$biggest[0]}=hash_sum($end_usage{$biggest[0]},"critical");
+			printf("\t%04.2f%siB's queued with %04.2f%siB's remaining  \n",
+			       ${$remove_summary{$biggest[0]}}{$b_file}/$disk_units{$unit},$unit,
+			       $end_totals{$biggest[0]}/$disk_units{$unit},$unit);
+		    }
 		}
 	    } 
 	    # if there are are no remaininf files, or the oldest remaining is a warning
@@ -475,7 +476,8 @@ sub queue_transfers {
 		printf("\n\nCannot clean any more right now\n\n");
 		$cleanable=0;
 	    }
-	    if ( $biggest[1]<$second[1] ) {
+	    if ( $end_totals{$biggest[0]}<$second[1] ) {
+		printf("RESET BIGGEST USER REQUESTED\n") if $debug_val > 90;
 		$reorder_users=1;
 	    }
 	    #$ending_size=hash_sum(\%end_totals);# only works when we process all
@@ -538,15 +540,19 @@ sub sum_files {
 
 sub hash_sum {
 # sum up the values of a hash and return the sum(via reference). 
-    my $hr;
+    my ($hr,$filter)=@_;
+    if ( ! defined $filter ) { 
+	$filter=".*";
+    }
     my %hash;
-    ($hr)=@_;
     %hash=%{$hr};	
     my $sum=0;
     #print("debug:$debug_val\n");
     for my $file (keys %hash) {
 	printf($file."\n") if $debug_val >90;
-	$sum=$sum+$hash{$file};
+	if ( $file =~ /$filter/) {
+	    $sum=$sum+$hash{$file};
+	}
     }
     return $sum;
 }
@@ -602,15 +608,16 @@ sub set_top_users {
 
     my ($user_ref,$usage_ref,$big_ref,$sec_ref)=@_;
     
-    if ($#{$user_ref} >= 0 ) {
+    if ($#{$user_ref} >= 0 ) {#if we have 1 or more
 	@{$big_ref}=(${$user_ref}[$#{$user_ref}],${$usage_ref}[$#{$usage_ref}]);
-    } elsif ($#{$user_ref} >= 1 ) {
+    } else {# ($#{$user_ref} < 0 ) {
+	@{$big_ref}=("LAST_USER",1);
+    }
+    if ($#{$user_ref} >= 1 ) {# if we have 2 or more
 	@{$sec_ref}=(${$user_ref}[$#{$user_ref}-1],${$usage_ref}[$#{$usage_ref}-1]);
     } else {
 	@{$sec_ref}=("LAST_USER",1);
-	if ($#{$user_ref} < 1 ) {
-	    @{$big_ref}=("LAST_USER",1);
-	}
+
     }
 }
 
@@ -625,7 +632,7 @@ sub transfer_user_data {
     
     #for my $index_file (@remove_list) { #(@transfer_info{"remove_list"}) {
     printf("Transfer queue is %i list files\n", ( $#{$transfer_info{"remove_list"}}+1));
-    sleep 1;
+    #sleep 1;
     for my $index_path (@{$transfer_info{"remove_list"}}) {
 	printf("moving contents of $index_path \n");
 	if ( ! -e $index_path) { 
@@ -695,9 +702,17 @@ sub transfer_data_group {
     #my ($rname,$rhost,$rdest)=$user_definitions{$u};
     
     #$rname,$rhost,$rdest,
-    my $ossh = Net::OpenSSH->new($rhost, user => $rname);
+
     my %ssh_opts=(
-	copy_attrs => 1 );
+	user => $rname,
+	#host => $rhost,
+	#   key_path => "/home/$rname/.ssh/id_dsa",
+	batch_mode=> 1,
+	);
+    my $ossh = Net::OpenSSH->new($rhost,%ssh_opts);
+    $ssh_opts{"copy_attrs"} = 1;
+    #$ssh_opts{"key_path"} = "/home/$rname/.ssh/id_dsa",;
+    #$ssh_opts{"batch_mode"} = 1;
     $ossh->error and warn "Couldnt establish SSH Connection: ". $ossh->error and return 0;
     my $scp_start=1;
     if ( $debug_val < 50 ) {
@@ -733,7 +748,7 @@ sub transfer_data_group {
 		my $r_dir=dirname($d_path);
 		my $status=0;
 		if ( $debug_val<50 ) {
-		my @capture=$ossh->capture("mkdir -p $r_dir") and $status=1;
+		my @capture=$ossh->capture(\%ssh_opts,"mkdir -p $r_dir") and $status=1;
 		}
 		if (! $status ) {
 		    #printf("%s",join(' ',@capture)); 
@@ -782,81 +797,89 @@ sub prepare_email {
     my %transfer_info=%{$t_ref};
     my $used_size=$USEDKS*1024; # used disk space in bytes
     my $total_size=$TOTALKS*1024; # total disk space in bytes
+    my $min_pct=1;
     #out_dir="/tmp/";
     my %out_hash; # a hash of open fileid's in theory we can have a lot of open file identifiers. 
     printf("----------\n");
     printf("prepare_email\n");
     printf("----------\n");
     for my $d_name ( keys(%user_usage) ) {
-	my @u_files=reverse sort by_number grep (/warning|critical/, keys(%{$user_usage{$d_name}}) );#get sorted list of files by age
+	#my @u_files=reverse sort by_number grep (/warning|critical/, keys(%{$user_usage{$d_name}}) );#get sorted list of files by age
 	if ( $d_name !~ /remove_list|TOTAL/x ) {
-	    printf("Preparing email to %s.\n",$d_name);
-	    my $out_file=sprintf("%s/disk_info_%s.txt",$out_dir,$d_name);
-	    my $c_fh=-1;
-	    if ( ! defined ($out_hash{"$d_name"} ) ) {
-		open ( $out_hash{"$d_name"},  '>', "$out_file") or die "Cannot open $out_file.  ".$!;
-	    } elsif (defined $out_hash{"$d_name"}) {
-	    }
-
-	    $c_fh=$out_hash{"$d_name"};
-	    #open ( $out_hash{"$user$interval"},  '>', "$out_file") or die "Cannot open $out_file.";
-	    #moving files 
-	    #my %user_file_list=%{$user_usage{$d_name}}; # get the list of files for the user.    
-	    my @wfiles=reverse sort by_number grep (/warning/, keys(%{$user_usage{$d_name}}) );#get sorted list of files by age
 	    
-	    my @tfiles=reverse sort by_number keys(%{$transfer_info{$d_name}});
-	    printf $c_fh ( "Subject: %s is nearly full! \n"
-			   ."Top offender summary: \n %s \n\n"
-			   ."%s, \n\tI transfered %0.2f%siB's of old data.( I dont count \"new data\" ).\n" #or \"small data\"
-			   ."You have %0.2f%siB's of data remaining.\n"
-			   ,#%s\n",
-			   $SCAN_DIR,$summary_txt,$d_name,
-			   hash_sum($transfer_info{$d_name})/$disk_units{$unit},$unit,
-			   hash_sum($user_usage{$d_name})/$disk_units{$unit},$unit,
-		);#, join("\n\t",@tfiles) ) ;
-	    my $m_n=0;
-	    for my $t_file ( @tfiles ) {#,$SCAN_DIR,$t_file,
-		#my $transfer_log= $elimination_queue."/".$u.$n."_transfered".$e;
-		my $t_path=$t_file;
-		if ($t_file =~ /$d_name/ ) {# if they've been transfered the username is in the filename
-		    if ( $m_n==0 ) {
-			$m_n=$m_n+1;
-			printf $c_fh ("I have moved the contents of these files (in this order) : \n");}
-
-		    printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$t_path,${$transfer_info{$d_name}}{$t_file}/$disk_units{$unit},$unit);
+	    #if defined (  hash_sum($transfer_info{$d_name}) ) 
+	    if ( hash_sum($user_usage{$d_name})/$total_size > $min_pct ||  hash_sum($user_usage{$d_name},"critical")>0 ) {
+		printf("Preparing email to %s.\n",$d_name);
+		my $out_file=sprintf("%s/disk_info_%s.txt",$out_dir,$d_name);
+		my $c_fh=-1;
+		if ( ! defined ($out_hash{"$d_name"} ) ) {
+		    open ( $out_hash{"$d_name"}, '>', "$out_file") or die "Cannot open $out_file.  ".$!;
+		} elsif (defined $out_hash{"$d_name"}) {
 		}
-	    }
-	    $m_n=0;
-
-	    for my $t_file ( @tfiles ) {#,$SCAN_DIR,$t_file,
-		#my $transfer_log= $elimination_queue."/".$u.$n."_transfered".$e;
-		my $t_path=$t_file;
-		if ($t_file !~ /$d_name/ ) {# if they havn't been transfered the username is not in the filename
-		    if ( $m_n==0 ) {
-			$m_n=$m_n+1;
-			printf $c_fh ( "The following were marked for transfer but failed. Likely due to remote location disk full.\n");}
-		    printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$t_path,${$transfer_info{$d_name}}{$t_file}/$disk_units{$unit},$unit);
+		
+		$c_fh=$out_hash{"$d_name"};
+		#open ( $out_hash{"$user$interval"},  '>', "$out_file") or die "Cannot open $out_file.";
+		#moving files 
+		#my %user_file_list=%{$user_usage{$d_name}}; # get the list of files for the user.    
+		my @wfiles=reverse sort by_number grep (/warning/, keys(%{$user_usage{$d_name}}) );#get sorted list of files by age
+		my @tfiles=reverse sort by_number keys(%{$transfer_info{$d_name}});
+		printf $c_fh ( "Subject: %s is nearly full! \n"
+			       ."Top offender summary: \n %s \n\n"
+			       ."%s, \n\tI transfered %0.2f%siB's of old data.( I dont count \"new data\" ).\n" #or \"small data\"
+			       ."You have %0.2f%siB's of data remaining.\n"
+			       ,#%s\n",
+			       $SCAN_DIR,$summary_txt,$d_name,
+			       hash_sum($transfer_info{$d_name},"$d_name")/$disk_units{$unit},$unit,
+			       hash_sum($user_usage{$d_name})/$disk_units{$unit},$unit,
+		    );#, join("\n\t",@tfiles) ) ;
+		my $m_n=0;
+		for my $t_file ( @tfiles ) {#,$SCAN_DIR,$t_file,
+		    #my $transfer_log= $elimination_queue."/".$u.$n."_transfered".$e;
+		    #my $t_path=$t_file;
+		    my $t_path="$elimination_queue/$t_file";
+		    if ($t_file =~ /$d_name/ ) {# if they've been transfered the username is in the filename
+			if ( $m_n==0 ) {
+			    $m_n=$m_n+1;
+			    printf $c_fh ("I have moved the contents of these files (in this order) : \n");}
+			
+			printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$t_path,${$transfer_info{$d_name}}{$t_file}/$disk_units{$unit},$unit);
+		    }
 		}
-	    }
-	    $m_n=0;
-
-	    for my $w_file ( @wfiles ) {#,$SCAN_DIR,$t_file,
-		#my $transfer_log= $elimination_queue."/".$u.$n."_transfered".$e;
-		my $w_path=$w_file;
-		if ($w_file !~ /$d_name/ ) {
-		    if ( $m_n==0 ) {
+		$m_n=0;
+		
+		for my $t_file ( @tfiles ) {#,$SCAN_DIR,$t_file,
+		    #my $t_path=$t_file;
+		    my $t_path="$out_dir/$d_name/$t_file";
+		    if ($t_file !~ /$d_name/ ) {# if they havn't been transfered the username is not in the filename
+			if ( $m_n==0 ) {
+			    $m_n=$m_n+1;
+			    printf $c_fh ( "The following were marked for transfer but failed. Likely due to remote location disk full or no write permssion.\n");}
+			printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$t_path,${$transfer_info{$d_name}}{$t_file}/$disk_units{$unit},$unit);
+		    }
+		}
+		$m_n=0;
+		
+		for my $w_file ( @wfiles ) {#,$SCAN_DIR,$t_file,
+		    #my $w_path=$w_file;
+		    my $w_path="$out_dir/$d_name/$w_file";
+		    if ($w_file !~ /$d_name/ ) {
+			if ( $m_n==0 ) {
 			$m_n=$m_n+1;
 			printf $c_fh ( "The following lists are getting old and will be auto shipped out soon.\n");}
-		    printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$w_path,${$user_usage{$d_name}}{$w_file}/$disk_units{$unit},$unit);
+			printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$w_path,${$user_usage{$d_name}}{$w_file}/$disk_units{$unit},$unit);
+		    }
 		}
+				
+		print $c_fh (" use cat file to get a listing of the contents. \n");
+		#use diagnostics;
+		#print ${out_hash{$d_name}} ($txt) unless ! defined ($out_hash{$d_name} );
+	    } else {
+		printf("%s has less than min usage total: %0.2f%siB's (%0.2f pct), not notifing.\n",
+		       $d_name,
+		       hash_sum($user_usage{$d_name},"critical")/$disk_units{$unit},$unit,
+		       hash_sum($user_usage{$d_name})/$total_size,
+		    );
 	    }
-
-
-
-
-	    print $c_fh (" use cat file to get a listing of the contents. \n");
-	    #use diagnostics;
-	    #print ${out_hash{$d_name}} ($txt) unless ! defined ($out_hash{$d_name} );
 	}
     }
 
@@ -984,6 +1007,13 @@ sub main {
 
     #sleep 2;
     my $transfer_info_ref = queue_transfers($out_dir,$summary_ref,$CLEANABLE_USERS);
+    #$remove_summary{"remove_list"}=[@remove_list];
+    my $transfer_list=sprintf("%s/transfer_list_%i.txt",$out_dir,$current_epoc_time);
+    open ( my $TRANSFER_ORDER,  '>', $transfer_list );
+    #@{$transfer_info{"remove_list"}}
+    my %transfer_info=%{$transfer_info_ref};#<<<< copies hash?
+    printf $TRANSFER_ORDER (join("\n",@{$transfer_info{"remove_list"}} )."\n\n" );
+    close ( $TRANSFER_ORDER) ;
     #sleep 2;
     # NOTIFIY USERS!!!!!
     
