@@ -174,8 +174,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	printd(45,"List_sizeB:$list_sizeB\n"); 
     }
     my @lists=qw(ACQ_O2_list_size ACQ_O3_list_size ACQ_vd_list_size ACQ_vp_list_size);
-    for my $list_s (@lists) { 
-	if ($hf->get_value($data_prefix.$list_s) != 1 ) { confess("never saw $list_s value other than 1 Unsure how to continue"); }
+    for my $list_s (@lists) {
+	my $list_value=$hf->get_value($data_prefix.$list_s);
+	my $msg="$list_s is $list_value. never saw value other than 1! Unsure how to continue";
+	if ($hf->get_value($data_prefix.$list_s) != 1 && $debug_val<50 ) {
+	    confess($msg); 
+	} elsif ($hf->get_value($data_prefix.$list_s) != 1 && $debug_val<50 ) {
+	    carp($msg." But we're trying to debug so lets continue!\n" ); 
+	} 
     }
 
     my @slice_offsets;
@@ -390,11 +396,13 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
         $time_pts=$movie_frames;
         $vol_type="4D";
-        if ( defined $n_dwi_exp ) { 
+        if ( defined $n_dwi_exp &&  $n_dwi_exp != 'NO_KEY') { 
             printd(45,"diffusion exp with $n_dwi_exp frames\n");
-            if ( $movie_frames!=$n_dwi_exp) { 
-                croak "ACQ_n_movie_frames not equal to PVM_DwNDiffExp we have never seen that before.\nIf this is a new method its fesable that ACQ_spatial_phase1 would be defined.";
-            }
+            #if (  $n_dwi_exp != 'NO_KEY' ) { # just making sure its defined.
+	    if ( $movie_frames!=$n_dwi_exp ) { 
+		croak "ACQ_n_movie_frames($movie_frames) not equal to PVM_DwNDiffExp($n_dwi_exp) we have never seen that before.\nIf this is a new method its fesable that ACQ_spatial_phase1 would be defined.";
+	    }
+	    #}
             $vol_detail="DTI";
         } else { 
             $vol_detail="MOV";
@@ -450,7 +458,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		$current_offset=sprintf("%.9f",$current_offset);
 #		printd(85,"num1 (".($slice_offsets[$offset_num]).")  num-1(".($slice_offsets[($offset_num-1)]).")\n");
 		printd(85,"num_a:$num_a, num_b:$num_b\n");
-		
+
+		# Due to very minimal discrepancy in calculation error, we have seen a bad decimal of precision when testing for contiguous slices. 
+		# these sprintf's should help prevent that error from foring us into multi-volume when we only want one..
+#                                        0.235548400
+#                                        0.235548401
+		$first_offset=sprintf("%0.8f",$first_offset);
+		$current_offset=sprintf("%0.8f",$current_offset);
+
 		if("$first_offset" ne "$current_offset") { # for some reason numeric comparison fails for this set, i dont understnad why.
 		    printd(85,"diff bad  num:$offset_num  out of cur, <$current_offset> first, <$first_offset>\n");
 		    $first_offset=-1000; #force bad for rest
@@ -536,7 +551,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     my $method_ex="<(".join("|",@knownmethods).")>";
     my $method_ex_2="<(Bruker[:]".join("|Bruker[:]",@knownmethods).")>"; # PV6 adds Bruker: to each method.
     if ( $method !~ m/^$method_ex$/x && $method !~ m/^$method_ex_2$/x ) {
-	croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
+        my $msg="NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n";
+	if ( $debug_val<50 ) { 
+	    croak($msg);
+	} else {
+	    carp($msg."\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES, THEIR DIMENSIONS, ESPECIALLY Z\n");
+	}	
+	
+#n	croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
 #\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
     }
     return "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth}:${data_type}:${order}";
@@ -1047,8 +1069,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     ($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
     ($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov")); 
     $fov_f=$fov_f*10;
-    $fov_p=$fov_p*10;
-    $fov_z=$fov_z*10;
+    if(defined $fov_p) {
+	$fov_p=$fov_p*10; }
+    if ( defined $fov_z ) {
+	$fov_z=$fov_z*10;}
     if ( $hf->get_value($data_prefix."PVM_SpatResol") ne 'NO_KEY') {
 #	($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
 	if ( $fov_f!=$df*$thick_f )
@@ -1250,6 +1274,23 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #### DTI keys
 #### PVM_DwBMat, make a key foreach matrix, and put each matrix in headfileas DwBMat[n]
     if($vol_type eq "4D" && $vol_detail eq "DTI") { 
+	my $key="PVM_DwBMat";
+	if ( defined  $bruker_header_ref->{$key} ) {
+#	    ##$PVM_DwBMat=( 7, 3, 3 )
+	    my $diffusion_scans;
+	    $diffusion_scans=aoaref_get_single($bruker_header_ref->{"DE"}); # $diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    printd(75,"adding hf keys for $diffusion_scans diffusion scans\n");
+	    for my $bval (1..$diffusion_scans) {
+		my @subarray=aoaref_get_subarray($bval,$bruker_header_ref->{$key});
+		my $text=$subarray[0].','.join(' ',@subarray[1..$#subarray]);
+		my $bnum=$bval-1;
+		my $hfilevar="${s_tag}${key}_${bnum}";
+		printd(20,"  INFO: For Diffusion scan $bval key $hfilevar bmat is $text \n") ; 
+		$hf->set_value("$hfilevar",$text); 
+	    }
+	} 
+    } elsif($vol_type eq "4D" && $vol_detail eq "MOV") {
+	##### FINISH SUPPORT FOR CHAINED ACQUISITIONS
 	my $key="PVM_DwBMat";
 	if ( defined  $bruker_header_ref->{$key} ) {
 #	    ##$PVM_DwBMat=( 7, 3, 3 )

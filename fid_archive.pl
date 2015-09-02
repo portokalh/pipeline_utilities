@@ -326,7 +326,7 @@ our $verbose=0;
 #	    push(@infiles,$directory.'/'."acqp");
 #	    push(@infiles,$directory.'/'."method");
 	} else {
-	    printd(15,"the scanner input file was specified directly, bruker headers are normally in three parts, you need to have combined those into one to specify the headfile to use directly.(subject,acqp,method)");
+	    printd(15,"You specifid the scanner header file directly instead of the directory it sits in. This is an unproven method best suited for testing different ways to fool the header parse script \n"); 
 	}
 #	$hf_prefix='z_Bruker_';
 	$hf_short_prefix="S_";

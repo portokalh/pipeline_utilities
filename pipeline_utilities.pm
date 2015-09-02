@@ -1713,6 +1713,11 @@ sub fileparts {
     use File::Basename;
 #    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
     my ($name,$path,$suffix) = fileparse($fullname,qr/\.([^.].*)+$/);#qr/\.[^.]*$/)
+    if ( ! defined $fullname ||  $fullname eq "") { 
+	
+	return("","","");
+    }
+    my ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
     return($name,$path,$suffix);
 }
 
