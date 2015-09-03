@@ -76,7 +76,7 @@ $current_epoc_time=$current_epoc_time-$rem; #floors to lowest interval from epoc
 
 my $dt = DateTime->from_epoch(epoch => $current_epoc_time );
 
-my $debug_val=0;45;
+my $debug_val=0;#45;
 
 my $TOTALKS=0;
 my $USEDKS=0;
