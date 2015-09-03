@@ -169,6 +169,7 @@ sub command_batch {
     
     for my $cmd ( @cmds ) {
 	printf("firing off %s\n",$cmd);
+	#my $out="";
 	my $out=qx($cmd);
 	$ret_val=$ret_val.$?;
     }
@@ -322,13 +323,6 @@ sub summarize_data {
 		#print Dumper %user_summary if ($debug_val>90);
 		$user_usage{$d_name}=\%user_summary;
 		${$user_usage{"TOTAL"}}{$d_name}=hash_sum($user_usage{$d_name}{"critical"});#+hash_sum($user_usage{$d_name}{"warning"});#+hash_sum($user_usage{$d_name}{"files"});
-		if( 0 ) {
-		    printf("  Total ( %i b ) %s's: %0.2f. pct of used : %0.2f. pct of total %0.2f.\n",
-		       $user_totals{$d_name},$unit,
-		       ($user_totals{$d_name}/$disk_units{$unit}),
-		       ($user_totals{$d_name}/$used_size*100),
-		       ($user_totals{$d_name}/$total_size*100));
-		}
 	    } 
 	}
     }
@@ -359,7 +353,7 @@ sub summary_print_format {
 	#$user_totals{$d_name}=hash_sum($user_usage{$d_name});
 	if ( $d_name !~ /TOTAL/x ) {
 	    if ( ($user_totals{$d_name}/$used_size*100) > $min_pct ) {# the primary summary is only for users taking up more than min_pct of the total space.
-		$summary=sprintf("%sUser %s Old Total ( %ib ), %0.2f%siB's. pct of used : %0.2f. pct of disk %0.2f.\n",
+		$summary=sprintf("%sUser %s Old Total ( %ib ), %8.2f  %siB's. pct of used : %0.2f. pct of disk %0.2f.\n",
 				 $summary,$d_name,$user_totals{$d_name},
 				 ($user_totals{$d_name}/$disk_units{$unit}),$unit,
 				 ($user_totals{$d_name}/$used_size*100),
@@ -377,7 +371,7 @@ sub summary_print_format {
     }
 
 #    my $d_name="TOTAL";
-    $summary=sprintf("TOTAL cleanable ( %ib ), %0.2f%s's. pct of used : %0.2f. pct of disk %0.2f. pct free %0.2f\n-----\n%s-----\n",
+    $summary=sprintf("TOTAL cleanable ( %ib ), %8.2f%s's. pct of used : %0.2f. pct of disk %0.2f. pct free %0.2f\n-----\n%s-----\n",
 		     hash_sum(\%user_totals),
 		     (hash_sum(\%user_totals)/$disk_units{$unit}),$unit,
 		     (hash_sum(\%user_totals)/$used_size*100),
@@ -436,7 +430,7 @@ sub queue_transfers {
     my $used_size=$USEDKS*1024; # used disk space in bytes
     my $total_size=$TOTALKS*1024; # total disk space in bytes
     my $cleanable_size=hash_sum(\%end_totals);
-    printf("Total cleanable %0.2f%s. pct of used : %0.2f. pct of total %0.2f.\n",
+    printf("Total cleanable %8.2f  %siB's. pct of used : %0.2f. pct of total %0.2f.\n",
 	   $cleanable_size/$disk_units{$unit},$unit,
 	   $cleanable_size/$used_size*100,
 	   $cleanable_size/$total_size*100);
@@ -479,7 +473,7 @@ sub queue_transfers {
 			delete ${$end_usage{$biggest[0]}{"critical"}}{$b_file}; # remove from critical
 			$end_totals{$biggest[0]}=hash_sum(${end_usage{$biggest[0]}{"critical"}}); # set new endpoint size
 			$biggest[1]=$end_totals{$biggest[0]};
-			printf("\t%04.2f%siB's queued with %04.2f%siB's remaining  \n",
+			printf("\t%04.2f  %siB's queued with %04.2f  %siB's remaining  \n",
 			       #${$remove_summary{$biggest[0]}}{$b_file}/$disk_units{$unit},$unit,
 			       ${$end_usage{$biggest[0]}{"transfer"}}{$b_file}/$disk_units{$unit},$unit,
 			       $end_totals{$biggest[0]}/$disk_units{$unit},$unit);
@@ -508,7 +502,7 @@ sub queue_transfers {
 	} while ( $ending_size/$total_size > $disk_cleaning_threshold 
 		  && $cleanable ) ;
 	my $ending_free=$used_size-$ending_size;
-	printf("\nAdditional space avail %0.2f%s. pct of disk %0.2f.\n",
+	printf("\nAdditional space avail %8.2f  %siB's. pct of disk %0.2f.\n",
 	       $ending_free/$disk_units{$unit},$unit,
 	       $ending_free/$total_size*100);
 	#sleep 2; 
@@ -689,7 +683,7 @@ sub transfer_user_data {
 	    if ( defined $s ) {
 		my $status=1;
 		if ( $debug_val<50 ) {
-		    printf("\t( %0.2f%s ) ",$s/$disk_units{$unit},$unit);
+		    printf("\t( %8.2f  %siB's ) ",$s/$disk_units{$unit},$unit);
 		    $status=transfer_data_group($u,$s,$index_path,$transfer_log,$cleanup_script);
 		    #sleep 1;
 		}
@@ -860,8 +854,8 @@ sub prepare_email {
 		my ($rname,$rhost,$rdest)=@{$user_definitions{$d_name}};
 		printf $c_fh ( "Subject: %s is nearly full! \n"
 			       ."Top offender summary: \n %s \n\n"
-			       ."%s, \n\tI transfered %0.2f%siB's of old data.( I dont count \"new data\" ).\n" #or \"small data\"
-			       ."You have %0.2f%siB's of data remaining.\n"
+			       ."%s, \n\tI transfered %8.2f  %siB's of old data.( I dont count \"new data\" ).\n" #or \"small data\"
+			       ."You have %8.2f  %siB's of data remaining.\n"
 			       ."Your scp remote location is %s\@%s:%s\n"
 			       ."Notify james or lucy if this location is incorrect.\n"
 			       ,#%s\n",
@@ -882,7 +876,7 @@ sub prepare_email {
 					  ."These files cant stay there forever, I will try to delete them 5 weeks from now.\n"
 					  ."You will be reminded of this 3 and 4 weeks from now.\n");
 			}
-			printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$_path,${$user_usage{$d_name}{"elimination"}}{$_file}/$disk_units{$unit},$unit);
+			printf $c_fh ( "\t %s ( %8.2f  %siB's )\n",$_path,${$user_usage{$d_name}{"elimination"}}{$_file}/$disk_units{$unit},$unit);
 		    }
 		}
 		$m_n=0;
@@ -894,7 +888,7 @@ sub prepare_email {
 			    $m_n=$m_n+1;
 			    printf $c_fh ( "The following were marked for transfer but failed. "
 					   ."Likely due to remote location disk full or no write permssion.\n");}
-			printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$_path,${$user_usage{$d_name}{"transfer"}}{$_file}/$disk_units{$unit},$unit);
+			printf $c_fh ( "\t %s ( %8.2f  %siB's )\n",$_path,${$user_usage{$d_name}{"transfer"}}{$_file}/$disk_units{$unit},$unit);
 		    }
 		}
 		$m_n=0;
@@ -909,16 +903,19 @@ sub prepare_email {
 				$m_n=$m_n+1;
 				# becuase this runs for remaining criticals and warnings this verbage is imprefect.
 				printf $c_fh ( "The following lists are getting old and will be auto shipped out soon.\n");}
-			    printf $c_fh ( "\t %s ( %0.2f%siB's )\n",$_path,${$user_usage{$d_name}{$list}}{$_file}/$disk_units{$unit},$unit);
+			    printf $c_fh ( "\t %s ( %8.2f  %siB's )\n",$_path,${$user_usage{$d_name}{$list}}{$_file}/$disk_units{$unit},$unit);
 			}
 		    }
 		}
 				
-		print $c_fh (" use cat file to get a listing of the contents. \n");
+		print $c_fh ("To get a listing of the contents use, \"cat listfilepath |cut -d '|' -f 2-\" \n");
+		print $c_fh ("To get a listing with easier to read size use, \"ls -lhrS `cat listfilepath |cut -d '|' -f 2-\`\"\n");
+		#print $c_fh ("To get a listing with easier to read size use, \"ls -lh `cat listfilepath |cut -d '|' -f 2-\`\"\n");
+		print $c_fh ("To get a listing of only the directories, \"for file in `cat listfilepath |cut -d '|' -f 2-\` ; do dirname \$file; done |sort -u \"\n");
 		#use diagnostics;
 		#print ${out_hash{$d_name}} ($txt) unless ! defined ($out_hash{$d_name} );
 	    } else {
-		printf("%s has less than min usage total: %0.2f%siB's (%0.2f pct), not notifing.\n",
+		printf("%s has less than min usage total: %8.2f  %siB's (%0.2f pct), not notifing.\n",
 		       $d_name,
 		       hash_sum($user_usage{$d_name},"critical")/$disk_units{$unit},$unit,
 		       hash_sum($user_usage{$d_name})/$total_size,
@@ -1036,7 +1033,7 @@ sub main {
     my $min_pct=5;
     my $out_dir=$SCAN_DIR."/storage_janitor";
     my $elimination_queue=$out_dir."/Elimination";
-    #my $files_found=file_discovery($SCAN_DIR,$out_dir);
+    my $files_found=file_discovery($SCAN_DIR,$out_dir);
     print("files $files_found found at least $test_age days old\n");
     my $summary_ref = summarize_data($out_dir);# while testing use jjc29|hw|luc
     #my $summary_ref = summarize_data($out_dir,'jjc29|hw|luc|abade');# while testing use jjc29|hw|luc
