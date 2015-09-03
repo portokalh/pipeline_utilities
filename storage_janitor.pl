@@ -76,7 +76,7 @@ $current_epoc_time=$current_epoc_time-$rem; #floors to lowest interval from epoc
 
 my $dt = DateTime->from_epoch(epoch => $current_epoc_time );
 
-my $debug_val=0;#45;
+my $debug_val=0;#50;
 
 my $TOTALKS=0;
 my $USEDKS=0;
@@ -182,7 +182,7 @@ sub file_discovery {
     
     #my $cmd="find $scan_dir -size +$min_size -mtime +$test_age -type f -printf \"%TY-%Tm-%Td-%Tw_%TT|%T@|%AY-%Am-%Ad-%Aw_%AT|%A@|%s|%u|%h/%f\n\" ";
     #removed minsize
-    my $cmd="find $scan_dir -size -mtime +$test_age -type f -printf \"%TY-%Tm-%Td-%Tw_%TT|%T@|%AY-%Am-%Ad-%Aw_%AT|%A@|%s|%u|%h/%f\n\" ";
+    my $cmd="find $scan_dir -mtime +$test_age -type f -printf \"%TY-%Tm-%Td-%Tw_%TT|%T@|%AY-%Am-%Ad-%Aw_%AT|%A@|%s|%u|%h/%f\n\" ";
 
 #1970time->%A@
 
@@ -838,8 +838,8 @@ sub prepare_email {
     printf("prepare_email\n");
     printf("----------\n");
     for my $d_name ( keys(%user_usage) ) {
-	#my @u_files=reverse sort by_number grep (/warning|critical/, keys(%{$user_usage{$d_name}}) );#get sorted list of files by age
-	if ( $d_name !~ /remove_list|TOTAL/x ) {
+	if ( $d_name !~ /remove_list|TOTAL/x && defined $user_definitions{$d_name} ) {
+	my ($rname,$rhost,$rdest)=@{$user_definitions{$d_name}};
 	    #if defined (  hash_sum($user_usage{$d_name}) ) 
 	    if ( $user_totals{$d_name}/$total_size > $min_pct ||  hash_sum(${user_usage{$d_name}{"critical"}} )>0 ) {
 		printf("Preparing email to %s.\n",$d_name);
@@ -851,7 +851,7 @@ sub prepare_email {
 		}
 		
 		$c_fh=$out_hash{"$d_name"};
-		my ($rname,$rhost,$rdest)=@{$user_definitions{$d_name}};
+		
 		printf $c_fh ( "Subject: %s is nearly full! \n"
 			       ."Top offender summary: \n %s \n\n"
 			       ."%s, \n\tI transfered %8.2f  %siB's of old data.( I dont count \"new data\" ).\n" #or \"small data\"
@@ -1033,7 +1033,11 @@ sub main {
     my $min_pct=5;
     my $out_dir=$SCAN_DIR."/storage_janitor";
     my $elimination_queue=$out_dir."/Elimination";
-    my $files_found=file_discovery($SCAN_DIR,$out_dir);
+    my $files_found=0;
+    if ( $debug_val<50) {
+	$files_found=file_discovery($SCAN_DIR,$out_dir);
+    }
+
     print("files $files_found found at least $test_age days old\n");
     my $summary_ref = summarize_data($out_dir);# while testing use jjc29|hw|luc
     #my $summary_ref = summarize_data($out_dir,'jjc29|hw|luc|abade');# while testing use jjc29|hw|luc
@@ -1067,7 +1071,9 @@ sub main {
 
     my $mail_commands=prepare_email($out_dir,$summary_txt,$summary_ref,$elimination_queue,$elimination_summary);
     #printf("%s\n",join(" ",@{$mail_commands}));
+    if($debug_val<50) {
     my $cmd_status=command_batch($mail_commands);
+    }
     
     print("storage janitor complete!\n");
 }
