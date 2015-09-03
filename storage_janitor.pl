@@ -169,7 +169,8 @@ sub command_batch {
     
     for my $cmd ( @cmds ) {
 	printf("firing off %s\n",$cmd);
-	$ret_val=$ret_val+qx($cmd);
+	my $out=qx($cmd);
+	$ret_val=$ret_val.$?;
     }
     return $ret_val;
 }
@@ -1069,7 +1070,7 @@ sub main {
 
     my $mail_commands=prepare_email($out_dir,$summary_txt,$summary_ref,$elimination_queue,$elimination_summary);
     #printf("%s\n",join(" ",@{$mail_commands}));
-    command_batch($mail_commands);
+    my $cmd_status=command_batch($mail_commands);
     
     print("storage janitor complete!\n");
 }
