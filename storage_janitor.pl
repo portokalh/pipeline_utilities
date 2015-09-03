@@ -53,6 +53,7 @@ my $safety=0; # SAFETY variable, if set to 1 will not remove, will just build an
 
 ##### globals
 my $CLEANABLE_USERS='.*';#all uesrs are cleanable, used in testing or for targeting a specific user.
+my $EMAIL_BLACKLIST="edc15|mf177|lucy";#.* will disable any emails
 my $SCAN_DIR=$ENV{'BIGGUS_DISKUS'}; # directory we're testing for old files.
 if( ! defined $SCAN_DIR && defined $ARGV[0] ){ 
     $SCAN_DIR=$ARGV[0];
@@ -99,6 +100,9 @@ my %disk_units=(
 # user definitions
 # where do we put data.
 # remote user, remote host, remote location.
+# users must be in this list for summary information to be generated. 
+# if we dont desire summary information comment out that users line.
+# if we dont want that user to recieeve notifications, add them to the EMAIL_BLACKLIST variable above, pipe(|) separated
 my %user_definitions=( 
     "abadea" => [ qw(alex rhodos.duhs.duke.edu /Users/alex/) ], 
     "edc15" => [ qw(edc15 trinity.duhs.duke.edu /Users/edc15) ], 
@@ -935,7 +939,9 @@ sub prepare_email {
 	    my $email_address=sprintf("%s\@duke.edu",$d_name);
 	    my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
 	    
-	    push(@mail_call,sprintf ("sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $out_file\n") );
+	    if ( $d_name !~/$EMAIL_BLACKLIST/x) { # do not email users on the blacklist.
+		push(@mail_call,sprintf ("sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $out_file\n") );
+	    }
 	    #push(@mail_call,sprintf ("sendmail  $email_address\ < $out_file\n") );
 	    
 	    #mail $email_address $subject $out_file 
@@ -1031,7 +1037,18 @@ sub remote_check_free {
 sub main {
     my ($inputs)=@_;
     my $min_pct=5;
-    my $out_dir=$SCAN_DIR."/storage_janitor";
+    #my @pwfs=(getpwuid($<));
+    #my $person_name  = join(",",@pwfs);
+    my $person_name=(getpwuid($<))[0];
+    my $out_dir=$SCAN_DIR."/".$person_name."storage_janitor";
+    
+    if ($person_name =~/root|janitor/x ){
+	printf("You're running as $person_name, setting common location\n");
+	$out_dir=$SCAN_DIR."/storage_janitor";
+    } else {
+	printf("You're $person_name, setting personal location, only cleaning you.\n");
+	$CLEANABLE_USERS=$person_name;
+    }
     my $elimination_queue=$out_dir."/Elimination";
     my $files_found=0;
     if ( $debug_val<50) {
@@ -1072,7 +1089,7 @@ sub main {
     my $mail_commands=prepare_email($out_dir,$summary_txt,$summary_ref,$elimination_queue,$elimination_summary);
     #printf("%s\n",join(" ",@{$mail_commands}));
     if($debug_val<50) {
-    my $cmd_status=command_batch($mail_commands);
+	my $cmd_status=command_batch($mail_commands);
     }
     
     print("storage janitor complete!\n");
