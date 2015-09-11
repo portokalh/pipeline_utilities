@@ -2853,7 +2853,7 @@ sub convert_time_to_seconds {
 	
     }
 	
-    print "For ${time_and_date_string}, time in seconds is ${time_in_seconds}\n";
+   # print "For ${time_and_date_string}, time in seconds is ${time_in_seconds}\n";
 
     return($time_in_seconds);
 
