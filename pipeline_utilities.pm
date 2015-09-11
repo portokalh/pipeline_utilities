@@ -2828,6 +2828,7 @@ sub convert_time_to_seconds {
     
     my @colon_split = split(':',$time_and_date_string);
     my $categories = $#colon_split; 
+ 
     $seconds = $colon_split[$categories];
     $seconds = int($seconds + 0.9999999);
     $time_in_seconds = $time_in_seconds + $seconds;
@@ -2841,16 +2842,18 @@ sub convert_time_to_seconds {
 	my $hours_and_days = $colon_split[($categories-2)];
 	if ($hours_and_days =~ /-/) {
 	    ($days,$hours) = split('-',$hours_and_days);
+	   
 	} else {
 	    $days = 0;
 	    $hours = $hours_and_days;
-	    
-	    $time_in_seconds = $time_in_seconds + ($hours*60*60);
-	    $time_in_seconds = $time_in_seconds + ($days*24*60*60);
 	}
+	
+	$time_in_seconds = $time_in_seconds + ($hours*60*60);
+	$time_in_seconds = $time_in_seconds + ($days*24*60*60);
+	
     }
 	
-   # print "For ${time_and_date_string}, time in seconds is ${time_in_seconds}\n";
+    print "For ${time_and_date_string}, time in seconds is ${time_in_seconds}\n";
 
     return($time_in_seconds);
 
