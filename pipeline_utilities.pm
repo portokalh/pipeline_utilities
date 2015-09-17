@@ -1955,7 +1955,7 @@ sub cluster_wait_for_jobs {
 	print STDOUT "SLURM: Waiting for multiple jobs to complete";
 	#print "jobs = $jobs\n\n"; ##	
 	while ($completed == 0) {
-	    if (`squeue -j $jobs -o "%i %t"` =~ /(CG|PD|R)/) {
+	    if (`sacct -j $jobs -o State` =~ /(COMPLETING|PENDING|RUNNING)/) {
 		if ($verbose) {print STDOUT ".";}
 		my $throw_error=0;
 		if ($check_for_slurm_out) {
@@ -1964,7 +1964,7 @@ sub cluster_wait_for_jobs {
 		    my @job_list=split(',',$jobs);
 		    foreach my $job (@job_list) {
 			#print "Job = $job\t"; ##
-			if (`squeue -j $job -o "%i %t"` =~ /R/){   
+			if (`sacct -j $job -o State` =~ /RUNNING/){   
 			    my $slurm_out_file = "${sbatch_location}/slurm-${job}.out";
 			    if (! -e $slurm_out_file) {
 				$throw_error = 1;
