@@ -1717,7 +1717,7 @@ sub fileparts {
 	
 	return("","","");
     }
-    my ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
+    ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
     return($name,$path,$suffix);
 }
 
