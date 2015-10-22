@@ -202,17 +202,45 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
             croak "Required field missing from bruker header:\"PVM_NSPacks\" ";
         }
     }
-    $slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
-    if ($slice_pack_size ne 'NO_KEY' ) {
-       $slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
+    #$slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
+    if ($hf->get_value($data_prefix."PVM_SPackArrNSlices") ne 'NO_KEY' ) {
+	$slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
+	#printd(45,"spack_size:$slice_pack_size\n");
+	#check for multi-pack with same size.
+	if ( $slice_pack_size !~ /^$num_ex$/x) {# if not number assume we're a multi
+	    printd(45,"MULTIPART SPACK_SIZE, CHECKING REDUNDANT\n");
+	    #my @multi_slice_pack_sizes;
+	    #my $arf;
+	    #$arf=printline_to_aoa("$slice_pack_size");
+	    #my @multi_slice_pack_sizes=@{$arf};
+	    my @multi_slice_pack_sizes=printline_to_aoa("$slice_pack_size");
+	    if ( defined $multi_slice_pack_sizes[0] ) { 
+		my $diff_sizes=0;# bool to control if we can fix spack size and continue.
+		my $lv=-1;
+		for (my $snum=0;$snum<$#multi_slice_pack_sizes;$snum++) {
+		    my @subarray=aoaref_get_subarray($snum,\@multi_slice_pack_sizes);
+		    #carp('Cannot get subarray');
+		    for (my $sbnum=0;$sbnum<$#subarray;$sbnum++) {
+			if($subarray[$sbnum] != $lv && $lv != -1) {
+			    $diff_sizes=1;
+			}
+			$lv=$subarray[$sbnum];
+		    }
+		}
+		if ( ! $diff_sizes) {
+		    $slice_pack_size=$multi_slice_pack_sizes[0];
+		    $hf->set_value($data_prefix."PVM_SPackArrNSlices",$slice_pack_size);
+		}
+	    }
+	}
     } else { 
     # $list_size == $slice_pack_size
 	$slice_pack_size=$hf->get_value($data_prefix."NI");
 	carp("No ${data_prefix}PVM_SPackArrNSlices, using NI instead, could be wrong value ") ;
 	sleep_with_countdown(4);
     }
-    printd(45,"n_spacks:$n_slice_packs\n");        
-    printd(45,"spack_size:$slice_pack_size\n");
+    printd(35,"n_spacks:$n_slice_packs\n");        
+    printd(35,"spack_size:$slice_pack_size\n");
 ### get the dimensions 
 # matrix 2 or 3 element vector containing the dimensions, shows wether we're 2d or 3d 
 # ACQ_size=2,400 200 pvm_matrix not defined for acquisition only so we'll go with acq size if pvm_matrix undefined. 
@@ -396,7 +424,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
         $time_pts=$movie_frames;
         $vol_type="4D";
-        if ( defined $n_dwi_exp &&  $n_dwi_exp != 'NO_KEY') { 
+        if ( defined $n_dwi_exp &&  $n_dwi_exp ne 'NO_KEY') { 
             printd(45,"diffusion exp with $n_dwi_exp frames\n");
             #if (  $n_dwi_exp != 'NO_KEY' ) { # just making sure its defined.
 	    if ( $movie_frames!=$n_dwi_exp ) { 
@@ -1132,7 +1160,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
  	    printd(45,"\t".$data_prefix."SPackArrNSlices $spackns\n");
  	    my $nspacks=$hf->get_value($data_prefix."PVM_NSPacks\n");
  	    printd(45,"\t".$data_prefix."NSPacks $nspacks\n");
-	    if ( $hf->get_value($data_prefix."PVM_SPackArrNSlices") > 1 && $hf->get_value($data_prefix."PVM_NSPacks")== 1){ 
+	    if ( $hf->get_value($data_prefix."PVM_SPackArrNSlices") ne 1 && $hf->get_value($data_prefix."PVM_NSPacks")== 1){ 
 		printd(45,"\t".$data_prefix."fov_z set using dz*thick_z\n");
 		$fov_z=$dz*$thick_z; 
 #		$fov_z=$thick_z; 
@@ -1258,7 +1286,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    );
 	foreach (@orientation_bruker) {#error check orientation code
 	    if ($_ ne $orientation_bruker[0]){
-		error_out("multile orientations, totally confused, explodenow\n");
+		confess("multile orientations, totally confused, explodenow\n");
 	    }
 	}
 	if ($orientation_alias{$orientation_bruker[0]} ne $specified_orient ) {
