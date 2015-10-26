@@ -53,7 +53,7 @@ my $safety=0; # SAFETY variable, if set to 1 will not remove, will just build an
 
 ##### globals
 my $CLEANABLE_USERS='.*';#all uesrs are cleanable, used in testing or for targeting a specific user.
-my $EMAIL_BLACKLIST="edc15|mf177|lucy";#.* will disable any emails
+my $EMAIL_BLACKLIST="edc15|mf177|lucy|root";#.* will disable any emails
 my $SCAN_DIR=$ENV{'BIGGUS_DISKUS'}; # directory we're testing for old files.
 if( ! defined $SCAN_DIR && defined $ARGV[0] ){ 
     $SCAN_DIR=$ARGV[0];
@@ -107,31 +107,35 @@ my %user_definitions=(
     "abadea" => [ qw(alex rhodos.duhs.duke.edu /Users/alex/) ], 
     "edc15" => [ qw(edc15 trinity.duhs.duke.edu /Users/edc15) ], 
     "hw133" => [ qw(hj hj hj) ], 
+    "nw61" => [ qw(nw nw nw) ], 
     "jjc29" => [ qw(james panorama.duhs.duke.edu /Users/BiGDATADUMP) ], 
+    "cl242" => [ qw(cl242 trinity.duhs.duke.edu /Volumes/trinityspace) ],
     "ksd15" => [ qw(kyle wheezy.duhs.duke.edu /Volumes/wheezyspace) ], 
     "lucy" => [ qw(lucy wytyspy.duhs.duke.edu /Users/lucy) ], 
     "lx21" => [ qw(lx21 andromeda.duhs.duke.edu /Volumes/andromedaspace) ], 
     "mf177" => [ qw(mf177 milos.duhs.duke.edu /Volumes/milosspace) ], 
-    "rja20" => [ qw(rja20 atlasdb.duhs.duke.edu /atlas3/rja20) ], 
-    "rmd22" => [ qw(rmd22 atlasdb.duhs.duke.edu /atlas3/rmd22) ], 
+    "rja20" => [ qw(rja20 atlas3.dhe.duke.edu /atlas3/rja20) ], 
+    #"rmd22" => [ qw(rmd22 atlasdb.duhs.duke.edu /atlas3/rmd22) ], 
+    "rmd22" => [ qw(rmd22 jeeves.duhs.duke.edu /Volumes/glusterspace_relief/) ], 
+    "root" => [ qw(nobody nohost.should.ever.respond.to.this /nodrive/should/be/found) ],
     );
 if ( 0 ) {
-print(%user_definitions);
-print("\n");
+    print(%user_definitions);
+    print("\n");
 
-print($user_definitions{"jjc29"});
-print("\n");
-
-print(%user_definitions."\n\n");
-print($user_definitions{"jjc29"}."\n\n");
-
-print(join(" ", keys %user_definitions)."\n\n");
+    print($user_definitions{"jjc29"});
+    print("\n");
+    
+    print(%user_definitions."\n\n");
+    print($user_definitions{"jjc29"}."\n\n");
+    
+    print(join(" ", keys %user_definitions)."\n\n");
 #print(join(" ",@{$user_definitions{"jjc29"}})."\n\n");
-print("\n");
-print("\n");
-print Dumper %user_definitions;
-print("\n");print("\n");
-exit;
+    print("\n");
+    print("\n");
+    print Dumper %user_definitions;
+    print("\n");print("\n");
+    exit;
 }
 my %admins =(
     "jjc29" => "James Cook",
@@ -182,7 +186,7 @@ sub command_batch {
 sub file_discovery { 
 #$SCAN_DIR="/glusterspace"
     #option_process;
-    my ($scan_dir,$out_dir)=@_;
+    my ($scan_dir,$out_dir,$summary_file)=@_;
     
     #my $cmd="find $scan_dir -size +$min_size -mtime +$test_age -type f -printf \"%TY-%Tm-%Td-%Tw_%TT|%T@|%AY-%Am-%Ad-%Aw_%AT|%A@|%s|%u|%h/%f\n\" ";
     #removed minsize
@@ -207,12 +211,21 @@ sub file_discovery {
 
 #        my $pid = open(PH, "$c 3>&1 1>&2 2>&3 3>&-|");
 #        while (<PH>) {
-
-    print("Starting search command\n$cmd\n");
+    my $collect_info=1;
+    if ( -f $summary_file ){
+	$collect_info=0;
+	#use File::stat;
+	#use Time::localtime;
+	#open( my $fh,<$summary_file);
+	#my $timestamp = ctime(stat($fh)->mtime);
+    }	 else {
+	print("Starting search command\n$cmd\n");
+    }
 #    return 0;    #exit;
+    if ( $collect_info ){ 
     my $pid = open( my $CID,"-|", "$cmd"  ) ;
     print("PID:$pid\n");
-
+    
     while ( my $line=<$CID> ) {
     #my $line=$_;
     $files_found++;
@@ -289,6 +302,7 @@ sub file_discovery {
     foreach (keys %out_hash) {
 	print("Closing file $_");
 	close $out_hash{"$_"};
+    }
     }
     return $files_found;
 }
@@ -453,6 +467,9 @@ sub queue_transfers {
 		$reorder_users=0;
 		sort_users(\@users,\@usage,\%end_totals);
 		set_top_users(\@users,\@usage,\@biggest,\@second);
+		if ( $second[1]== 0 ) {
+		    $second[1]=1;
+		}
 		printf("Largest remaining %s.\n  Next top two user ratio : %0.2f.  (%s/%s).\n",$biggest[0],$biggest[1]/$second[1],$biggest[0],$second[0]);
 		printf("  Remaining users: %s\n",join(" ",@users));
 		#test order is a sorted list of file groups owned by the biggest user. It is sorted oldest to newest.
@@ -684,7 +701,10 @@ sub transfer_user_data {
 	    my $index_ending_path=$elimination_queue."/".$idxout;
 	    #printf("Looking up filesize with %s, %s\n", $u, $n.$e);
 	    my $s=${$user_usage{$u}{"transfer"}}{$n.$e};
-	    if ( defined $s ) {
+	    if ( ! defined $user_definitions{$u}  ) { 
+		warn "user $u not part of user definitions but has data\n";
+	    }
+	    if ( defined $s && defined $user_definitions{$u} ) {
 		my $status=1;
 		if ( $debug_val<50 ) {
 		    printf("\t( %8.2f  %siB's ) ",$s/$disk_units{$unit},$unit);
@@ -747,13 +767,15 @@ sub transfer_data_group {
 	#   key_path => "/home/$rname/.ssh/id_dsa",
 	batch_mode=> 1,
 	);
-    my $ossh = Net::OpenSSH->new($rhost,%ssh_opts);
+    my $ossh = Net::OpenSSH->new($rhost,%ssh_opts) unless $safety;
     $ssh_opts{"copy_attrs"} = 1;
     #$ssh_opts{"key_path"} = "/home/$rname/.ssh/id_dsa",;
     #$ssh_opts{"batch_mode"} = 1;
+    if ( ! $safety) {
     $ossh->error and warn "Couldnt establish SSH Connection: ". $ossh->error and return 0;
+    }
     my $scp_start=1;
-    if ( $debug_val < 50 ) {
+    if ( $debug_val < 50 && ! $safety) {
 	 $scp_start=remote_check_free($s,$rdest,$ossh) ;
     }
     if ( ! $scp_start) {
@@ -779,14 +801,14 @@ sub transfer_data_group {
 	    my $d_path=$rdest."/storage_janitor/".$path;
 	    $sum=$sum+$size;
 	    my $single_copy_proceede=1;
-	    if ( $debug_val<50 ) {
+	    if ( $debug_val<50 && ! $safety) {
 		$single_copy_proceede = remote_check_free($size,$rdest,$ossh);
 	    } 
 	    if ( $single_copy_proceede ) {
 		my $r_dir=dirname($d_path);
 		my $status=0;
-		if ( $debug_val<50 ) {
-		my @capture=$ossh->capture(\%ssh_opts,"mkdir -p $r_dir") and $status=1;
+		if ( $debug_val<50 && ! $safety) {
+		    my @capture=$ossh->capture(\%ssh_opts,"mkdir -p $r_dir") and $status=1;
 		}
 		if (! $status ) {
 		    #printf("%s",join(' ',@capture)); 
@@ -794,7 +816,7 @@ sub transfer_data_group {
 		} 
 
 		$status=1;
-		if ( $debug_val<50){
+		if ( $debug_val<50 && ! $safety){
 		    #printf("scp $path $rname\@$rhost:$d_path\n");
 		    $ossh->scp_put(\%ssh_opts,"$path", "$d_path") or $status=0 ; 
 		}
@@ -928,6 +950,7 @@ sub prepare_email {
 	}
     }
 
+    
     foreach (keys %out_hash) {
 	print("Closing file $_\n");
 	close $out_hash{"$_"};
@@ -937,14 +960,30 @@ sub prepare_email {
 	    #"$user$interval"
 	    my $out_file=sprintf("%s/disk_info_%s.txt",$out_dir,$d_name);
 	    my $email_address=sprintf("%s\@duke.edu",$d_name);
-	    my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
+	    #my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
 	    
 	    if ( $d_name !~/$EMAIL_BLACKLIST/x) { # do not email users on the blacklist.
 		push(@mail_call,sprintf ("sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $out_file\n") );
+	    } else {
+		
 	    }
 	    #push(@mail_call,sprintf ("sendmail  $email_address\ < $out_file\n") );
 	    
 	    #mail $email_address $subject $out_file 
+	}
+    }
+    my $sa_file=$out_dir."/admin_summary.txt";
+    #my $sa_fh=-1;
+    open ( my $sa_fh, '>', "$sa_file") or die "Cannot open $sa_file.  ".$!;
+    if ( $sa_fh != -1 ) {
+	printf $sa_fh ( "Subject: %s is nearly full! \n"
+			."Top offender summary: \n %s \n\n"
+			,#%s\n",
+			$SCAN_DIR,$summary_txt);
+	for my $d_name ( keys %admins ) {
+	    my $email_address=sprintf("%s\@duke.edu",$d_name);
+	    #my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
+	    push(@mail_call,sprintf ("sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $sa_file\n") );
 	}
     }
     return \@mail_call;
@@ -1050,12 +1089,16 @@ sub main {
 	$CLEANABLE_USERS=$person_name;
     }
     my $elimination_queue=$out_dir."/Elimination";
+    my $summary_file=sprintf("%s/summary_%i.txt",$out_dir,$current_epoc_time);
     my $files_found=0;
     if ( $debug_val<50) {
-	$files_found=file_discovery($SCAN_DIR,$out_dir);
+	$files_found=file_discovery($SCAN_DIR,$out_dir,$summary_file);
     }
-
-    print("files $files_found found at least $test_age days old\n");
+    if( ! $files_found ){
+	print("Using cached file discovery information, this may produce inaccurate results.\n");
+    } else {
+	print("files $files_found found at least $test_age days old\n");
+    }
     my $summary_ref = summarize_data($out_dir);# while testing use jjc29|hw|luc
     #my $summary_ref = summarize_data($out_dir,'jjc29|hw|luc|abade');# while testing use jjc29|hw|luc
     #my $summary_ref = summarize_data($out_dir,'jjc29');# while testing use jjc29|hw|luc
@@ -1063,7 +1106,6 @@ sub main {
 
     my $summary_txt=summary_print_format($min_pct,$summary_ref);# this is more for the cronjob output to lucy and james.
 
-    my $summary_file=sprintf("%s/summary_%i.txt",$out_dir,$current_epoc_time);
     print("\n".$summary_txt);
     open ( my $SUMMARY,  '>', $summary_file );
     printf $SUMMARY ("\n".$summary_txt);
