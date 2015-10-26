@@ -626,7 +626,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 #    my $vol_type=$hf->get_value("B_vol_type");
 #    my $vol_detail=$hf->get_value("B_vol_type_detail");
 
-    my $block_header_size=28;                   ; # one block header per file block. Blocks may be volumes or slices.
+    my $block_header_size=28;   # one block header per file block. Blocks may be volumes or slices.
     #my $binary_header_size=32+$block_header_size; # one binary header per file
     my $binary_header_size=32; # one binary header per file
     $hf->set_value("binary_header_size",$binary_header_size);
@@ -829,6 +829,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     if ( $hf->get_value('ray_blocks_per_volume') eq 'NO_KEY' ) {
 	$hf->set_value('ray_blocks_per_volume',1) && carp('ray_blocks_per_volume unknown, setting 1');
     }
+    
 #     if ( $hf->get_value($data_prefix.'ne') !~ /^[0-9]+$/x ) {
 # 	printd(5,"ne not defined in agilent headfile
 # 	$hf->set_value('ne',1);
@@ -888,16 +889,28 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	}
     }
     my $dim_order='xpyczt';#both xpyczt and xpcyzt work when we dont have channels, formerly 'xycpzt', c was in good position relative to yz for some acquisitions.
+ 
+    # the report_order not set it properly in the set_volume_type function. so we'll override it here.
+    #to make use of it for our block dimension problem. 
+    
+    $report_order='xpycz';
+
     if ( $vol_type =~ /2D/x ){
 	printd(25,"Volume 2D detected setting special 2D dimensional order\n");
 	$dim_order='xpcyzt';
-    } elsif($vol_type =~ /4D/x) {
+	$report_order='xpyc';
+    } elsif( $vol_type =~ /4D/x ) {
 	#$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
 	$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
+	$report_order='xpyzc';
     }
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
     $hf->set_value("${s_tag}dimension_order",$dim_order);
+    
+    $hf->set_value("ray_block_order","$report_order"); # string of the dimension in a ray block.
+    
+    printd(5, "ray_block_order is $dim_order\n");
     printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
     printd(25,"acquisition order is $dim_order\n");
 
