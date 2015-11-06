@@ -427,6 +427,7 @@ sub usage_message  {
 	"  -o overwrite enable\n".
 	"  -d #   \tdebug level\n".
 	"  -s suffix   \tout runno suffix\n".
+	"Makes a research archive of data straight from the scanner with required meta info for reconstruction.".
 	"";
     
     exit $ERROR_EXIT;
