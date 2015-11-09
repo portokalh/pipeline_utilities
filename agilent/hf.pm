@@ -626,7 +626,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 #    my $vol_type=$hf->get_value("B_vol_type");
 #    my $vol_detail=$hf->get_value("B_vol_type_detail");
 
-    my $block_header_size=28;                   ; # one block header per file block. Blocks may be volumes or slices.
+    my $block_header_size=28;   # one block header per file block. Blocks may be volumes or slices.
     #my $binary_header_size=32+$block_header_size; # one binary header per file
     my $binary_header_size=32; # one binary header per file
     $hf->set_value("binary_header_size",$binary_header_size);
@@ -635,81 +635,88 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 
 
     my %hfkey_aliaslist=( # hfkey=>[multiplier,alias1,alias2,aliasn] 
-			   "unix scan date"=>[
-			       1,
-			       'ACQ_abs_time',            # starting or ending acquision time in a unix time stamp
-			   ],
-			   "alpha"=>[
-			       1,
-			       'flip1',                   # seems to be consistent place to pick up the flip angle.,
-			                                  # Might need to look at flip2 as well. 
-			   ],
-			   "agilent scan date"=>[
-			       1,
-			       'date',                # starting or ending acquision time , but its bad, it is  listed as an array but it only has one value, so the agilent parsecolonecomma function breaks on this one, should ignore and just abs time 
-			   ],
+			  "unix scan date"=>[
+			      1,
+			      'ACQ_abs_time',            # starting or ending acquision time in a unix time stamp
+			  ],
+			  "alpha"=>[
+			      1,
+			      'flip1',                   # seems to be consistent place to pick up the flip angle.,
+			      # Might need to look at flip2 as well. 
+			  ],
+			  "agilent scan date"=>[
+			      1,
+			      'date',                # starting or ending acquision time , but its bad, it is  listed as an array but it only has one value, so the agilent parsecolonecomma function breaks on this one, should ignore and just abs time 
+			  ],
 			  "A_max_bval"=>[
 			      1,
 			      'max_bval'
 			  ],
-			   "navgs"=>[
-			       1,
+			  "navgs"=>[
+			      1,
 #			       'UNKNOWN', 
 			  ],
 			  "alternate_echo_reverse"=>[
 			      1,
 			      'altecho_reverse',
 			  ],
-			   "nex"=>[
-			       1,
+			  "nex"=>[
+			      1,
 #			       'UNKNOWN',     
-			   ],
-			   "bw"=>[
-			       (1/2),
-			       'sw',
-			   ],
+			  ],
+			  "bw"=>[
+			      (1/2),
+			      'sw',
+			  ],
 #			   "B_NRepetitions"=>[
 #			       1,
 #			       'UNKNOWN',     			       
 #			   ],
-			   "tr"=>[                   # in us
-			       1000000,
-			       'tr',                 # in ms
-			   ],
-			   "te"=>[
-			       1000,
-			       'first_te',
-			       'te',
-			   ],
-			   "S_PSDname"=>[
-			       1,
-			       'seqfil',
-			   ],
-			   "te2"=>[
-			       1000,
-			       'te_spacing',
-			   ],
-			   "ne"=>[
-			       1,
-			       'nechoes',
-			       'ne',
-			   ],
-			   "EchoTimes"=>[
-			       1000,
-			       'TE',
-			   ],
-			   "ray_length"=>[  # number of samples along a ray *2 (real,imaginary)
-			       0.5,  # might want to divide by two as these are separted real/imaginary points
-			       'np',
-			   ],
-			   "rays_per_block"=>[ 
-			       1, 
-			       'nf',
-			   ],
-			   "ray_blocks"=>[ #ray_blocks_per_volume, need to get per slices also
-			       1,
-			       'nblocks',
-			   ],
+			  "tr"=>[                   # in us
+						    1000000,
+						    'tr',                 # in ms
+			  ],
+			  "te"=>[
+			      1000,
+			      'first_te',
+			      'te',
+			  ],
+			  "S_PSDname"=>[
+			      1,
+			      'seqfil',
+			  ],
+			  "te2"=>[
+			      1000,
+			      'te_spacing',
+			  ],
+			  "ne"=>[
+			      1,
+			      'nechoes',
+			      'ne',
+			  ],
+			  "EchoTimes"=>[
+			      1000,
+			      'TE',
+			  ],
+			  # number of samples along a ray *2 (real,imaginary)
+			  "ray_length"=>[  
+			      0.5, # might want to divide by two as these are separted real/imaginary points
+			      'np', 
+			  ],
+			  "rays_per_block"=>[ 
+			      1, 
+			      'nf',
+			  ],
+			  #ray_blocks in the whole acquisition.
+			  "ray_blocks"=>[ 
+			      1, 
+			      'nblocks',
+			  ],
+			  #ray_blocks_per_volume, ray_blocks in an (full)acquitision, generally 1 in agilentland.
+			  "ray_blocks_per_volume"=>[ 
+			      1,
+			      'PROPER_VAR_UNKNOWN', #'nblocks',#nsblock, or ns ?
+			  ],
 #			   "PVM_NEchoImages"=>[
 #			       1,
 #			       'PVM_NEchoImages',
@@ -811,7 +818,7 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 		    printd(25,"\t$hfkey \t$alias=$aval\n");
                     $hf->set_value("$hfkey",$aval);
                 } elsif($hfval ne $aval) {
-                    confess("$hfkey value $hfval, from alias $alias $aval not the same as prevoious values, alias definition must be erroneous!");
+                    confess("$hfkey value $hfval, from alias $alias $aval not the same as previous values, alias definition must be erroneous!");
                 } else { 
 		    printd(25,", $alias");
 		}
@@ -819,6 +826,10 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	}
 	printd(25,"\n");
     }
+    if ( $hf->get_value('ray_blocks_per_volume') eq 'NO_KEY' ) {
+	$hf->set_value('ray_blocks_per_volume',1) && carp('ray_blocks_per_volume unknown, setting 1');
+    }
+    
 #     if ( $hf->get_value($data_prefix.'ne') !~ /^[0-9]+$/x ) {
 # 	printd(5,"ne not defined in agilent headfile
 # 	$hf->set_value('ne',1);
@@ -878,16 +889,28 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	}
     }
     my $dim_order='xpyczt';#both xpyczt and xpcyzt work when we dont have channels, formerly 'xycpzt', c was in good position relative to yz for some acquisitions.
+ 
+    # the report_order not set it properly in the set_volume_type function. so we'll override it here.
+    #to make use of it for our block dimension problem. 
+    
+    $report_order='xpycz';
+
     if ( $vol_type =~ /2D/x ){
 	printd(25,"Volume 2D detected setting special 2D dimensional order\n");
 	$dim_order='xpcyzt';
-    } elsif($vol_type =~ /4D/x) {
+	$report_order='xpyc';
+    } elsif( $vol_type =~ /4D/x ) {
 	#$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
 	$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
+	$report_order='xpyzc';
     }
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
     $hf->set_value("${s_tag}dimension_order",$dim_order);
+    
+    $hf->set_value("ray_block_order","$report_order"); # string of the dimension in a ray block.
+    
+    printd(5, "ray_block_order is $dim_order\n");
     printd(15,"acquisition type is $vol_type, specifically $vol_detail\n");
     printd(25,"acquisition order is $dim_order\n");
 

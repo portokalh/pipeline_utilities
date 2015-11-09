@@ -105,7 +105,7 @@ sub open_log {
        exit $BADEXIT;
    }
    $pipeline_info_log_path = "$result_dir/pipeline_info_$PID.txt";
-   open $PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file";
+   open $PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file $pipeline_info_log_path, error $!\n";
    my $time = scalar localtime;
    print("# Logfile is: $pipeline_info_log_path\n");
    $log_open = 1;
@@ -230,7 +230,7 @@ sub make_matlab_m_file_quiet {
 # -------------
 #simple utility to save an mfile with a contents of function_call at mfile_path
    my ($mfile_path, $function_call) = @_;
-   open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path";
+   open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path, error $!\n";
    # insert startup.m call here.
    use Env qw(WKS_SHARED);
    #print MATLAB_M 'fprintf([datestr(now, \'HH:MM:SS\'),\'\n\n\']);'."\n";
@@ -930,7 +930,7 @@ sub file_checksum {
     # run checksum on file and return checksum result.
     my ($file) = @_;
     use Digest::MD5 qw(md5 md5_hex md5_base64); 
-    open  my $data_fid, "<", "$file" or die "could not open $file";
+    open  my $data_fid, "<", "$file" or die "could not open $file, error $!\n";
     #print("md5 calc on $file\n");
     my $md_calc=Digest::MD5->new ;
     $md_calc->addfile($data_fid);
@@ -948,7 +948,7 @@ sub link_checksum {
     # run checksum on link and return checksum result.
     my ($file) = @_;
     use Digest::MD5 qw(md5 md5_hex md5_base64); 
-    my $data = readlink $file or die "could not open $file";
+    my $data = readlink $file or die "could not open $file, error $!\n";
     #print("md5 calc on $file\n");
     my $md_calc=Digest::MD5->new ;
     $md_calc->add($data);
@@ -1712,11 +1712,12 @@ sub fileparts {
     my ($fullname) = @_;
     use File::Basename;
 #    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
+    my ($name,$path,$suffix) = fileparse($fullname,qr/\.([^.].*)+$/);#qr/\.[^.]*$/)
     if ( ! defined $fullname ||  $fullname eq "") { 
 	
 	return("","","");
     }
-    my ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
+    ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
     return($name,$path,$suffix);
 }
 

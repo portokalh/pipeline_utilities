@@ -71,7 +71,7 @@ sub get_file {
     # i think this would retrieve remote.
     # ssh server.example.com tar cf - /usr/local/bin | tar -xf -
     # ssh crete '(cd /Volumes/workstation_data/data/atlas/rat/; tar -pcjf - rat_labels.nii.gz )' | tar -xjf -
-    my @args  = ("scp","-C", $src, $dest); #the former solution which duplicated linked files, 
+    my @args  = ("scp","-pC", $src, $dest); #the former solution which duplicated linked files, 
     my $cmd=join(" ",@args);
     $cmd  = ("cd $local_dest_dir; ssh $system '(cd $source_dir ; tar -pcjf - $file )'| tar -xjf - ");# the new solution which does not duplicate links.
     print STDERR "   Beginning ".$cmd." at $date...\n" if $verbose>0;#    print STDERR "Beginning scp of $src at $date...";
@@ -205,7 +205,8 @@ sub get_dir_i { # the internal get_dir which does either the dir or its contents
 	push( @args,$src);
     }
     
-    unshift(@args,"-r"); # put -r on beinning of arglist,
+    unshift(@args,"-r"); # put -r on beinning of arglist, recursive
+    unshift(@args,"-p"); # put -p on beinning of arglist, preserve meta info(time)
     unshift(@args,"-C"); # add the compression.
     unshift(@args,"scp");# put scp(our program name) on beginning of arglist
     push(@args,$dest);   # put our destination at the end of the arglist
@@ -246,7 +247,7 @@ sub get_dir_OLD {
     # } else {
     # 	$src="-r ".$src;
     # }
-    my @args  = ("scp","-r", $src, $dest);
+    my @args  = ("scp","-pr", $src, $dest);
     my $start = time;
     print STDERR "   Beginning ".join(" ",@args)." at $date...\n";#    print STDERR "   Beginning scp of $src at $date...\n";
     !system (@args) or 
