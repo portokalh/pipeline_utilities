@@ -31,7 +31,7 @@ require Headfile;
 #require apply_noise_reduction_to_all;
 
 
-my $file_pat=".*\.nii(?:\.gz)?\$";
+my $file_pat="(.*\.nii(?:\.gz)?)|(.*\.txt)|(.*\.xml)\$";
 
 #  my ($identifier,@required_values) = @_;#runno
 #my ($local_input_dir, $local_work_dir, $local_result_dir, $result_headfile, $EC)=new_get_engine_dependencies('PU_TEST',());
