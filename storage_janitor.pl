@@ -49,7 +49,7 @@ my $min_size="1M";     #minimum size. If there are no small files present, will 
 my $files_found=0;     #result, number of files matching criteria. a scan count.
 my $disk_safety_threshold=0.8;  # disk must be at least this % full before we start moving.
 my $disk_cleaning_threshold=0.5;   # if disk is at least this % full email users to clean up with the summary of who's the biggest.
-my $safety=1; # SAFETY variable, if set to 1 will not remove, will just build an rm script.
+my $safety=0; # SAFETY variable, if set to 1 will not remove, will just build an rm script.
 
 ##### globals
 my $CLEANABLE_USERS='.*';#all uesrs are cleanable, used in testing or for targeting a specific user.
@@ -751,7 +751,7 @@ sub transfer_data_group {
     my $sum=0;
     if ( ! defined $output ) {
 	my ($n,$p,$e) = fileparse($input,qr/\.[^.]*$/);	
-	$output=$p.$u.$n."_transfered".$e;
+	$output.$u.$n."_transfered".$e;
     }
     if ( ! defined $cleanup_script ) {
 	my ($n,$p,$e) = fileparse($output,qr/\.[^.]*$/);	
