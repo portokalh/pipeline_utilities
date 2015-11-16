@@ -49,7 +49,7 @@ my $min_size="1M";     #minimum size. If there are no small files present, will 
 my $files_found=0;     #result, number of files matching criteria. a scan count.
 my $disk_safety_threshold=0.8;  # disk must be at least this % full before we start moving.
 my $disk_cleaning_threshold=0.5;   # if disk is at least this % full email users to clean up with the summary of who's the biggest.
-my $safety=0; # SAFETY variable, if set to 1 will not remove, will just build an rm script.
+my $safety=1; # SAFETY variable, if set to 1 will not remove, will just build an rm script.
 
 ##### globals
 my $CLEANABLE_USERS='.*';#all uesrs are cleanable, used in testing or for targeting a specific user.
@@ -965,9 +965,9 @@ sub prepare_email {
 	    #my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
 	    
 	    if ( $d_name !~/$EMAIL_BLACKLIST/x) { # do not email users on the blacklist.
-		push(@mail_call,sprintf ("sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $out_file\n") );
+		push(@mail_call,sprintf ("/usr/sbin/sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $out_file\n") );
 	    } else {
-		
+		printf ("NOMAIL, COMMAND sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $out_file\n");
 	    }
 	    #push(@mail_call,sprintf ("sendmail  $email_address\ < $out_file\n") );
 	    
@@ -985,7 +985,7 @@ sub prepare_email {
 	for my $d_name ( keys %admins ) {
 	    my $email_address=sprintf("%s\@duke.edu",$d_name);
 	    #my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
-	    push(@mail_call,sprintf ("sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $sa_file\n") );
+	    push(@mail_call,sprintf ("/usr/sbin/sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $sa_file\n") );
 	}
     }
     return \@mail_call;
