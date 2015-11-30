@@ -223,86 +223,88 @@ sub file_discovery {
     }
 #    return 0;    #exit;
     if ( $collect_info ){ 
-    my $pid = open( my $CID,"-|", "$cmd"  ) ;
-    print("PID:$pid\n");
-    
-    while ( my $line=<$CID> ) {
-    #my $line=$_;
-    $files_found++;
-    chomp $line;
-    my ($mod_time,$mod_epoc,$accesstime,$access_epoc,$bytesize,$user,$path,@rest)=split('\|',$line);
-    #my @line_c=split('|',$line);
-    #my ($mod_time,$accesstime,$bytesize,$user,$path,@rest)=@line_c;
-    #print(join(':',@line_c));
-    #print("\t$line\n\t$path:$user:$bytesize");
-
-    ####my ($yr,$mo,$day,$hr,$min,$sec,$sec_frac)=time_spliter($mod_time);    # time splitter functions but is not used
-    ###print("$bytesize\n\t$user\n\t$mod_time\n\t$accesstime\n\tfile:$path\n");
-    my $age_in_sec=($current_epoc_time-$mod_epoc);
-    my $interval_m=floor($age_in_sec/$interval_seconds);
-
-    my $access_age=($current_epoc_time-$access_epoc);
-    my $interval_a=floor($access_age/$interval_seconds);
-
-    #my $interval=min($interval_a,$interval_m);
-    my $interval=$interval_a<$interval_m ? $interval_a : $interval_m ;
-
-    if ( $interval > $max_intervals) {
-	$interval = "critical_$interval";
-    } elsif ( $interval > ($max_intervals/2)  ||   $interval_m > ($max_intervals/2) ) {
-	$interval = "warning_$interval";
-    } 
-    my $info_dir=$out_dir."/$user";
-    my $old_dir=sprintf("%s/%s/%s_%d",$out_dir,"old",$user,$current_epoc_time);
-    my $out_file="${info_dir}/filelist_$interval.txt";
-    
-
-    if ( ! defined ($out_hash{"$user$interval"} ) ) {
-	if ( ! defined($old_info{$user}) ) { $old_info{$user}=''; }
-	printf( "Opening output bin $user$interval\n");
-	# if we havnt opend our output yet.
-	if(  -d $info_dir &&  $old_info{$user} eq '') { 
-	    if ( ! -d $out_dir."/old") {
-		make_path($out_dir."/old");
+	my $pid = open( my $CID,"-|", "$cmd"  ) ;
+	print("PID:$pid\n");
+	
+	while ( my $line=<$CID> ) {
+	    #my $line=$_;
+	    $files_found++;
+	    chomp $line;
+	    my ($mod_time,$mod_epoc,$accesstime,$access_epoc,$bytesize,$user,$path,@rest)=split('\|',$line);
+	    #my @line_c=split('|',$line);
+	    #my ($mod_time,$accesstime,$bytesize,$user,$path,@rest)=@line_c;
+	    #print(join(':',@line_c));
+	    #print("\t$line\n\t$path:$user:$bytesize");
+	    
+	    ####my ($yr,$mo,$day,$hr,$min,$sec,$sec_frac)=time_spliter($mod_time);    # time splitter functions but is not used
+	    ###print("$bytesize\n\t$user\n\t$mod_time\n\t$accesstime\n\tfile:$path\n");
+	    my $age_in_sec=($current_epoc_time-$mod_epoc);
+	    my $interval_m=floor($age_in_sec/$interval_seconds);
+	    
+	    my $access_age=($current_epoc_time-$access_epoc);
+	    my $interval_a=floor($access_age/$interval_seconds);
+	    
+	    #my $interval=min($interval_a,$interval_m);
+	    my $interval=$interval_a<$interval_m ? $interval_a : $interval_m ;
+	    
+	    if ( $interval > $max_intervals) {
+		$interval = "critical_$interval";
+	    } elsif ( $interval > ($max_intervals/2)  ||   $interval_m > ($max_intervals/2) ) {
+		$interval = "warning_$interval";
+	    } 
+	    my $info_dir=$out_dir."/$user";
+	    my $old_dir=sprintf("%s/%s/%s_%d",$out_dir,"old",$user,$current_epoc_time);
+	    my $out_file="${info_dir}/filelist_$interval.txt";
+	    
+	    
+	    if ( ! defined ($out_hash{"$user$interval"} ) ) {
+		if ( ! defined($old_info{$user}) ) { $old_info{$user}=''; }
+		printf( "Opening output bin $user$interval\n");
+		# if we havnt opend our output yet.
+		if(  -d $info_dir &&  $old_info{$user} eq '') { 
+		    if ( ! -d $out_dir."/old") {
+			make_path($out_dir."/old");
+		    }
+		    $old_info{$user}=$old_dir;
+		    printf("\tmoving previous bin to $old_dir\n");
+		    # if our directory already is a directory
+		    rename( $info_dir, $old_dir);
+		}
+		make_path($info_dir);
+		open ( $out_hash{"$user$interval"},  '>', "$out_file") or die "Cannot open $out_file.";
+		
+	    } elsif (defined($out_hash{"$user$interval"} ) ) {
+		# if we're defined we'll print later.
+	    } else {
+		#effectively if( 0 ) never run. this is the old way of pringting;
+		#print("Dumping info to $out_file\n");
+		open(my $fh, '>>', "$out_file") or die "Cannot open $out_file.";
+		my @f_stats=stat($fh);
+		#my $log_modtime=(stat($fh))[9];
+		#if ( ! defined $log_modtime) { 
+		#$log_modtime=$f_stats[9];
+		#}
+		#print (join(':',@f_stats)." f stat\n");
+		#if ( ( $current_epoc_time-$log_modtime) < 0 ) {
+		if ( ( $f_stats[9]-$current_epoc_time) < 0 ) { # this handles make new vs old file
+		    close($fh);
+		    #print("clearing last file\n");
+		    open($fh, '>', "$out_file") or die "Cannot open $out_file.";
+		}
 	    }
-	    $old_info{$user}=$old_dir;
-	    printf("\tmoving previous bin to $old_dir\n");
-	    # if our directory already is a directory
-	    rename( $info_dir, $old_dir);
+	    #print("$f_stats[9]-$current_epoc_time=".($f_stats[9]-$current_epoc_time));
+	    my $c_fh=$out_hash{"$user$interval"};
+	    print $c_fh ("$bytesize\|$path\n"); #    print $fh ("$path\|$bytesize\n");
+	    #print $fh ("$path\n");
 	}
-	make_path($info_dir);
-	open ( $out_hash{"$user$interval"},  '>', "$out_file") or die "Cannot open $out_file.";
-
-    } elsif (defined($out_hash{"$user$interval"} ) ) {
-	# if we're defined we'll print later.
-    } else {
-        #effectively if( 0 ) never run. this is the old way of pringting;
-	#print("Dumping info to $out_file\n");
-	open(my $fh, '>>', "$out_file") or die "Cannot open $out_file.";
-	my @f_stats=stat($fh);
-	#my $log_modtime=(stat($fh))[9];
-	#if ( ! defined $log_modtime) { 
-	#$log_modtime=$f_stats[9];
-	#}
-	#print (join(':',@f_stats)." f stat\n");
-	#if ( ( $current_epoc_time-$log_modtime) < 0 ) {
-	if ( ( $f_stats[9]-$current_epoc_time) < 0 ) { # this handles make new vs old file
-	    close($fh);
-	    #print("clearing last file\n");
-	    open($fh, '>', "$out_file") or die "Cannot open $out_file.";
+	close $CID;
+	
+	foreach (keys %out_hash) {
+	    print("Closing file $_");
+	    close $out_hash{"$_"};
 	}
-    }
-    #print("$f_stats[9]-$current_epoc_time=".($f_stats[9]-$current_epoc_time));
-    my $c_fh=$out_hash{"$user$interval"};
-    print $c_fh ("$bytesize\|$path\n"); #    print $fh ("$path\|$bytesize\n");
-    #print $fh ("$path\n");
-    }
-    close $CID;
-
-    foreach (keys %out_hash) {
-	print("Closing file $_");
-	close $out_hash{"$_"};
-    }
+    } else { 
+	print("File info collection skipped\n");
     }
     return $files_found;
 }
@@ -749,7 +751,7 @@ sub transfer_data_group {
     my $sum=0;
     if ( ! defined $output ) {
 	my ($n,$p,$e) = fileparse($input,qr/\.[^.]*$/);	
-	$output=$p.$u.$n."_transfered".$e;
+	$output.$u.$n."_transfered".$e;
     }
     if ( ! defined $cleanup_script ) {
 	my ($n,$p,$e) = fileparse($output,qr/\.[^.]*$/);	
@@ -963,9 +965,9 @@ sub prepare_email {
 	    #my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
 	    
 	    if ( $d_name !~/$EMAIL_BLACKLIST/x) { # do not email users on the blacklist.
-		push(@mail_call,sprintf ("sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $out_file\n") );
+		push(@mail_call,sprintf ("/usr/sbin/sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $out_file\n") );
 	    } else {
-		
+		printf ("NOMAIL, COMMAND sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $out_file\n");
 	    }
 	    #push(@mail_call,sprintf ("sendmail  $email_address\ < $out_file\n") );
 	    
@@ -983,7 +985,7 @@ sub prepare_email {
 	for my $d_name ( keys %admins ) {
 	    my $email_address=sprintf("%s\@duke.edu",$d_name);
 	    #my $subject=sprintf( "%s_%s",$HOST,$SCAN_DIR);
-	    push(@mail_call,sprintf ("sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $sa_file\n") );
+	    push(@mail_call,sprintf ("/usr/sbin/sendmail -f janitor\@$HOST.dhe.duke.edu $email_address\ < $sa_file\n") );
 	}
     }
     return \@mail_call;
