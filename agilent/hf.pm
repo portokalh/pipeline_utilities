@@ -716,6 +716,8 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 			  "ray_blocks_per_volume"=>[ 
 			      1,
 			      'PROPER_VAR_UNKNOWN', #'nblocks',#nsblock, or ns ?
+			      # with ONE 2d multi-echo multi-slice spin echo scan we found celem 
+			      # specified the number of blocks per volume.
 			  ],
 #			   "PVM_NEchoImages"=>[
 #			       1,
@@ -899,6 +901,13 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	printd(25,"Volume 2D detected setting special 2D dimensional order\n");
 	$dim_order='xpcyzt';
 	$report_order='xpyc';
+#THERE ARE OTHER SPECIAL CASES FOR REPORT ORDER WHERE IT IS JUST x
+	if ( ($hf->get_value($data_prefix."celem") ne 'NO_KEY')  
+	    && ( $hf->get_value($data_prefix."celem") != $hf->get_value($s_tag.'channels') ) ) {
+		printd(10,"\n\nWARNING:!!!!!\n\nEXTRA SPECIAL 2D case enabled, EVERY LINE IS CONSIDERED ITS OWN BLOCK\n YOU HAVE DONE SOMETHING NEW AND/OR STRANGE IN YOUR ACQUISTIION, STOP THAT!\n");
+		sleep_with_countdown(15);
+		$report_order='x';
+	}
     } elsif( $vol_type =~ /4D/x ) {
 	#$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
 	$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
