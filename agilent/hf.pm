@@ -906,8 +906,16 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	    && ( $hf->get_value($data_prefix."celem") != $hf->get_value($s_tag.'channels') ) ) {
 		printd(10,"\n\nWARNING:!!!!!\n\nEXTRA SPECIAL 2D case enabled, EVERY LINE IS CONSIDERED ITS OWN BLOCK\n YOU HAVE DONE SOMETHING NEW AND/OR STRANGE IN YOUR ACQUISTIION, STOP THAT!\n");
 		sleep_with_countdown(15);
-		$report_order='x';
+		$report_order='xpc';
 	}
+    } elsif( $vol_type =~ /3D/x ) { 
+	if ( ($hf->get_value($data_prefix."celem") ne 'NO_KEY')  
+	    && ( $hf->get_value($data_prefix."celem") != $hf->get_value($s_tag.'channels') ) ) {
+		printd(10,"\n\nWARNING:!!!!!\n\nEXTRA SPECIAL 3D case enabled, EVERY SLICE IS CONSIDERED ITS OWN BLOCK\n YOU HAVE DONE SOMETHING NEW AND/OR STRANGE IN YOUR ACQUISTIION, STOP THAT!\n");
+		sleep_with_countdown(15);
+		$report_order='xpcy';
+	}
+	
     } elsif( $vol_type =~ /4D/x ) {
 	#$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
 	$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
