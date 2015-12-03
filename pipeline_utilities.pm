@@ -1817,8 +1817,8 @@ sub cluster_exec {
     if (! defined $verbose) {$verbose = 1;}
 
     if ($test) {
-	$queue_command = "-p overload";
-	$time_command = "-t 15";     
+	$queue_command = "-p overload";#"-p matlab";#Not sure why switched from overload to matlab...have now switched back.
+	#$time_command = "-t 180"; # -t 15     
     } elsif ($custom_q == 1) {
 	$queue_command = "-p $my_queue";
     }
@@ -1831,11 +1831,11 @@ sub cluster_exec {
     if (! defined $memory) {
 	$memory_command = " --mem ${default_memory} ";
     } else {
-	$memory_command = " --mem $memory ";
+        $memory_command = " --mem $memory ";
     }
 
 
-    my $sharing_is_caring = ' -s ';  # Not sure if this is still needed.
+    my $sharing_is_caring =  ' -s ';  # Not sure if this is still needed.
     my ($batch_path,$batch_file,$b_file_name);
     my $msg = '';
     my $jid=1;
@@ -1949,13 +1949,13 @@ sub cluster_wait_for_jobs {
 	$jobs=$sbatch_location.','.$jobs;
 	$check_for_slurm_out = 0;
     }
-    
+    sleep(1);
     my $completed = 0;
     if ($jobs ne '') {
 	print STDOUT "SLURM: Waiting for multiple jobs to complete";
 	#print "jobs = $jobs\n\n"; ##	
 	while ($completed == 0) {
-	    if (`sacct -j $jobs -o State` =~ /(COMPLETING|PENDING|RUNNING)/) {
+	    if (`squeue -j $jobs -o "%i %t"` =~ /(CG|PD|R)/) { #`sacct -n -j $jobs -o State` =~ /(COMPLETING|PENDING|RUNNING)/) {
 		if ($verbose) {print STDOUT ".";}
 		my $throw_error=0;
 		if ($check_for_slurm_out) {
@@ -1964,7 +1964,7 @@ sub cluster_wait_for_jobs {
 		    my @job_list=split(',',$jobs);
 		    foreach my $job (@job_list) {
 			#print "Job = $job\t"; ##
-			if (`sacct -j $job -o State` =~ /RUNNING/){   
+			if (`sacct -n -j $job -o State` =~ /RUNNING/){   
 			    my $slurm_out_file = "${sbatch_location}/slurm-${job}.out";
 			    if (! -e $slurm_out_file) {
 				$throw_error = 1;
@@ -2005,24 +2005,11 @@ sub cluster_wait_for_jobs {
 		$completed = 1;
 		print STDOUT "\n";
 	    }
-
-
-	    
-
-
-
-
-
-
-
-
-
-
-
 	}
     } else {
 	$completed = 1;
     }
+    sleep(1);
     return($completed);
 }
 
