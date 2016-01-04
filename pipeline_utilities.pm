@@ -2536,7 +2536,6 @@ sub hash_summation {
     }
     return($sum,$errors);
 }
-
 #---------------------
 sub memory_estimator {
 #---------------------
@@ -2546,20 +2545,71 @@ sub memory_estimator {
 
     my $node_mem = 244000;
     my $memory;
-    my $jobs_per_node = int($jobs/$nodes + 0.99999);
-    if ($jobs) {
+    my $max_jobs_per_node;
+
+    if ($jobs && $nodes) {
+	$max_jobs_per_node=int($jobs/$nodes + 0.99999);
+
+	$memory =int($node_mem/$max_jobs_per_node);
 
 
-	$memory =int($node_mem/$jobs_per_node);
 	my $limit = 0.9*$node_mem;
 	if ($memory > $limit) {
 	    $memory = $limit;
 	} 
-	print "Memory requested per job: $memory MB\n";
+
+	    print "Memory requested per job: $memory MB\n";
+	
     } else {
 	$memory = 2440; # This number is not expected to be used so it can be arbitrary.
+
     }
     return($memory);
+}
+
+#---------------------
+sub memory_estimator_2 {
+#---------------------
+
+    my ($jobs,$nodes) = @_;
+    if ((! defined $nodes) || ($nodes eq '') || ($nodes == 0)) { $nodes = 1;}
+
+    my $node_mem = 244000;
+    my $memory_1;
+    my $memory_2;
+    my $jobs_requesting_memory_1;
+    my $holes;
+    my $max_jobs_per_node;
+    if ($jobs && $nodes) {
+	$max_jobs_per_node=int($jobs/$nodes + 0.99999);
+	$holes = $nodes*$max_jobs_per_node-$jobs;
+
+	$jobs_requesting_memory_1 = ($nodes-$holes)*$max_jobs_per_node;
+
+	$memory_1 =int($node_mem/$max_jobs_per_node);
+	if ($max_jobs_per_node > 1) {
+	    $memory_2 =int($node_mem/($max_jobs_per_node-1));
+	} else {
+	    $memory_2 = $memory_1;
+	}
+	my $limit = 0.9*$node_mem;
+	if ($memory_1 > $limit) {
+	    $memory_1 = $limit;
+	} 
+
+	if ($memory_2 > $limit) {
+	    $memory_2 = $limit;
+	} 
+	if ($holes) {
+	    print "[Variable] Memory requested per job: ${memory_1} MB or ${memory_2} MB\n";
+	} else {
+	    print "Memory requested per job: $memory_1 MB\n";
+	}
+    } else {
+	$memory_1 = 2440; # This number is not expected to be used so it can be arbitrary.
+	$memory_2 = 2440;
+    }
+    return($memory_1,$memory_2,$jobs_requesting_memory_1);
 }
 
 
