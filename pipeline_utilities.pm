@@ -2134,12 +2134,16 @@ sub compare_headfiles {
 
 # ------------------
 sub symbolic_link_cleanup {
-#
-    my ($folder,$log) = @_;
-    if (! defined $log) {$log=0;}
+# ------------------
+   # my ($folder,$log) = @_;
+   # if (! defined $log) {$log=0;}
+    my ($folder,$PM) = @_;
+    if (! defined $PM) {$PM = 'Unknown_module';}
+
     if ($folder !~ /\/$/) {
 	$folder=$folder.'/';
     }
+
     my $link_path;
     my $temp_path = "$folder/temp_file";
     if (! -d $folder) {
@@ -2148,6 +2152,9 @@ sub symbolic_link_cleanup {
     }
     opendir(DIR,$folder);
     my @files = grep(/.*/,readdir(DIR));
+    my $log_msg_prefix = "${PM}: Attempting symbolic link cleanup...\n";
+    my $log_msg = '';    
+   
     foreach my $file (@files) {
 	$file_path = "$folder/$file";
 	if (-l $file_path) {
@@ -2161,16 +2168,24 @@ sub symbolic_link_cleanup {
 		# print "\$link_folder ${link_folder}  eq \$folder ${folder}\n";
 		$action = "mv";
 	    }
-	    my $echo = `${action} ${link_path} ${file_path}`;
-	    if ($log) {
-		my $annotation = "Cleaning up symbolic links.";
-		my $command =  "${action} ${link_path} ${file_path}";
-		$command = $command.$echo;
-		execute(1,$annotation,$command,$verbose);
+	    my $command = "rm ${file_path}; ${action} ${link_path} ${file_path};";
+	    my $echo = `$command`;
+	    $log_msg = $log_msg."Bash command: ${command}\n";
+	    if ($echo ne '') {
+		$log_msg = $log_msg."\tBash echo: $echo\n";
 	    }
+	    #my $echo = `rm ${file_path}; ${action} ${link_path} ${file_path};`;
+	    # if ($log) {
+	    # 	my $annotation = "Cleaning up symbolic links.";
+	    # 	my $command =  "${action} ${link_path} ${file_path}";
+	    # 	$command = $command.$echo;
+	    # 	execute(1,$annotation,$command,$verbose);
+	    #}
 	}
     }
-
+    if ($log_msg ne '') {
+	log_info($log_msg_prefix.$log_msg);
+    }
 }
 
 
