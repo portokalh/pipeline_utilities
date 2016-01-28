@@ -354,6 +354,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     }
 
 ###### determine dimensions and volumes
+    printd(65,"BRUKER Dimension ordering is: $order\n");
     if ( $order =~  m/^H_F|A_P$/x && $extraction_mode_bool ) { #   $method !~ m/RARE/x  
 #         if ( ! $extraction_mode_bool ) {
 # 	    $order ='xy'; # because we're unswapping in recon mode, we dont want to report ourselves backwards
@@ -904,14 +905,23 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     my $encs1=$hf->get_value($data_prefix.'PVM_EncSteps1');
     my $encs2=$hf->get_value($data_prefix.'PVM_EncSteps2');
 
-    if ($enc1 ne 'LINEAR_ENC' &&  $enc1 !~ m/NO_KEY|UNDEFINED|BLANK/x &&  $encs1 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
+    #$enc1 ne 'LINEAR_ENC' && 
+    if ( $enc1 !~ m/NO_KEY|UNDEFINED|BLANK/x &&  $encs1 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
 	printd(35,"dim_Y encoding from PVM_EncSteps1($enc1)\n");
+	if ( $enc1 ne 'LINEAR_ENC' ) {
+	    printd(15,"WARNING: PVM_EncOrder1 was LINEAR_ENC but going to use it anyway as bandaid for unexpected LINEAR_ENC meaning.\n");
+	    if ( $debug< 55) {
+		sleep_with_countdown(4);
+	    }
+	}
 	$hf->set_value('dim_Y_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps1'));
     } else { 
 	printd(35,"dim_Y encoding not specified with $enc1\n");
     }
+
     # $hf->get_value($data_prefix.'PVM_EncSteps2') ne 'NO_KEY'
-    if ( $enc2 ne 'LINEAR_ENC' &&  $enc2 !~ m/NO_KEY|UNDEFINED|BLANK/x &&  $encs2 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
+    # 
+    if (  $enc2 ne 'LINEAR_ENC' && $enc2 !~ m/NO_KEY|UNDEFINED|BLANK/x &&  $encs2 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
 	printd(35,"dim_Z encoding from PVM_EncSteps2($enc2)\n");
 	$hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps2'));
     } elsif( $objs ne 'Sequential' ) { 
