@@ -910,7 +910,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	printd(35,"dim_Y encoding from PVM_EncSteps1($enc1)\n");
 	if ( $enc1 ne 'LINEAR_ENC' ) {
 	    printd(15,"WARNING: PVM_EncOrder1 was LINEAR_ENC but going to use it anyway as bandaid for unexpected LINEAR_ENC meaning.\n");
-	    if ( $debug< 55) {
+	    if ( $debug_val< 55) {
 		sleep_with_countdown(4);
 	    }
 	}
