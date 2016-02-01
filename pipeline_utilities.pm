@@ -124,6 +124,8 @@ get_bounding_box_and_spacing_from_header
 get_slurm_job_stats
 write_stats_for_pm
 convert_time_to_seconds
+get_git_commit
+make_R_stub
 ); 
 }
 
