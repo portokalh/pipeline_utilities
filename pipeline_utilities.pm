@@ -1808,6 +1808,7 @@ sub cluster_exec {
 # ------------------
     my ($do_it,$annotation,$cmd,$work_dir,$Id,$verbose,$memory,$test,$node) = @_;
    # my $memory=25600;
+    my @sbatch_commands;
     my $node_command=''; # Was a one-off ---> now turned on for handling diffeo identity warps.
  
     my $queue_command='';
@@ -1818,13 +1819,16 @@ sub cluster_exec {
 
     if ($test) {
 	$queue_command = "-p overload";#"-p matlab";#Not sure why switched from overload to matlab...have now switched back.
-	#$time_command = "-t 180"; # -t 15     
+	$time_command = "-t 15"; # -t 180
+	push(@sbatch_commands,$time_command);     
     } elsif ($custom_q == 1) {
 	$queue_command = "-p $my_queue";
     }
+    push(@sbatch_commands,$queue_command);
 
     if (defined $node) {
 	$node_command = "-w $node";
+	push(@sbatch_commands,$node_command);
     }
 
 
@@ -1833,9 +1837,11 @@ sub cluster_exec {
     } else {
         $memory_command = " --mem $memory ";
     }
-
+    push(@sbatch_commands,$memory_command);
 
     my $sharing_is_caring =  ' -s ';  # Not sure if this is still needed.
+    push(@sbatch_commands,$sharing_is_caring);
+
     my ($batch_path,$batch_file,$b_file_name);
     my $msg = '';
     my $jid=1;
@@ -1850,11 +1856,17 @@ sub cluster_exec {
 	    mkdir($batch_path,0777);
 	} 
 	my $slurm_out_command = " --output=${batch_path}".'/slurm-%j.out ';
+	push(@sbatch_commands,$slurm_out_command);
+
 #	my $open_jobs_path = "${batch_path}/open_jobs.txt";
 
 	open($Id,'>',$batch_file);
 	print($Id "#!/bin/bash\n");
         print($Id 'echo \#'."\n");
+	foreach my $sbatch_option (@sbatch_commands) {
+	    print($Id "#SBATCH ${sbatch_option}\n");
+	}
+
 	print($Id "$cmd \n");
 	close($Id);
 
@@ -1877,8 +1889,9 @@ sub cluster_exec {
 	}
 	
 	# this works, but alternate call might be nicer.
-	my $bash_call = "sbatch ${slurm_out_command} ${sharing_is_caring} ${node_command} ${queue_command} ${memory_command} ${time_command} ${batch_file}";
-	print "sbatch command is: ${bash_call}\n";
+	$bash_call_with_visible_options = "sbatch ${slurm_out_command} ${sharing_is_caring} ${node_command} ${queue_command} ${memory_command} ${time_command} ${batch_file}";
+	my $bash_call = "sbatch ${batch_file}";
+	print "sbatch command is: ${bash_call_with_visible_options}\n";
 	($msg,$jid)=`$bash_call` =~  /([^0-9]+)([0-9]+)/x;
 	if ( $msg !~  /.*(Submitted batch job).*/) {
 	    $jid = 0;
@@ -2117,7 +2130,13 @@ sub compare_headfiles {
 	foreach my $Key (@key_array) {
 	    my $A_val = $Hf_A->get_value($Key);
 	    my $B_val = $Hf_B->get_value($Key);
-	    if ($A_val ne $B_val) {
+	    my $robust_A_val = $A_val; # 15 January 2016: added functionality such that gzipped/ungzipped difference doesn't throw a flag.
+	    my $robust_B_val = $B_val;
+
+	    if ($robust_A_val =~ s/\.gz//) {}
+	    if ($robust_B_val =~ s/\.gz//) {}
+
+	    if ($robust_A_val ne $robust_B_val) {
 		my $msg = "Non-matching values for key \"$Key\":\n\tValue 1 = ${A_val}\n\tValue 2 = ${B_val}\n";
 		push (@errors,$msg);
 	    }
@@ -2515,6 +2534,7 @@ sub recenter_nii_function {
 
     my ($name,$in_path,$ext) = fileparts($file);	
     my $nifti_args = "\'${in_path}\', \'$name\', \'nii\', \'${out_path}/$name$ext\', 0, 0, ".
+   # my $nifti_args = "\'${in_path}\', \'$name\', \'${ext}\', \'${out_path}/$name$ext\', 0, 0, ".
 	" 0, 0, 0,0,0, ${flip_x}, ${flip_z},0,0";
     if (! $skip) {
 	my $nifti_command = make_matlab_command('civm_to_nii',$nifti_args,"${name}_",$temp_Hf,0); # 'center_nii'
@@ -2911,5 +2931,64 @@ sub convert_time_to_seconds {
 
 }
 
+#---------------------
+sub get_git_commit {
+#---------------------
+    my ($base_directory_or_file) = @_;
+    my ($name,$in_path,$ext) = fileparts($base_directory_or_file);
+    my $commit_line =  `cd ${in_path}; git log -1`;
+    my @commit_array = split("\n",$commit_line);
+    $commit_line = $commit_array[0];
+    if ($commit_line =~ s/^(commit\s)[a-f0-9](.*)//) {
+	return ($commit_line);
+    } else {
+	return(0);
+    }
+}
+
+
+#---------------------
+sub make_R_stub {
+#---------------------
+    my ($R_function_name,$R_function_args,$Id,$work_dir,$source) = @_;
+    
+    my ($R_function,$in_path,$ext) = fileparts($R_function_name);
+    if ($R_function eq '') {
+	$R_function = $R_function_name;
+    }
+
+
+  #  print "R_function = ${R_function}\nin_path-${in_path}\next=$ext\n";
+  #  die;
+
+    if (! defined $source) {
+	if (-d $in_path) {
+	    $source_directory = $in_path;
+	} else {
+	    my $default_Rscript_directory = "/home/rja20/cluster_code/workstation_code/analysis/vbm_pipe/"; # This is very BJ-centric, will need to evolve.
+	    $source_directory = $default_Rscript_directory;
+	}
+
+	$source = $source_directory.'/'.$R_function.'.R';
+    }
+
+    my $batch_path = "${work_dir}/sbatch/";
+    my $stub_name = $Id.'.R';
+    my $stub_path = $batch_path.$stub_name;
+    if (! -e $batch_path) {
+	    mkdir($batch_path,0777);
+	}
+    my $cmd = "${R_function}(${R_function_args})";
+    my $current_commit = get_git_commit($source);
+
+    open($Id,'>',$stub_path);
+    print($Id "\#Current git commit: ${current_commit}\n");
+    print($Id "source(\"${source}\")\n");
+    print($Id "$cmd \n");
+    close($Id);
+
+    return($stub_path,$R_function,$R_args,$source); # I know it seems redundant to spit out inputs, but it is the outputs can be used as next fx inputs and ensure consistency.
+
+}
 
 1;
