@@ -60,6 +60,7 @@ genpaths={
     [ workstation_home '/recon/mat_recon_pipe/mat_wrappers' ]
     [ workstation_home '/recon/External/grid/mri_unbound']
     [ workstation_home '/../orchestra-sdk-1.2-115.matlab/']
+    [ workstation_home '/../orchestra-sdk-1.4-772.matlab/']
     };
 
 for p=1:length(old_paths)
