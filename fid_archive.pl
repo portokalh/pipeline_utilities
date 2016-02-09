@@ -174,9 +174,19 @@ our $verbose=0;
 	}
     } elsif ( ! -d "$Engine_work_dir/$runno") {
 	my @dirs=glob("$Engine_work_dir/$runno*");
-	@dirs=grep(!/$runno(?:\.work|_fid)/, @dirs);
-	#print(join("\n", @dirs)."\n");
-	($name,$directory,$extension)= fileparts($dirs[0]);
+	@dirs=grep(!/$runno(?:\.work|_fid)/, @dirs); #ignore any .work or _fid directories?
+	printd(95,"runno search found \n\t".join("\n\t", @dirs)."\n");
+	# pick shortest named directory
+	my $picked_dir=$dirs[0];
+	if( $#dirs>0 ){
+	    foreach (@dirs) {
+		if (length($_)< length ($picked_dir)) {
+		    printd(55," ignoring $picked_dir\n");
+		    $picked_dir=$_;
+		}
+	    }
+	}
+	($name,$directory,$extension)= fileparts($picked_dir);
 	#print("$name,$directory,$extension\n");
 	if ( $name ne $runno && defined $name && $name ne "" ) { 
 	    $runno=$name;
@@ -189,6 +199,14 @@ our $verbose=0;
     $directory="$Engine_work_dir/$runno.work/"; 
     # check if runno was an m0(or other suffix) directory, if it was, and the .work doesnt exist, try a base run dir.
     my $insuffix='';
+#    if ( ! -e $directory && ! -f $runno && $runno =~ /[A-Za-z0-9_]+_m[0-9]+/x ) {
+#	my $rx=$runno;
+#	$rx =~ s/(_m[0-9]+$)//x;
+#	$directory="$Engine_work_dir/$rx.work/"; 
+#	if ( -e $directory ) {
+#	    $runno=$rx;
+#	}
+#    }
     if ( ! -e $directory && ! -f $runno) {
 	printd(25,"not exist $directory, and not file $runno\n");
 	my $ldir=$directory;
@@ -306,20 +324,22 @@ our $verbose=0;
 	import aspect qw(parse_header input_files);
 	require aspect::hf ;
     } elsif($scanner_vendor eq 'bruker') {
-	error_out("fid archive doesnt support $scanner_vendor yet");
+	#error_out("fid archive doesnt support $scanner_vendor yet");
+	$hf_prefix='z_Bruker_';
+	$hf_short_prefix="B_";
+	require bruker;
+	import bruker qw(parse_header input_files);
+	require bruker::hf ;
+	@infiles=input_files();
 	if ($#infiles == -1 ) { 
 	    push(@infiles,$directory.'/'."subject");
 	    push(@infiles,$directory.'/'."acqp");
 	    push(@infiles,$directory.'/'."method");
+	    push(@infiles,$directory.'/'."fid");
 	} else {
 	    printd(15,"the scanner input file was specified directly, bruker headers are normally in three parts, you need to have combined those into one to specify the headfile to use directly.(subject,acqp,method)");
 	}
-	$hf_prefix='z_Bruker_';
-	$hf_short_prefix="B_";
-	$data_filename="fid";
-	require bruker;
-	import bruker qw(parse_header input_files);
-	require bruker::hf ;
+	#$data_filename="fid";
     } elsif($scanner_vendor eq 'ge') {
 	if ($#infiles == -1 ) { 
 	    push(@infiles,glob($directory.'/'."P*"));

@@ -83,6 +83,7 @@ BEGIN { #require Exporter;
 parse_header
 determine_volume_type
 read_til_next_keyline
+input_files
 @knownmethods
 );
 }    
@@ -112,6 +113,15 @@ push(@knownmethods,@cartesian_2D_methods);
 push(@knownmethods,@radial_methods);
 # brukere extract tested methods are qw( DtiEpi EPI FLASH GEFC MDEFT MGE MSME PRESS RARE UTE UTE2D UTE3D ute3d_keyhole ); # tested acquisition methods for bruker extract. might be good to pull this out to configuration variables. Many of these no longer work for various resons
 
+sub input_files { 
+    my @files;
+    push(@files,"subject");
+    push(@files,"acqp");
+    push(@files,"method");
+    my $data_file="fid";
+    push(@files,$data_file);
+    return @files;
+}
 ###
 sub parse_header {   #( \@brukerheaderarrayoflines,$debug_valval )
 ###
