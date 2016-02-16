@@ -101,7 +101,7 @@ sub get_file {
 	my $pid = open (my $CMD_FID,"$cmd 3>&1 1>&2 2>&3 3>&-|");
 	#my $pid = open(CMD_FID, "$c 3>&1 1>&2 2>&3 3>&-|");
 	my $something_on_stderr;
-	while (<CMD_FID>) {
+	while (<$CMD_FID>) {
 	    $something_on_stderr = 1;
 	    print "Executed command sent this message to STDERR: $_\n";
 	    if (/Exception thrown/) {  # checks $_
