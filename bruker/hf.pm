@@ -355,7 +355,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 
 ###### determine dimensions and volumes
     printd(65,"BRUKER Dimension ordering is: $order\n");
-    if ( $order =~  m/^H_F|A_P$/x && $extraction_mode_bool ) { #   $method !~ m/RARE/x  
+    if ( $order =~  m/^H_F|A_P$/x && $extraction_mode_bool ) { #&& $debug_val<50 ) { #   $method !~ m/RARE/x  
 #         if ( ! $extraction_mode_bool ) {
 # 	    $order ='xy'; # because we're unswapping in recon mode, we dont want to report ourselves backwards
 # 	} else {
@@ -369,6 +369,10 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 # 	    printd(45, "halving y\n");
 # 	}
     } else { 
+#	if ( $debug_val>50) {
+#	    printd(49,"NOT SWAPPING xy DIMENSIONS IN DEBUG MODE! JOHN'S SEQUENCES DO NOT SWAP XY\n");
+#	    sleep_with_countdown(4);
+#	}
         $order='xy';
         $x=$matrix[0];
         $y=$matrix[1];
@@ -1194,6 +1198,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     printd(25,"fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n");
     if (  ! $extraction_mode_bool ) { 
 	$hf->set_value("ray_length",$df);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing. 
+	# john has proveded me with infomation on how line_padding is determined, i should incorporate that there
 	my $ntr=1; # number of tr values, just 1 for now, should cause errors on data load for recon if it should have been anything but one
 	if ( $vol_type eq '2D') { 
 	    # if interleave we have to load lots of data at a time or fall over to ray by ray loading. 
@@ -1235,6 +1240,14 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    
 	    printd(25,"rays_acquired_in_total:".$hf->get_value("rays_acquired_in_total").
 		", ray_blocks_per_volume:".$hf->get_value('ray_blocks_per_volume').", ");
+	} elsif($vol_type eq "4D" && $vol_detail  =~ m/DTI/x) {
+	    # copied straight from 3D for now, updated ray_blocks to include volumes. probably have to better than that eventually.
+#	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	    $hf->set_value("rays_per_block",$dp*$hf->get_value('ne')*$ntr);#*$hf->get_value("${s_tag}channels") 
+# removed channels, as i'm pretty sure i've handled that else where
+	    $hf->set_value("ray_blocks",$dz*$hf->get_value("${s_tag}diffusion_scans"));
+	} else {
+	    printd(5,"ERROR: I DONT UNDERSTAND THIS SCAN");
 	}
 	printd(25,"ray_length:".$hf->get_value('ray_length').
 	       ", rays_per_block:".$hf->get_value('rays_per_block').
@@ -1260,7 +1273,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #"B_input_bit_depth"
 #"B_input_data_type"
 #       'RECO_wordtype',           # bit depth and type
-#       'PVM_DwBMat',              # DtiEpi key, 7 subarrays of 3x3 
+#       'PVM_DwBMat',              # DtiEpi key, 7 subarrays of 3x3 NOT ALWAYS 7 YOU DOLT!
 #       'PVM_DwBvalEach',          # DtiEpi key, bvalue per item, the set number? but not the actuall?(guesssing due to the dwmaxbvalkey
 #       'PVM_DwMaxBval',           # DtiEpi key, bvalue maximum? unsure...
 #       'PVM_DwDir',               # DtiEpi key, 7 subarrays of 3 each
@@ -1316,7 +1329,13 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	if ( defined  $bruker_header_ref->{$key} ) {
 #	    ##$PVM_DwBMat=( 7, 3, 3 )
 	    my $diffusion_scans;
-	    $diffusion_scans=aoaref_get_single($bruker_header_ref->{"DE"}); # $diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    if ( defined $bruker_header_ref->{"PVM_DwNDiffExp"}) {  # PVM_DwNDiffExp  looks to have the right value
+		$diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    } else {
+		# WHAT THE HELL IS DE! IT DOESNT MATCH THE PROPER DIFFUSION SCAN NUMBER AND APPEARS TO ALWAYS BE 6!
+		$diffusion_scans=aoaref_get_single($bruker_header_ref->{"DE"}); # $diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    }
+
 	    printd(75,"adding hf keys for $diffusion_scans diffusion scans\n");
 	    for my $bval (1..$diffusion_scans) {
 		my @subarray=aoaref_get_subarray($bval,$bruker_header_ref->{$key});
@@ -1333,7 +1352,12 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	if ( defined  $bruker_header_ref->{$key} ) {
 #	    ##$PVM_DwBMat=( 7, 3, 3 )
 	    my $diffusion_scans;
-	    $diffusion_scans=aoaref_get_single($bruker_header_ref->{"DE"}); # $diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    if ( defined $bruker_header_ref->{"PVM_DwNDiffExp"}) {  # PVM_DwNDiffExp  looks to have the right value
+		$diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    } else {
+		# WHAT THE HELL IS DE! IT DOESNT MATCH THE PROPER DIFFUSION SCAN NUMBER AND APPEARS TO ALWAYS BE 6!
+		$diffusion_scans=aoaref_get_single($bruker_header_ref->{"DE"}); # $diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    }
 	    printd(75,"adding hf keys for $diffusion_scans diffusion scans\n");
 	    for my $bval (1..$diffusion_scans) {
 		my @subarray=aoaref_get_subarray($bval,$bruker_header_ref->{$key});
@@ -1388,12 +1412,14 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 ## channel params
 # PVM_EncNReceivers   nchannels used 
 
-## parameter dimesino
+## parameter dimesion
 # PVM_NEchoImages     number of changes to the parameter if its TE, otherwise 1
 # EchoAcqMode         positiveReadOutEchos|? not sure what this is about
 # FirstEchoTime       time to first echo.(second echo is FirstEchoTime+1*EchoSpacing.)
 # EchoSpacing         distance between echos
 # EffectiveTE         sequence of TE's used
+# DIFFUSION WHEN RAD_MAT IS USED
+#    if (  ! $extraction_mode_bool ) { 
 
 ## data parametrs
 # PVM_EncZfRead       1 for zero fill data to nearest power of 2 or multiple of 192,, 0 for off (so luke tells me)
@@ -1408,7 +1434,6 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	} else {
 	    $dim_order='ycpzxt';
 	} 
-
     } else {
 # RARE dimorder 1 test gives xcyz, p and t unknown
 	if ( $report_order eq 'xy' ){	
@@ -1420,8 +1445,12 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	printd(45,"Using dimension_order $dim_order\n");
     $hf->set_value("${s_tag}dimension_order",$dim_order);
 #    $hf->set_value("${s_tag}channels",'');
-
-    if ( $hf->get_value('ne') ne 'NO_KEY' ) {
+    # if echos defined
+    if($vol_type eq "4D" && $vol_detail  =~ m/DTI/x ) { 
+	# we'll use dti for now. Kinda feel like bval or bmatrix are appropriate values also
+	# and by consequcne we wont support multi-te in DTI
+	$hf->set_value("${s_tag}varying_parameter",'dti');
+    } elsif ( $hf->get_value('ne') ne 'NO_KEY' ) {
 	if ( $hf->get_value('ne')>1) {
 	    $hf->set_value("${s_tag}varying_parameter",'echos');
 	} elsif ($hf->get_value('ne')>1) {
@@ -1430,7 +1459,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    #printd(35, "Doing default set of echos with $vols/".$hf->get_value('ne')."\n");
 	    #$hf->set_value("${s_tag}echos",$vols/$hf->get_value('ne'));
 	}
-    }
+    } 
 #    $hf->set_value('ne,); PVM_NEchoImages
 #    $hf->set_value("${s_tag}",'');
 
