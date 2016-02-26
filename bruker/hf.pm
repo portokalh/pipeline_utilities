@@ -668,7 +668,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			   ],
 			   "B_max_bval"=>[
 			       1,
-			       'PVM_DwMaxBval',           # max reported bvalue PVM_DwEffBval might also be relevent, it is the effective bvalue for each scan.
+			       #'PVM_DwMaxBval',           # max reported bvalue PVM_DwEffBval might also be relevent, it is the effective bvalue for each scan.
+			                                  # NEW INFORMATION FROM JOHN, This looks to be the maximum possible bvalue, not themaximum used. 
+                                                          # We think the tensorpipeline is looking for the maximum used. 
+			       'PVM_DwBvalEach',          # Per john, he thinks this is his max used bvalue. 
 			   ],
 			   "navgs"=>[
 			       1,
