@@ -32,7 +32,7 @@ use English;
 
 use vars qw($HfResult $BADEXIT $GOODEXIT);
 my $PM="pipeline_utilities";
-use civm_simple_util qw(load_file_to_array write_array_to_file);
+use civm_simple_util qw(load_file_to_array write_array_to_file is_empty);
 our $PIPELINE_INFO; #=0; # needstobe undef.#pipeline log fid. All kinds of possible trouble? should only be one log open at a time, but who knows how this'll work out.
 my $custom_q = 0; # Default is to assume that the cluster queue is not specified.
 my $my_queue = '';
@@ -1625,7 +1625,7 @@ sub my_ls {
   my ($unixy_dir) = @_;
   my @allfiles =  ("error");
   my $result = 0;
-  opendir THISDIR, $unixy_dir;
+  opendir THISDIR, $unixy_dir or error_out("open dir failure, $!");;
   @allfiles = readdir THISDIR;
   closedir THISDIR;
   $result = 1;

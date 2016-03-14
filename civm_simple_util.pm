@@ -34,6 +34,7 @@ get_engine_constants_path
 get_engine_hosts
 get_script_loc
 file_exists
+is_empty
 printd 
 whoami 
 whowasi 
@@ -226,6 +227,34 @@ sub file_exists {
     }
     
     return $status;
+}
+
+=item is_empty 
+
+check if a directory is empty using read dir 
+filepath can include regular expession bits except for / because we use basename to get the directory.
+
+# 1 - empty
+# 0 - not empty
+# -1 - doesn't exist
+# Definition of "empty" -- no files/folders/links except . and ..
+
+=cut
+sub is_empty {
+    my ($dir) = @_;
+    my $file;
+    if (opendir my $dfh, $dir){
+	while (defined($file = readdir $dfh)){
+	    next if $file eq '.' or $file eq '..';
+	    closedir $dfh;
+	    return 0;
+	}
+	closedir $dfh;
+	return 1;
+    }else{
+	#die "$dir not exist";
+	return -1;
+    }
 }
 
 =item printd
