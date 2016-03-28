@@ -420,8 +420,15 @@ our $verbose=0;
     $Hfile->set_value('U_rd_modality',$modality);# U_rd_modality=research DTI;
     
     $Hfile->print_headfile($outrunno);
+
     if ( $#errors>=0 ) {
-	error_out("process stop before write headfile".join("\n",@errors));
+	my $err_hdr="";
+	if (! $Hfile->write_headfile ($hf_path."err")) {
+	    print("Could not write Headfile -> $hf_path.err");
+	} else {
+	    $err_hdr=" wrote error header, ${hf_path}.err";
+	}
+	error_out("process stop before write headfile wrote working headfile to ${err_hdr}. Errors: ".join("\n",@errors));
     }
 ###
 # save header
