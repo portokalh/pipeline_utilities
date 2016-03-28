@@ -422,13 +422,13 @@ our $verbose=0;
     $Hfile->print_headfile($outrunno);
 
     if ( $#errors>=0 ) {
-	my $err_hdr="";
-	if (! $Hfile->write_headfile ($hf_path."err")) {
-	    print("Could not write Headfile -> $hf_path.err");
-	} else {
-	    $err_hdr=" wrote error header, ${hf_path}.err";
-	}
-	error_out("process stop before write headfile wrote working headfile to ${err_hdr}. Errors: ".join("\n",@errors));
+	$hf_path = "$out_dir${outrunno}.err.headfile";
+	my $err_hdr=", wrote error header, ${hf_path}.err";
+	if (! $Hfile->write_headfile ($hf_path)) {
+	    print("Could not write Headfile -> $hf_path.\n\n\n");
+	    $err_hdr="";
+	}#wrote working headfile to ${err_hdr}
+	error_out("process stop before write headfile$err_hdr. Errors:\n\t".join("\n\t",@errors));
     }
 ###
 # save header
@@ -442,7 +442,6 @@ our $verbose=0;
     }
     
 }
-
 sub usage_message  {
     my ($msg)=@_;
     print( STDERR "\ndumpHeader PROBLEM: $msg\n");
