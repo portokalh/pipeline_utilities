@@ -1206,7 +1206,8 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	if ( $vol_type eq '2D') { 
 	    # if interleave we have to load lots of data at a time or fall over to ray by ray loading. 
 	    my $ntr=1; # number of tr's 
-	    $hf->set_value("rays_per_block",$dp*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	    $hf->set_value("rays_per_block",$dp*$dz*$hf->get_value('ne')*$ntr);
+	    # removed channels now here too. *$hf->get_value("${s_tag}channels")
 	    $hf->set_value("ray_blocks",1);
 	} elsif($vol_type eq '3D')  {
 #	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
