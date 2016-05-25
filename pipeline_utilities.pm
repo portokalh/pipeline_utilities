@@ -1350,7 +1350,9 @@ if (0) {
            if (/Exception thrown/) {  # checks $_
               print "  Execute recognized this ANTS error msg: $_\n";
            }
-        }   
+        }
+	if ($pid ) { waitpid $pid, 0 ; }# ensure the open finishes.
+
         $rc = $?;
         if ($something_on_stderr) {
           print STDERR "  Problem:\n";
