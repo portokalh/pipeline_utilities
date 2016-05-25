@@ -28,8 +28,8 @@ sub works {
 
     if ($date eq "") {
        print STDERR "  Problem:\n" if($DEBUG>=0); 
-       print STDERR "  * Unable to remotely access system $remote_system.\n" if($DEBUG>=0);
        print STDERR "  * Remote system must allow ssh, scp.  User omega should have permissions.\n" if($DEBUG>=0);
+       print STDERR "  * Unable to remotely access system $remote_system.\n" if($DEBUG>=0);
        my $who = `whoami` if($DEBUG>=0);
        print STDERR "  * You are running this script as: $who\n" if($DEBUG>=0);
 
