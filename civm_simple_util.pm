@@ -35,6 +35,7 @@ get_engine_hosts
 get_script_loc
 file_exists
 is_empty
+get_busy_char
 printd 
 whoami 
 whowasi 
@@ -204,6 +205,17 @@ sub get_script_loc { # ($script_path,[debug_val])
 	printd(25,"to  $script_path.\n");
     }
     return $script_path;
+}
+
+=get_busy_char
+
+gets the next char for a busy indicator.
+
+=cut
+sub get_busy_char {
+    my ($count)=@_;
+    my @chars=('|','/','-','\\');
+    return ($chars[$count%($#chars)]);
 }
 =item file_exists
 
