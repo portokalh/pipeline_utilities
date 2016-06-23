@@ -104,19 +104,23 @@ my %disk_units=(
 # if we dont desire summary information comment out that users line.
 # if we dont want that user to recieeve notifications, add them to the EMAIL_BLACKLIST variable above, pipe(|) separated
 my %user_definitions=( 
-    "abadea" => [ qw(alex rhodos.duhs.duke.edu /Users/alex/) ], 
+#    "abadea" => [ qw(alex rhodos.duhs.duke.edu /Users/alex/) ], 
+    "abadea" => [ qw(alex localhost /nas4/abadea) ], 
     "edc15" => [ qw(edc15 trinity.duhs.duke.edu /Users/edc15) ], 
     "hw133" => [ qw(hj hj hj) ], 
     "nw61" => [ qw(nw nw nw) ], 
     "jjc29" => [ qw(james panorama.duhs.duke.edu /Users/BiGDATADUMP) ], 
     "cl242" => [ qw(cl242 trinity.duhs.duke.edu /Volumes/trinityspace) ],
-    "ksd15" => [ qw(kyle wheezy.duhs.duke.edu /Volumes/wheezyspace) ], 
+#    "ksd15" => [ qw(kyle wheezy.duhs.duke.edu /Volumes/wheezyspace) ], 
+    "ksd15" => [ qw(ksd15 localhost /nas4/ksd15) ], 
     "lucy" => [ qw(lucy wytyspy.duhs.duke.edu /Users/lucy) ], 
     "lx21" => [ qw(lx21 andromeda.duhs.duke.edu /Volumes/andromedaspace) ], 
     "mf177" => [ qw(mf177 milos.duhs.duke.edu /Volumes/milosspace) ], 
-    "rja20" => [ qw(rja20 atlas3.dhe.duke.edu /atlas3/rja20) ], 
+#    "rja20" => [ qw(rja20 atlas3.dhe.duke.edu /atlas3/rja20) ], 
+    "rja20" => [ qw(rja20 localhost /nas4/rja20) ], 
     #"rmd22" => [ qw(rmd22 atlasdb.duhs.duke.edu /atlas3/rmd22) ], 
-    "rmd22" => [ qw(rmd22 jeeves.duhs.duke.edu /Volumes/glusterspace_relief/) ], 
+#    "rmd22" => [ qw(rmd22 jeeves.duhs.duke.edu /Volumes/glusterspace_relief/) ], 
+    "rmd22" => [ qw(rmd22 localhost /nas4/rmd22) ], 
     "root" => [ qw(nobody nohost.should.ever.respond.to.this /nodrive/should/be/found) ],
     );
 if ( 0 ) {
