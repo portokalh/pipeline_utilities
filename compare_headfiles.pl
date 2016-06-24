@@ -14,9 +14,6 @@ my @list=();
 
 
     
-my $project_code=shift(@ARGV);
-
-
 my @hfs=();
 my @runnos=();
 my $field_width=8;
@@ -32,13 +29,13 @@ if ($#ARGV>0) {
 	    $hfs[$#hfs]->read_headfile or error_out("Unable to read $headfile\n");
 	    push(@runnos,$hfs[$#hfs]->get_value('U_runno'));#sprintf("%".$field_width."s",$run));
 	} else {
-	    die ("dont know what to dowith this runformat");
+	    die ("wasnt a file $headfile");
 	}
 
     }
 } else {
 
-    
+    my $project_code=shift(@ARGV);    
     my @run_def=split('-',shift(@ARGV));
     if( $#run_def!=1){
 	die ("dont know what to dowith this runformat");
