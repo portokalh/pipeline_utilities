@@ -14,6 +14,7 @@ require Headfile;
 
 
 
+#<<<<<<< HEAD
 my %opt;
 if (! getopts('c:o:p:t:', \%opt)) {
     error('Options not understood, expecting nothing, OR -c project_code -o output_csv -p base_path -t template_headfile');
@@ -37,11 +38,13 @@ if ( defined $opt{'t'} ) {
 
 my @headfile_paths=(); # array of headfile paths
 my @hfs=(); # array of headfiles
+#=======#>>>>>>> 96f21654430e44f2fa9cb3fa8a2c8198f8a733a1
 my @runnos=();
 my $field_width=8;
 my @keys=();
 my @hf_errors=();
 
+#<<<<<<< HEAD
 while(my $in_bit = shift(@ARGV) ){
     if ( $in_bit =~ /\/.*\.headfile/) {
 	# try to use as headfilepaths
@@ -54,7 +57,7 @@ while(my $in_bit = shift(@ARGV) ){
 	}
     } elsif ( $in_bit =~ /.*\.headfile/) {
 	# try to use as headfile name
-	my @run_def=split('.',$in_bit);
+	my @run_def=split('\.',$in_bit);
 	my $run=$run_def[0];
 	my $image_folder=sprintf("%s/%s/%simages",$base_path,$run,$run);
 	if ( ! -d $image_folder ) {
@@ -79,6 +82,7 @@ while(my $in_bit = shift(@ARGV) ){
 	} else { 
 	    push(@hf_errors,"dont know what to do with this runformat, $run\n");
 	}
+#=======#>>>>>>> 96f21654430e44f2fa9cb3fa8a2c8198f8a733a1
     } else {
 	# presume a dash separted range.
 	my @run_def=split('-',$in_bit);
@@ -111,7 +115,7 @@ while(my $in_bit = shift(@ARGV) ){
 if ( $#headfile_paths>=0 ){
     printf("Loading ");
 }
-foreach my $hf_path (@headfile_paths) {
+foreach my $hf_path (sort @headfile_paths) {
     printf("%s ",$hf_path);
     push(@hfs,new Headfile ('ro', $hf_path));
     $hfs[$#hfs]->check() or push(@hf_errors,"Unable to open $hf_path\n");
