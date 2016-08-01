@@ -192,4 +192,6 @@ foreach my $key(@keys){
 	printf($print_format." = %s\n",substr($key,0,$field_width),sprintf(($print_format.', ') x @vals,@vals));
     }
 }
-write_array_to_file($output_path,\@out_array);
+if($output_path !~/NO_OUTPUT/){
+    write_array_to_file($output_path,\@out_array);
+}
