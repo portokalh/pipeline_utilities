@@ -17,7 +17,7 @@ require Headfile;
 #<<<<<<< HEAD
 my %opt;
 if (! getopts('c:o:p:t:', \%opt)) {
-    error('Options not understood, expecting nothing, OR -c project_code -o output_csv -p base_path -t template_headfile');
+    die('Options not understood, expecting nothing, OR -c project_code -o output_csv -p base_path -t template_headfile');
 }
 my $base_path="$BIGGUS_DISKUS";
 my $output_path="NO_OUTPUT";
