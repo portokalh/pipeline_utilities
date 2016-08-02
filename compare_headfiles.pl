@@ -169,7 +169,7 @@ foreach my $key(@keys){
 	push(@vals,sprintf($print_format,substr($val,0,$field_width)));
     }
     # cleaning the keys a bit, for scanner keys, remove z_scanner from the key
-    if ( -f $template ) { # if we have a template, use it for key replacement.
+    if ( -f $template_path ) { # if we have a template, use it for key replacement.
 	$key=$template->get_value($key);
     }
     if(  $key =~ /z_.*/x ) {
