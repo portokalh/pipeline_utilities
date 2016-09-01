@@ -34,6 +34,7 @@ get_engine_constants_path
 get_engine_hosts
 get_script_loc
 file_exists
+mod_time
 is_empty
 get_busy_char
 printd 
@@ -223,6 +224,7 @@ check if a files exists using read dir
 filepath can include regular expession bits except for / because we use basename to get the directory.
 
 =cut
+
 sub file_exists { 
     my ($fullname)=@_; 
     my $status = 0;
@@ -241,6 +243,17 @@ sub file_exists {
     return $status;
 }
 
+=item mod_time 
+
+get modiy time in seconds of a file. 
+
+=cut
+
+sub mod_time {
+    #use File::stat;
+    my($file)=@_;
+    return (stat($file))[9];
+}
 =item is_empty 
 
 check if a directory is empty using read dir 
@@ -306,7 +319,7 @@ input: ($sleep_length)
 sleeps for sleep_length seconds tiking off the seconds
 
 =cut
-sub sleep_with_countdown { 
+sub sleep_with_countdown {
     my ($sleep_length)=@_;
     my $previous_default=select(STDOUT);
     $| ++;
