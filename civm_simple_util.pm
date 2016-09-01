@@ -38,6 +38,9 @@ get_engine_constants_path
 get_engine_hosts
 get_script_loc
 file_exists
+mod_time
+is_empty
+get_busy_char
 printd 
 whoami 
 whowasi 
@@ -206,12 +209,24 @@ sub get_script_loc { # ($script_path,[debug_val])
     }
     return $script_path;
 }
+
+=get_busy_char
+
+gets the next char for a busy indicator.
+
+=cut
+sub get_busy_char {
+    my ($count)=@_;
+    my @chars=('|','/','-','\\');
+    return ($chars[$count%($#chars)]);
+}
 =item file_exists
 
 check if a files exists using read dir 
 filepath can include regular expession bits except for / because we use basename to get the directory.
 
 =cut
+
 sub file_exists { 
     my ($fullname)=@_; 
     my $status = 0;
@@ -228,6 +243,45 @@ sub file_exists {
     }
     
     return $status;
+}
+
+=item mod_time 
+
+get modiy time in seconds of a file. 
+
+=cut
+
+sub mod_time {
+    #use File::stat;
+    my($file)=@_;
+    return (stat($file))[9];
+}
+=item is_empty 
+
+check if a directory is empty using read dir 
+filepath can include regular expession bits except for / because we use basename to get the directory.
+
+# 1 - empty
+# 0 - not empty
+# -1 - doesn't exist
+# Definition of "empty" -- no files/folders/links except . and ..
+
+=cut
+sub is_empty {
+    my ($dir) = @_;
+    my $file;
+    if (opendir my $dfh, $dir){
+	while (defined($file = readdir $dfh)){
+	    next if $file eq '.' or $file eq '..';
+	    closedir $dfh;
+	    return 0;
+	}
+	closedir $dfh;
+	return 1;
+    }else{
+	#die "$dir not exist";
+	return -1;
+    }
 }
 
 =item printd
@@ -267,7 +321,7 @@ input: ($sleep_length)
 sleeps for sleep_length seconds tiking off the seconds
 
 =cut
-sub sleep_with_countdown { 
+sub sleep_with_countdown {
     my ($sleep_length)=@_;
     my $previous_default=select(STDOUT);
     $| ++;

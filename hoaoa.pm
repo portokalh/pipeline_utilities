@@ -70,7 +70,7 @@ internal function doing the work of printline_to_aoa
 	#printd(25,"Printline <$printline> did not split properly.\n");
 	if ( ! defined $values ) { $values="$printline"; $dims=1;}
 	if ( ! defined $dims ) { $dims="1"; }
-	carp("WARN: Printline <$printline> did not split as expected.\n\tDims will be $dims\n\tValues will be $printline");
+	carp("WARN: Printline <$printline> was not in printed aoa format.\n\tnDims will be $dims\n\tValues will be $printline");
     }
 
     @dim_array=  ( $dims =~ m/([0-9]+[:+]?[ ]?)+/gx  );#(:?:([0-9]+)?)*
@@ -78,7 +78,7 @@ internal function doing the work of printline_to_aoa
 
 #    my $nsubarrays=shift@dim_array;
     my $subarraysize;
-    if ($#dim_array==0 ) { 
+    if ($#dim_array==0 ) { # if only one entry.
 	$subarraysize=$dim_array[0];
     } elsif( $#dim_array == 1 ) { 
 	if ( $dim_array[0] == 1 ) { 
@@ -262,8 +262,11 @@ sub aoaref_get_subarray { # ( $ref_to_AoA )
     my @subarrays;
 #defined  $bruker_header_ref->{$key} 
 #    if ( $#{$dataarray_ref} >=1 ){
-    if ( $dataarray_ref ne "" && $reftype eq 'ARRAY' ) {
-	if ( defined @{$dataarray_ref->[($n-1)]} ) #depreciated warning, perhaps just omit defined keyword?
+    if ( $dataarray_ref ne "" && $reftype eq 'ARRAY' ) { # if we're not an empty string and and we're an array ref, 
+	#if ( defined @{$dataarray_ref->[($n-1)]} ) #depreciated warning, perhaps just omit defined keyword?
+	#if ( defined ${$dataarray_ref->[($n-1)]}[0] ) #depreciated warning attempt at fixing by just adding a [0]
+	#if ( defined ${$dataarray_ref->[($n-1)]} ) #no array on array ref, attempt at fixing by just removing a [0]
+	if ( ref($dataarray_ref->[($n-1)] ) eq 'ARRAY' )
 	{
 	    @data=@{$dataarray_ref->[($n-1)]};
 	} else {
@@ -275,7 +278,7 @@ sub aoaref_get_subarray { # ( $ref_to_AoA )
 # 	my ($elements) = $subarrays[($n-1)] =~ m/[(](.*)[)]/x;
 # 	@data=split(',',$elements);
 #	print("getsubarray:@data\n");
-    } elsif ( $reftype ne 'ARRAY' ) { 
+    } elsif ( $reftype ne 'ARRAY' ) {
         $err_cause="ref type $reftype wrong";
         confess "ref type $reftype wrong";
     } else {
@@ -285,7 +288,7 @@ sub aoaref_get_subarray { # ( $ref_to_AoA )
 #    } else {
 #	$data[0]="ERROR";
 #    }
-    return @data;    
+    return @data;
 }
 
 

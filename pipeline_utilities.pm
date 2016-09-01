@@ -49,7 +49,7 @@ if ( ! defined $debug_val){
     
 }
 my $PM="pipeline_utilities";
-use civm_simple_util qw(load_file_to_array write_array_to_file);
+use civm_simple_util qw(load_file_to_array write_array_to_file is_empty);
 our $PIPELINE_INFO; #=0; # needstobe undef.#pipeline log fid. All kinds of possible trouble? should only be one log open at a time, but who knows how this'll work out.
 my $custom_q = 0; # Default is to assume that the cluster queue is not specified.
 my $my_queue = '';
@@ -128,7 +128,7 @@ sub open_log {
        exit $BADEXIT;
    }
    $pipeline_info_log_path = "$result_dir/pipeline_info_$PID.txt";
-   open $PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file";
+   open $PIPELINE_INFO, ">$pipeline_info_log_path" or die "Can't open pipeline_info file $pipeline_info_log_path, error $!\n";
    my $time = scalar localtime;
    print("# Logfile is: $pipeline_info_log_path\n");
    $log_open = 1;
@@ -253,7 +253,7 @@ sub make_matlab_m_file_quiet {
 # -------------
 #simple utility to save an mfile with a contents of function_call at mfile_path
    my ($mfile_path, $function_call) = @_;
-   open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path";
+   open MATLAB_M, ">$mfile_path" or die "Can't open mfile $mfile_path, error $!\n";
    # insert startup.m call here.
    use Env qw(WKS_SHARED);
    #print MATLAB_M 'fprintf([datestr(now, \'HH:MM:SS\'),\'\n\n\']);'."\n";
@@ -956,7 +956,7 @@ sub file_checksum {
     # run checksum on file and return checksum result.
     my ($file) = @_;
     use Digest::MD5 qw(md5 md5_hex md5_base64); 
-    open  my $data_fid, "<", "$file" or die "could not open $file";
+    open  my $data_fid, "<", "$file" or die "could not open $file, error $!\n";
     #print("md5 calc on $file\n");
     my $md_calc=Digest::MD5->new ;
     $md_calc->addfile($data_fid);
@@ -974,7 +974,7 @@ sub link_checksum {
     # run checksum on link and return checksum result.
     my ($file) = @_;
     use Digest::MD5 qw(md5 md5_hex md5_base64); 
-    my $data = readlink $file or die "could not open $file";
+    my $data = readlink $file or die "could not open $file, error $!\n";
     #print("md5 calc on $file\n");
     my $md_calc=Digest::MD5->new ;
     $md_calc->add($data);
@@ -1197,18 +1197,30 @@ sub execute_indep_forks {
   #$ncores=20000000; # fail conditional for many procs.
 ##### 
 #INDEP FORK REAPER
-  $SIG{CHLD} = sub {# this reaps all COMPLETED children but does not wait on uncompleted
+  $SIG{CHLD} = sub {
+# this reaps ALL COMPLETED children each time a child completes,
+# this means sometimes it will run with no children because an earlier run cleaned up all the children.
+# THIS DOES NOT wait for uncompleted children
+      my $completed=0;
       while () {
+	  #waitpid returns child PID if child has stopped.
+	  #waitpid returns -1 on a failure
+	  #waitpid returns 0 on child still running. 
+	  # this is a sig chld handler, so it should never still be running.
 	  my $child = waitpid -1, POSIX::WNOHANG;
 	  last if $child <= 0;
-	  my $localtime = localtime;
 	  my $ev=$?>> 8;
 	  #print "Parent: Child $child was reaped - $localtime. \n";
+	  my $localtime = localtime;
 	  if ( $ev ) {
-	      error_out( "Parent: Child $child was reaped - $localtime with error code:$ev \n");
+	      error_out( "Parent: Child ended with error code! $localtime - $child was reaped with error code:$ev \n");
+	      #error_out( "Parent: Child $child was reaped - $localtime with error code:$ev \n");
 	  }
 	  $nforked-=1;
+	  $completed++;
       }
+      my $endtime = localtime;
+      print("\tcollected $completed finished process(es). - $endtime \n"); # test print to show when the reaper has killed a child.
   };
 #####
   print("forking with up to ".(2*$ncores)." processes");
@@ -1246,6 +1258,7 @@ sub execute_indep_forks {
       } elsif ($pid == 0) { 
 # child
 #	  print "child fork $$\n";
+	  #sleep(5+int(rand(10)));# a test sleep of 5-15 seconds to make sure our children all end at different times.
 	  if ( 1 ) {
 #### cut execute_heart
 #execute_heart DIT NOT perform well here for fast tasks.	      
@@ -1273,6 +1286,8 @@ sub execute_indep_forks {
 		  last if $child <= 0;
 		  my $localtime = localtime;
 		  print "nf:Parent: Child $child was reaped - $localtime.\n";
+		  print("ERROR CONDITION< ALTENRATE CHILD REAPER USED\n\t SLEEPING FOR 60!!!!!!\n");
+		  sleep(60);
 		  $nforked-=1;
 	      }
 	  };
@@ -1291,7 +1306,12 @@ sub execute_indep_forks {
 	  print "pid $tmp done, $nforked child forks left.\n";
       }
   }
-  print "Execute: waited for all $total_forks command forks to finish; fork queue size $nforked...zombies eliminated.\n";
+  #wait 1 second at a time for any remaining children to finish.
+  while ( $nforked> 0 ) {
+      sleep(1);
+      #print STDERR ("."); # just too keep us interested. bad idea, some of our commands have valid output to look at.
+  }
+  print "Execute: waited for all $total_forks command forks to finish; fork queue remainder $nforked. \n";
   
   return($$);
 }
@@ -1356,7 +1376,9 @@ if (0) {
            if (/Exception thrown/) {  # checks $_
               print "  Execute recognized this ANTS error msg: $_\n";
            }
-        }   
+        }
+	if ($pid ) { waitpid $pid, 0 ; }# ensure the open finishes.
+
         $rc = $?;
         if ($something_on_stderr) {
           print STDERR "  Problem:\n";
@@ -1631,7 +1653,7 @@ sub my_ls {
   my ($unixy_dir) = @_;
   my @allfiles =  ("error");
   my $result = 0;
-  opendir THISDIR, $unixy_dir;
+  opendir THISDIR, $unixy_dir or error_out("open dir failure, $!");;
   @allfiles = readdir THISDIR;
   closedir THISDIR;
   $result = 1;
@@ -2541,7 +2563,12 @@ sub fileparts {
     my ($fullname) = @_;
     use File::Basename;
 #    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
-    my ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
+    my ($name,$path,$suffix) = fileparse($fullname,qr/\.([^.].*)+$/);#qr/\.[^.]*$/)
+    if ( ! defined $fullname ||  $fullname eq "") { 
+	
+	return("","","");
+    }
+    ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
     return($name,$path,$suffix);
 }
 

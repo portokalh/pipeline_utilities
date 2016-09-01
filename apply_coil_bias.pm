@@ -114,9 +114,10 @@ sub apply_coil_bias_nohf {
   my $cmd = "$coil_bias_program_path " . "$params";
 #./ImageMath ImageDimension  OutputImage.ext   Operator   Image1.ext   Image2.extOrFloat
   log_info("Useing coil bias comand: $cmd\n");
-  if(!execute($ggo,"$name Coil Bias correction", $cmd)) {
+  if(!execute($ggo&&(! -e $out_field),"$name Coil Bias correction", $cmd)) {
       error_out("  $name Coil Bias failed.");
-  } else {  # only set values on sucess, not sure i like this syntax.
+  }
+  #else {  # only set values on sucess, not sure i like this syntax.
       if (! -f $out_nii ) { 
 	  my $prog="$ants_app_dir/ImageMath ";
 	  my $dimensions = 3;
@@ -129,7 +130,7 @@ sub apply_coil_bias_nohf {
 	  if (! $ok) {
 	      error_out("coil bias apply failed -> $out_nii\n");
 	  }
-      }
+      #}
 #       print( "Setting HF Keys\n") if ( $debug_val>=10);
 #       $Hf_out->set_value("${hf_nii_id}-coil-bias-input-nii-path",$in_nii);
 #       $Hf_out->set_value("${hf_nii_id}-coil-bias-applied","true");

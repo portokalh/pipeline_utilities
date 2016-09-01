@@ -28,8 +28,8 @@ sub works {
 
     if ($date eq "") {
        print STDERR "  Problem:\n" if($DEBUG>=0); 
-       print STDERR "  * Unable to remotely access system $remote_system.\n" if($DEBUG>=0);
        print STDERR "  * Remote system must allow ssh, scp.  User omega should have permissions.\n" if($DEBUG>=0);
+       print STDERR "  * Unable to remotely access system $remote_system.\n" if($DEBUG>=0);
        my $who = `whoami` if($DEBUG>=0);
        print STDERR "  * You are running this script as: $who\n" if($DEBUG>=0);
 
@@ -40,28 +40,40 @@ sub works {
 
 sub get_file {
     my ($system, $source_dir, $file, $local_dest_dir,$verbose)  =@_;
-    
+    #print("SSH CALL: sys:$system sourcedir:$source_dir file:$file local_dest:$local_dest_dir verbosity:$verbose\n");
     my $date = `ssh -Y $system date`;
     chop ($date);
-    my $src = "$system:$source_dir";
+
+    # this src/dest code needs to be cleaned up for future sanity.
+    my $src = "$source_dir";
     my $dest  = "$local_dest_dir";
     if ( !defined $verbose) { 
 	$verbose=1;
     }
     if ( $file ne "" ) {
-	$src="$src/$file"; 
-	$dest="$dest/".basename($file);
+	$src="$src/$file"; # maybe we should have / inbetweeen may be we shouldnt
     } #allow empty file, in case we have the full path in our sourcedir
+    # update source_dir , file and local_dest to make ssh call more sane.
 
+    my ($tn,$tp,$te) = fileparse($src,qr/\.[^.]*$/);
+    #my ($tn,$tp,$te)=fileparts($src);
+    $source_dir=$tp;
+    $file=$tn.$te;
+    $src="$system:$src";
+    if ( $file ne "" ) {
+	$dest="$dest/".basename($file);
+    }
+
+    
     # this scp does not preserve links, here is an example of preserving links.
     # this example sends a file, to retrieve a file
     #$ tar cf - /usr/local/bin | ssh server.example.com tar xf -
     # i think this would retrieve remote.
     # ssh server.example.com tar cf - /usr/local/bin | tar -xf -
     # ssh crete '(cd /Volumes/workstation_data/data/atlas/rat/; tar -pcjf - rat_labels.nii.gz )' | tar -xjf -
-    my @args  = ("scp","-C", $src, $dest); #the former solution which duplicated linked files, 
-    @args  = ("cd $local_dest_dir; ssh $system '(cd $source_dir ; tar -pcjf - $file )'| tar -xjf - ";# the new solution which does not duplicate links.
+    my @args  = ("scp","-pC", $src, $dest); #the former solution which duplicated linked files, 
     my $cmd=join(" ",@args);
+    $cmd  = ("cd $local_dest_dir; ssh $system '(cd $source_dir ; tar -pcjf - $file )'| tar -xjf - ");# the new solution which does not duplicate links.
     print STDERR "   Beginning ".$cmd." at $date...\n" if $verbose>0;#    print STDERR "Beginning scp of $src at $date...";
     my $start = time;
 
@@ -89,7 +101,7 @@ sub get_file {
 	my $pid = open (my $CMD_FID,"$cmd 3>&1 1>&2 2>&3 3>&-|");
 	#my $pid = open(CMD_FID, "$c 3>&1 1>&2 2>&3 3>&-|");
 	my $something_on_stderr;
-	while (<CMD_FID>) {
+	while (<$CMD_FID>) {
 	    $something_on_stderr = 1;
 	    print "Executed command sent this message to STDERR: $_\n";
 	    if (/Exception thrown/) {  # checks $_
@@ -112,7 +124,9 @@ sub get_file {
     }
     my $end   = time;
     my $xfer_time = $end - $start;
-
+    if ( ! -e $dest ) {
+	print "transfer failure, $dest not found.\n" and return 0;
+    }
 
     print STDERR "Successful scp took $xfer_time second(s).\n" if $xfer_time > 5;
     return 1;
@@ -191,7 +205,8 @@ sub get_dir_i { # the internal get_dir which does either the dir or its contents
 	push( @args,$src);
     }
     
-    unshift(@args,"-r"); # put -r on beinning of arglist,
+    unshift(@args,"-r"); # put -r on beinning of arglist, recursive
+    unshift(@args,"-p"); # put -p on beinning of arglist, preserve meta info(time)
     unshift(@args,"-C"); # add the compression.
     unshift(@args,"scp");# put scp(our program name) on beginning of arglist
     push(@args,$dest);   # put our destination at the end of the arglist
@@ -232,7 +247,7 @@ sub get_dir_OLD {
     # } else {
     # 	$src="-r ".$src;
     # }
-    my @args  = ("scp","-r", $src, $dest);
+    my @args  = ("scp","-pr", $src, $dest);
     my $start = time;
     print STDERR "   Beginning ".join(" ",@args)." at $date...\n";#    print STDERR "   Beginning scp of $src at $date...\n";
     !system (@args) or 

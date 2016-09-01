@@ -22,14 +22,15 @@ if (! defined($RADISH_PERL_LIB)) {
 use lib split(':',$RADISH_PERL_LIB);
 use List::MoreUtils qw/uniq/;
 
-require pipeline_utilities ;
+require pipeline_utilities;
 require Headfile;
 require ssh_call;
 use civm_simple_util qw(get_engine_hosts);
 
 #my $file_pat=".*\.nii.*\$";
 #my $file_pat=".*\.nii(?:\.gz)?\$"; #check used in data_check
-my $file_pat=".*\.nii(\.gz)?\$"; 
+#my $file_pat=".*\.nii(\.gz)?\$"; 
+my $file_pat="(.*\.nii(?:\.gz)?)|(.*\.txt)|(.*\.xml)\$";
 my $lead_data_system="crete";#take this in via variable?
 my @eng_hosts=get_engine_hosts($WKS_SETTINGS);
 my $EC      =load_engine_deps();
@@ -56,12 +57,16 @@ print("local engine from dep is ".$EC->get_value("engine")."\n");
 print("remote engine from dep is ".$data_EC->get_value("engine")."\n");
 print("Checking data directories\n".
 $data_EC->get_value('engine_waxholm_canonical_images_dir')."\n".
-    $data_EC->get_value('engine_waxholm_labels_dir')."\n");
+      $data_EC->get_value('engine_waxholm_labels_dir')."\n");
 
 my @list;
-@list=ssh_call::get_dir_listing($data_EC->get_value('engine'),
-				$data_EC->get_value('engine_waxholm_canonical_images_dir'),
-				$file_pat);
+### get any links in the base dir, add those to top of list for checking since they're quick
+push(@list,ssh_call::get_dir_listing($data_EC->get_value('engine'),
+				     $remote_data_dir."/atlas"." -type l",
+				     "[^.]*"));
+push(@list,ssh_call::get_dir_listing($data_EC->get_value('engine'),
+				     $data_EC->get_value('engine_waxholm_canonical_images_dir'),
+				     $file_pat));
 if ( $data_EC->get_value('engine_waxholm_canonical_images_dir') ne $data_EC->get_value('engine_waxholm_labels_dir') ){
     push(@list,ssh_call::get_dir_listing($data_EC->get_value('engine'),
 					 $data_EC->get_value('engine_waxholm_labels_dir'),
@@ -132,8 +137,10 @@ for my $remote_data_file (@list ) {
     if ( -f $in.$rel_md5) { # rm file if it exists
 	unlink $in.$rel_md5 or warn("Coudlnt remove last copy of md5 file.\n"); }
     my $skip_file=0;
-#  get_file ($system, $source_dir, $file, $local_dest_dir);
+    #  get_file ($system, $source_dir, $file, $local_dest_dir);
     ssh_call::get_file($data_EC->get_value("engine"),$remote_data_dir.$rel_md5,'',$fp,-1) or $skip_file=1;
+    # verbosity on or off.
+    #ssh_call::get_file($data_EC->get_value("engine"),$remote_data_dir.$rel_md5,'',$fp,10) or $skip_file=1;
     
     my $cp_file=0;
     if ( ! $skip_file) {
