@@ -17,9 +17,11 @@ require Headfile;
 #<<<<<<< HEAD
 my %opt;
 if (! getopts('c:o:p:t:', \%opt)) {
-    die('Options not understood, expecting nothing, OR -c project_code -o output_csv -p base_path -t template_headfile');
+    die('Options not understood, expecting nothing, OR -c project_code -o output_csv -p base_path(BIGGUS_DISKUS or archivepath) -t template_headfile');
 }
 my $base_path="$BIGGUS_DISKUS";
+#my $arch_path="/Volumes/atlas1"; # not used directly, just a sub for base_path when base_path doesnt work
+# i should put better handling in for the multiple known places to look...
 my $output_path="NO_OUTPUT";
 my $project_code="00.QA.00";
 my $template_path="NO_TEMPLATE";
@@ -53,41 +55,47 @@ while(my $in_bit = shift(@ARGV) ){
 	if ( -f $hf_path ) {
 	    push(@headfile_paths,$hf_path);
 	} else { 
-	    push(@hf_errors,"didnt find headfile, $in_bit\n");
+	    push(@hf_errors,"didnt find headfile(fp), $in_bit\n");
 	}
     } elsif ( $in_bit =~ /.*\.headfile/) {
 	# try to use as headfile name
 	my @run_def=split('\.',$in_bit);
 	my $run=$run_def[0];
-	my $image_folder=sprintf("%s/%s/%simages",$base_path,$run,$run);
+	my $image_folder=sprintf("%s/%s/%simages",$base_path,$run,$run); # reco path
 	if ( ! -d $image_folder ) {
-	    $image_folder=sprintf("%s/%s/%s",$base_path,$project_code,$run);
+	    $image_folder=sprintf("%s/%s/%s",$base_path,$project_code,$run); #archive type path
+	}
+	if ( ! -d $image_folder ) {
+	    $image_folder=sprintf("%s/%s",$base_path,$run); #alt dir path
 	}
 	my $hf_path=sprintf("%s/%s.headfile",$image_folder,$run);
 	if ( -f $hf_path ) {
 	    push(@headfile_paths,$hf_path);
 	} else { 
-	    push(@hf_errors,"didnt find headfile, $in_bit\n");
+	    push(@hf_errors,"didnt find headfile(imgpath), $in_bit\n");
 	}
     } elsif( $in_bit !~/.{5,}-.{5,}/)  { 
 	# try out single runno
 	my $run=$in_bit;
-	my $image_folder=sprintf("%s/%s/%simages",$base_path,$run,$run);
+	my $image_folder=sprintf("%s/%s/%simages",$base_path,$run,$run); # reco path
 	if ( ! -d $image_folder ) {
-	    $image_folder=sprintf("%s/%s/%s",$base_path,$project_code,$run);
+	    $image_folder=sprintf("%s/%s/%s",$base_path,$project_code,$run); # archive type path
+	}
+	if ( ! -d $image_folder ) {
+	    $image_folder=sprintf("%s/%s",$base_path,$run); # alt dir path
 	}
 	my $hf_path=sprintf("%s/%s.headfile",$image_folder,$run);
 	if ( -f $hf_path ) {
 	    push(@headfile_paths,$hf_path);
 	} else { 
-	    push(@hf_errors,"dont know what to do with this runformat, $run\n");
+	    push(@hf_errors,"dont know what to do with this runformat(single), $run\n");
 	}
 #=======#>>>>>>> 96f21654430e44f2fa9cb3fa8a2c8198f8a733a1
     } else {
 	# presume a dash separted range.
 	my @run_def=split('-',$in_bit);
 	if( $#run_def!=1){
-	    push(@hf_errors,"dont know what to do with this runformat, $in_bit\n");
+	    push(@hf_errors,"dont know what to do with this runformat(seq), $in_bit\n");
 	} else {
 	    # lets assume run_def are a dash list for now. find headfile with local path, or with archivepath.
 	    my $r_width=length $run_def[0];
