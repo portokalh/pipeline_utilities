@@ -133,23 +133,20 @@ sub loader {
     # this loop sets up a nice comprehensive lookup structure for the color table.
     # for the primary keys of "structure Abbreviation and name", make a hash of primary
     # key to the colortable info for each color table entry
+    my %out_header;
+    @out_header{keys(%$h_hash)}=values(%$h_hash);
     foreach my $t_line (@text_lines) {
 	$t_line_num++;# keep track of the color table line so we can reference it later.
-	if ($t_line_num>3) { next;}
+	#if ($t_line_num>30) { next;} # this is a short curcuit for testing, to only do a few lines
 	#if ( $t_line !~ /^#.*/ ) {# if not comment.
 	if ( $t_line !~ /$line_format/ ) {# if not comment.
+	    $t_line =~ s/[\r\n]//gx; # found some hanging \r's and some \n's. This'll fix those right up.
 	    my @tt_entry=split($separator,$t_line);
-	    #dump(scalar(@tt_entry)."$t_line");
-	    #dump($h_hash);
-	    #exit;
 	    if ( scalar(@tt_entry) != scalar(keys(%$h_hash)) ) {
 		print("Bailing on bad entry with ($separator)\n");
-		print("\t".scalar (@tt_entry)." != ".scalar(keys(%$h_hash))."(".join(":",@tt_entry).")\n");#scalar (%{$h_hash}) );
-		#sleep_with_countdown(5);
-		#continue;
+		print("\t".scalar (@tt_entry)." != ".scalar(keys(%$h_hash))."(".join(":",@tt_entry).")\n");
 		dump($h_hash);
 		next;
-		#last;
 	    }
 	    # color table is form of,
 	    # VALUE NAME RED GREEN BLUE ALPHA
@@ -157,91 +154,45 @@ sub loader {
 	    # the expected format of our colortable comes from the avizo name format of alex. 
 	    # the names used in avizo were "_?abbreviation__(_?)fullterribly_long_structure_name"
 	    # some names add additional instances of double underscore. its uncertain what that was about.
-	    my %newbits;#{$splitter->{"Input"}(0)}	
+	    my %newbits;
 	    if( not defined $splitter) {
 		warn("No splitters found, using defacto one. This should just be omitted. ");
 		#@newbits{qw(Abbrev Name)} =  $tt_entry[1] =~/^_?(.+?)(?:___?(.*))$/;
 	    } else {
 		# foreach splitter
+		if (not defined($h_hash->{$splitter->{"Input"}[0]}) ){
+		    dump(@tt_entry);
+		    next;
+		}
 		my $in_index=$h_hash->{$splitter->{"Input"}[0]};
 		$newbits{$splitter->{"Input"}[1]}=$tt_entry[$in_index];
-
-		use Data::Dumper;# qw/Dumper/;
-		#print("Regex:".sprintf Dumper($splitter->{"Regex"}));
 		my $regex=$splitter->{"Regex"};
-		#print("Output:".sprintf Dumper(@{$splitter->{"Output"}}));
 		my @field_keys=@{$splitter->{"Output"}};# get the count ofexpected elementes
-		
-		#print("field_keys:".sprintf(Dumper(@field_keys)));
-		#print("field_keys:".join(":",@field_keys));
-		      
-		#print("field_val:".sprintf Dumper($tt_entry[$in_index]));
 		my $field_val=$tt_entry[$in_index] ;# for readablilty pulled this out.
-		
 		my @field_temp = $field_val  =~ /$regex/x;
-		
-		#print("Parts:".Dumper(@field_temp));
-		@newbits{@field_keys} = @field_temp;
-	    }
-	    if ( 1 ) {
-		my %entry_hash;
-		@entry_hash{keys(%$h_hash)}=@tt_entry[values(%$h_hash)];
-		@entry_hash{keys(%newbits)}=values(%newbits);
-		$entry_hash{"t_line"} = $t_line_num;
-		#dump(\%entry_hash);
-		#exit;
-		#my $Value = $tt_entry[0];
-		#my $c_R = $tt_entry[2];
-		#my $c_G = $tt_entry[3];
-		#my $c_B = $tt_entry[4];
-		#my $c_A = $tt_entry[5];
-		#my @stv{qw(Structure Abbrev name)}=($tt_entry[1], $c_Abbrev, $c_name);
-		#my @stv{qw[Structure Abbrev name]}=($tt_entry[1], $c_Abbrev, $c_name);
-		#my %stv=qw(Structure Abbrev name)[$tt_entry[1], $c_Abbrev, $c_name];
-		#my @stv=qw(Structure Abbrev name)[$tt_entry[1], $c_Abbrev, $c_name];
-
-		#dump(\%stv);
-		#exit;
-		# advanced lookups.
-
-		if ( 1 ) {
-		    #my $c_t_e = {
-		    #"t_line" => $t_line,
-		    #};
-		    # combine hash overwriting values using this example. My usage and setup here is rather complicated.
-		    #my %t = %target;
-		    #@t{keys %source} = values %source;
-		    #@{$c_t_e}{(keys %entry_hash)} =values %entry_hash;
-		    #delete($t_table->{$sub_tree}->{$stv{$sub_tree}}->{$sub_tree});
-
-		    for my $sub_tree (keys %entry_hash) {
-			$t_table->{$sub_tree}->{$entry_hash{$sub_tree}}=\%entry_hash;
-		    }
-		} else {
-		    warn('DIRTY OLD CODE !!!!!!!');
-		    my %stv;
-		    #@stv{qw(Structure Abbrev Name Value c_R c_G c_B c_A )}=($tt_entry[1], $c_Abbrev, $c_name, $Value, $c_R, $c_G, $c_B, $c_A);
-		    for my $sub_tree (keys %stv) {
-			$t_table->{$sub_tree}->{$stv{$sub_tree}} = {
-			    "Value" => $tt_entry[0], 
-			    "c_R" => $tt_entry[2],
-			    "c_G" => $tt_entry[3],
-			    "c_B" => $tt_entry[4],
-			    "c_A" => $tt_entry[5],
-			};
-			# combine hash overwriting values using this example. My usage and setup here is rather complicated.
-			#my %t = %target;
-			#@t{keys %source} = values %source;
-			@{$t_table->{$sub_tree}->{$stv{$sub_tree}}}{(keys %stv)} =values %stv;
-			delete($t_table->{$sub_tree}->{$stv{$sub_tree}}->{$sub_tree});
+		if ( scalar(@field_keys) != scalar(@field_temp) ) {
+		    warn("entry seems incomplele or badly formed.($t_line)");
+		    while( ( $#field_temp<$#field_keys ) && ( length($field_val)>0) ) {
+			push(@field_temp, $field_val);
 		    }
 		}
+		if ( scalar(@field_keys) == scalar(@field_temp) ) {
+		    @newbits{@field_keys} = @field_temp;
+		} 		
+	    }
+	    my %entry_hash;
+	    @entry_hash{keys(%$h_hash)}=@tt_entry[values(%$h_hash)];
+	    @entry_hash{keys(%newbits)}=values(%newbits);
+	    $entry_hash{"t_line"} = $t_line_num;
+	    for my $sub_tree (keys %entry_hash) {
+		$t_table->{$sub_tree}->{$entry_hash{$sub_tree}}=\%entry_hash;
 	    }
 	}
     }
-    
+    $t_table->{"Header"}=\%out_header;
     return $t_table;
 }
+
 
 
 
