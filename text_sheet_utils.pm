@@ -31,8 +31,9 @@ sub text_header_parse {
     push(@separators,' ');
     
     #$line =~ s/[ ]/_/gx; #exchange space for underscore.
+    $line =~ s/[\r\n]//gx; # found some hanging \r's and some \n's. This'll fix those right up.
     chomp($line);
-    
+    #trim($line); #NO SUCH THING!
     if (defined ($separator) ) {
 	@separators=($separator);
     } else {	
@@ -171,14 +172,24 @@ sub loader {
 		my $field_val=$tt_entry[$in_index] ;# for readablilty pulled this out.
 		my @field_temp = $field_val  =~ /$regex/x;
 		if ( scalar(@field_keys) != scalar(@field_temp) ) {
-		    warn("entry seems incomplele or badly formed.($t_line)");
+		    if ( 1 ) {
+		    } else {
+			# high verbosity.
+			warn("entry seems incomplele or badly formed. The splitter didnt work.\n"
+			     ."fields = ".join("  ",@field_keys)."\n"
+			     ."expected fields=".(scalar(@field_keys))."  != found_fields".(scalar(@field_temp)).".\n"
+			     ." ($t_line)");
+		    }
+		    # since we didnt find the requisite number of parts, just replicate the parts we did find the requisite number of times. 
 		    while( ( $#field_temp<$#field_keys ) && ( length($field_val)>0) ) {
 			push(@field_temp, $field_val);
 		    }
+		} else {
+		    #print("fields = ".join("  ",@field_keys)."\n");
 		}
 		if ( scalar(@field_keys) == scalar(@field_temp) ) {
 		    @newbits{@field_keys} = @field_temp;
-		} 		
+		}
 	    }
 	    my %entry_hash;
 	    @entry_hash{keys(%$h_hash)}=@tt_entry[values(%$h_hash)];
