@@ -1770,7 +1770,20 @@ sub mrml_find_by_name {
 #     }
     return mrml_attr_search($mrml_tree,"name",$value,$type);
 }
-
+# 
+sub mrml_find_by_type {
+# 
+# find the mrml node in the loaded xml tree by id
+# get a reference to the mrml hash, given specific name, and optionally given a type.
+    my ($mrml_tree,$type)=@_;
+    my $value=".*";
+    my @arr=mrml_attr_search($mrml_tree,"id",$value,$type);
+    #my @arr=@{$a_ref};
+    if ($#arr<0){
+	@arr=mrml_attr_search($mrml_tree,"id",$value,$type."Node");
+    }
+    return @arr;
+}
 # 
 sub mrml_attr_search {
 # 
@@ -1804,7 +1817,7 @@ sub mrml_attr_search {
 	for ( my $ha_i=0; $ha_i<=$#hash_array;$ha_i++ ){
 	    #foreach my $ref (@hash_array) {
 	    my $ref=$hash_array[$ha_i];# this is just to simplify reading the code.
-	    if ( defined $ref->{$attr}) {
+	    if ( ref($ref) eq 'HASH' && defined $ref->{$attr}) {
 		if ( $ref->{$attr} =~ /$value/x) { 
 		    #print($ref." ".$ref->{$attr}."\n");
 		    #push(@refs,${$mrml_tree->{$type}}[$ha_i]);#when all ar arrays this works, but some are not. 
@@ -2560,7 +2573,11 @@ sub defile {
 sub fileparts { 
 # ------------------
 # ala matlab file parts, take filepath, return path name ext
-    my ($fullname) = @_;
+    my ($fullname,$ver) = @_;
+    if( ! defined $ver){
+	$ver=1;
+    }
+    
     use File::Basename;
 #    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
     my ($name,$path,$suffix) = fileparse($fullname,qr/\.([^.].*)+$/);#qr/\.[^.]*$/)
@@ -2569,7 +2586,15 @@ sub fileparts {
 	return("","","");
     }
     ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
-    return($name,$path,$suffix);
+    if ($ver == 1) {
+	funct_obsolete("fileparts","basename for name, dirname for dir");
+    	return($name,$path,$suffix);
+    } else {
+	if ( $ver !=2 ) {
+	    funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation.");
+	}
+	return($path,$name,$suffix);
+    }
 }
 
 # ------------------
