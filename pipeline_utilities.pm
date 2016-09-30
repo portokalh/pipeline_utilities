@@ -38,9 +38,9 @@ use Carp;
 #use FindBin;
 #use lib $FindBin::Bin;
 #use XML::Parser;
-use XML::Rules;
 #use LWP::Simple;
-
+# xml rules moved to the xml functions in a require/import pair so when it doesnt exist, we dont fail here.
+#use XML::Rules;
 
 
 use vars qw($HfResult $BADEXIT $GOODEXIT $debug_val);
@@ -228,7 +228,8 @@ sub error_out
       $hf_path = $HfResult->get_value('headfile_dest_path');
       if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('headfile-dest-path'); }
       if($hf_path eq "NO_KEY"){ $hf_path = $HfResult->get_value('result-headfile-path'); }
-      my ($n,$p,$e) = fileparts($hf_path);
+      #my ($n,$p,$e) = fileparts($hf_path);
+      my ($p,$n,$e) = fileparts($hf_path,2);
       my $hf_path = $p.$n.'.err'.$e;
     $HfResult->write_headfile($hf_path);
     $HfResult = "unset";
@@ -923,39 +924,72 @@ sub data_integrity {
 # -------------
 # calc checksum of file, and if file.md5 exists load and compare, else save file.md5.
 
-    my ($file) = @_;
+    my ($file,$ver) = @_;
+    if( ! defined $ver){
+	$ver=1;
+    }
     my $data_check=0;
 
-    my ($n,$p,$ext) = fileparts($file);
-    my $checksumfile=$p.$n.".md5";
-    
-    my @md5 = (); 
-    if (! -l $file ) {
-	@md5=(file_checksum($file));	
-    } else {
-	@md5=(link_checksum($file));	
+    #my ($n,$p,$ext) = fileparts($file);
+    my ($p,$n,$e) = fileparts($file,3);
+    my $checksumfile=$p.$n.$e.".md5"; #new format, accepting the inelegant file names.
+    my $o_checksumfile=$p.$n.".md5";  #previous checksum format where we dropped the file extension.
+
+    # TODO CHECK FOR NEW FILE AND OLD FILE< IF OLD EXISTS< MOVE IT TO NEW THEN PROCEEDE!
+    if ( -f $o_checksumfile && ! -f $checksumfile ) {
+	rename($o_checksumfile, $checksumfile) ;
+    } elsif (  -f $o_checksumfile && -f $checksumfile && length($e)!=0 ) {
+	warn("both checksum file name conventions present, an error may have occured. $o_checksumfile, and $checksumfile present!");
     }
-    my @stored_md5;
+    my $md5 ;
+    
+    if (! -l $file ) {
+	$md5=file_checksum($file);
+    } else {
+	$md5=link_checksum($file);
+    }
+    my $stored_md5;
+    my @f_cont;#  beacuse my function reads into and array, this'll have to be an array.
     if ( ! -e $checksumfile ) { 
-	write_array_to_file($checksumfile,\@md5);
+	write_array_to_file($checksumfile,[$md5]);# becasue the function writes an array, we have to make our value an array here.
 	$data_check=1;
     } else {
-	load_file_to_array($checksumfile,\@stored_md5);
-	if ( $stored_md5[0] eq $md5[0] ) { 
+	load_file_to_array($checksumfile,\@f_cont);
+	$stored_md5=$f_cont[0];
+	if ( $stored_md5 eq $md5 ) { 
 	    $data_check=1;
-	    #print("GOOD! ($file:$md5[0])\n");
+	    #print("GOOD! ($file:$md5)\n");
 	} else {
-	    print ("BADCHECKSUM! $md5[0]($file)") ;
+	    print ("BADCHECKSUM! $md5($file) NOT $stored_md5") ;
 	}
     }
-    return $data_check;
+    
+    # If we failed our data check
+    if ( ! $data_check ){
+	if ($ver == 1) {
+	    funct_obsolete("data_integrity","data_integrity(\$file,2). this is the simple bool version with true for good.");
+	    # version 1, let us return 0
+	} else {
+	    if ( $ver !=2 ) {
+		#version other than 2 describe failure but keep operating in new mode.
+		funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation.");
+	    }
+	    # reutrn our md5 as array ref.
+	    #$data_check = $md5[0];
+	    $data_check = $md5;
+	}
+    }
+    # return ( $data_check ) ; #this emulates previous behavior well, If we return null on failure;
+    return $data_check; 
 }
 # -------------
 sub file_checksum {
 # -------------
     # run checksum on file and return checksum result.
     my ($file) = @_;
-    use Digest::MD5 qw(md5 md5_hex md5_base64); 
+    #use Digest::MD5 qw(md5 md5_hex md5_base64); 
+    require Digest::MD5;
+    Digest::MD5->import qw(md5 md5_hex md5_base64); 
     open  my $data_fid, "<", "$file" or die "could not open $file, error $!\n";
     #print("md5 calc on $file\n");
     my $md_calc=Digest::MD5->new ;
@@ -973,8 +1007,10 @@ sub link_checksum {
 # -------------
     # run checksum on link and return checksum result.
     my ($file) = @_;
-    use Digest::MD5 qw(md5 md5_hex md5_base64); 
-    my $data = readlink $file or die "could not open $file, error $!\n";
+    #use Digest::MD5 qw(md5 md5_hex md5_base64); 
+    require Digest::MD5;
+    Digest::MD5->import qw(md5 md5_hex md5_base64); 
+    my $data = readlink $file or die "could not read link $file, error $!\n";
     #print("md5 calc on $file\n");
     my $md_calc=Digest::MD5->new ;
     $md_calc->add($data);
@@ -1684,6 +1720,8 @@ sub writeTextFile {
 # -------------
 sub xml_read {
 # -------------
+    require XML::Rules;
+    XML::Rules->import;
     my ($xml_file,$options)=@_;
 
     if ( 1 ) {
@@ -1723,8 +1761,10 @@ sub xml_read {
 }
 
 sub xml_to_string {
+    require XML::Rules;
+    XML::Rules->import;
     my ( $xml_ref,$xml_file,$outpath) = @_;
-	my $rules = XML::Rules::inferRulesFromExample( $xml_file );# could pass many xml files here to form rules, might be good to grab all xml's we know about.
+    my $rules = XML::Rules::inferRulesFromExample( $xml_file );# could pass many xml files here to form rules, might be good to grab all xml's we know about.
     my $parser = XML::Rules->new( rules => $rules );
     my $xml=$parser->ToXML('',$xml_ref);
     my $sucess=0;
@@ -2581,17 +2621,19 @@ sub fileparts {
     use File::Basename;
 #    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
     my ($name,$path,$suffix) = fileparse($fullname,qr/\.([^.].*)+$/);#qr/\.[^.]*$/)
-    if ( ! defined $fullname ||  $fullname eq "") { 
+    if ( ! defined $fullname || $fullname eq "") { 
 	
 	return("","","");
     }
-    ($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
+    if ($ver ==3){
+	($name,$path,$suffix) = fileparse($fullname,qr/\.[^.]*$/);
+    }
     if ($ver == 1) {
 	funct_obsolete("fileparts","basename for name, dirname for dir");
     	return($name,$path,$suffix);
     } else {
-	if ( $ver !=2 ) {
-	    funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation.");
+	if ( $ver !=2 && $ver !=3) {
+	    funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation,3 for matlab emulation, but only first file extension.");
 	}
 	return($path,$name,$suffix);
     }
