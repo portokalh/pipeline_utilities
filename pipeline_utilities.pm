@@ -989,7 +989,14 @@ sub file_checksum {
     my ($file) = @_;
     #use Digest::MD5 qw(md5 md5_hex md5_base64); 
     require Digest::MD5;
-    Digest::MD5->import qw(md5 md5_hex md5_base64); 
+    # THIS LINE BREAKS ON NEW MACS! Known functional perl 5.12(mac OS 10.7)
+    #Digest::MD5->import qw(md5 md5_hex md5_base64); 
+    Digest::MD5 import qw(md5 md5_hex md5_base64);  
+    # These two tests are syntax errors
+    #Digest::MD5::import qw(md5 md5_hex md5_base64); 
+    #Digest->MD5->import qw(md5 md5_hex md5_base64); 
+
+   
     open  my $data_fid, "<", "$file" or die "could not open $file, error $!\n";
     #print("md5 calc on $file\n");
     my $md_calc=Digest::MD5->new ;
@@ -1009,7 +1016,9 @@ sub link_checksum {
     my ($file) = @_;
     #use Digest::MD5 qw(md5 md5_hex md5_base64); 
     require Digest::MD5;
-    Digest::MD5->import qw(md5 md5_hex md5_base64); 
+    # THIS LINE BREAKS ON NEW MACS! Known functional perl 5.12(mac OS 10.7)
+    #Digest::MD5->import qw(md5 md5_hex md5_base64); 
+    Digest::MD5 import qw(md5 md5_hex md5_base64); 
     my $data = readlink $file or die "could not read link $file, error $!\n";
     #print("md5 calc on $file\n");
     my $md_calc=Digest::MD5->new ;
