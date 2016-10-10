@@ -30,7 +30,9 @@ use civm_simple_util qw(get_engine_hosts);
 #my $file_pat=".*\.nii.*\$";
 #my $file_pat=".*\.nii(?:\.gz)?\$"; #check used in data_check
 #my $file_pat=".*\.nii(\.gz)?\$"; 
-my $file_pat="(.*\.nii(?:\.gz)?)|(.*\.txt)|(.*\.xml)\$";
+#my $file_pat="(.*\.nii(?:\.gz)?)|(.*\.txt)|(.*\.xml)\$";
+#my $file_pat="((.*\.nii(?:\.gz)?)|(.*\.txt)|(.*\.xml))\$";
+my $file_pat="((.*\.nii(\.gz)?)|(.*\.txt)|(.*\.xml))\$";
 my $lead_data_system="crete";#take this in via variable?
 my @eng_hosts=get_engine_hosts($WKS_SETTINGS);
 my $EC      =load_engine_deps();

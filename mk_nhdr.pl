@@ -111,7 +111,7 @@ if ($#ARGV < 0 ) {
 	}
 	#load_headfile or print header.
 	my $hf ;
-	my $hfpath=$path.$name.".headfile";
+	my $hfpath=$path.$name.".nii_hf";
 	if ( -e $hfpath && $re_make_headfile) { 
 	    print STDERR "WARNING: Headfile existed but we're re-creating!\n";
 	    #sleep_with_countdown( 1);

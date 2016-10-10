@@ -7,6 +7,10 @@
 # file_exists  check for file existence allowing regex in name
 # printd(print only if devbugval high enough)
 # load_file_to_array(loads a file at path, to an array of lines at ref)
+# write_array_to_file inverse of load_file_to_array
+#get_engine_constants_path  these two may be better suited to pipeline_utilities
+#get_engine_hosts
+# get_script_loc
 # whoami(functname)
 # whowasi(callingfunctionname)
 # debugloc(show partofcallstack if debug_val>debug_loc)
@@ -34,6 +38,7 @@ get_engine_constants_path
 get_engine_hosts
 get_script_loc
 file_exists
+mod_time
 is_empty
 get_busy_char
 printd 
@@ -96,17 +101,15 @@ sub write_array_to_file { # (path,array_ref[,debug_val]) writes text to array re
     civm_simple_util::whoami();
     civm_simple_util::printd(30,"Opening file $file.\n");
     open my $text_fid, ">", "$file" or croak "could not open $file";
-#  open SESAME_OUT, ">$outpath"; 
     croak "file <$file> not Text\n" unless -T $text_fid ;
-    foreach ( @all_lines ) 
-    {
+    foreach ( @all_lines ) {
 	print  $text_fid $_;  # write out every line modified or not 
     }
-#    @all_lines =  <$text_fid> ;
     close  $text_fid;
-#    push (@{$array_ref}, @all_lines);
-    return;# $#all_lines+1;
+
+    return;
 }
+
 =item constant_path=get_engine_constants_path { # (hostname[,debug_val])
 
 =cut
@@ -223,6 +226,7 @@ check if a files exists using read dir
 filepath can include regular expession bits except for / because we use basename to get the directory.
 
 =cut
+
 sub file_exists { 
     my ($fullname)=@_; 
     my $status = 0;
@@ -241,6 +245,17 @@ sub file_exists {
     return $status;
 }
 
+=item mod_time 
+
+get modiy time in seconds of a file. 
+
+=cut
+
+sub mod_time {
+    #use File::stat;
+    my($file)=@_;
+    return (stat($file))[9];
+}
 =item is_empty 
 
 check if a directory is empty using read dir 
@@ -306,7 +321,7 @@ input: ($sleep_length)
 sleeps for sleep_length seconds tiking off the seconds
 
 =cut
-sub sleep_with_countdown { 
+sub sleep_with_countdown {
     my ($sleep_length)=@_;
     my $previous_default=select(STDOUT);
     $| ++;

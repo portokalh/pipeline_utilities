@@ -21,13 +21,14 @@
 #            group_XXX[YYY] items are for grouping images in n-dimensions
 # 120731 james Updated copy_in to allow a prefix and a post fix to be put around the key value
 #              from the incoming file. Either of them can be blank or undefined. 
+# 160731 james cleaned out goofy code in get_keys.
 
 package Headfile;
 use strict;
 ## doesn't work on intel mac: use diagnostics;
 ###use IO::File;
 use IO qw(Handle File);
-my $VERSION = "120731";
+my $VERSION = "160731";
 my $COMMENT = 0;
 
 # Constructor --------
@@ -484,12 +485,18 @@ sub read_nii_header {
 sub get_keys {
 #------------
     my ($self) = @_; 
-    my @keys = ();
+
     my @sk = sort (keys %{$self->{'__hashref'}});
+    return ( @sk);
+
+    # seriously.... this shit.....
+    if ( 0 ) {
+	my @keys = ();    
     foreach my $k (@sk) {
 	push @keys, $k;
     }
     return @keys;
+    }
 }
 
 # private subroutines -----------

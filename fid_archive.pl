@@ -444,7 +444,7 @@ our $verbose=0;
 }
 sub usage_message  {
     my ($msg)=@_;
-    print( STDERR "\ndumpHeader PROBLEM: $msg\n");
+    print( STDERR "\n$0 PROBLEM: $msg\n");
     print STDERR "$0 <options> person runno\n".
 	" person= you, \n".
 	" runno= runno to attach raw data to\n".
