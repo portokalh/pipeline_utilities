@@ -19,7 +19,9 @@ $debug_locator
 };
 use civm_simple_util qw(load_file_to_array write_array_to_file printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);di
 
-use Data::Dump qw(dump);
+#use Data::Dump qw(dump);
+require Data::Dump;
+Data::Dump->import(qw(dump));
 
 sub text_header_parse {
     my ($line,$separator)=@_;

@@ -2463,9 +2463,14 @@ sub mrml_types {
 sub xml_read2 {
 # -------------
     my ( $xml_file)=@_;
-    use XML::Simple qw(XMLin);
-    use File::Slurp qw(read_file);
-    use Data::Dumper qw(Dumper); 
+    #use XML::Simple qw(XMLin);
+    require XML::Simple;
+    XML::Simple->import(qw(XMLin));
+    #use File::Slurp qw(read_file);
+    require File::Slurp;
+    File::Slurp->import( qw(read_file));
+    require Data::Dumper;
+    Data::Dumper->import(qw(Dumper)); 
     print Dumper XMLin scalar(read_file $xml_file),
     KeyAttr => undef, ForceArray => 1, StrictMode => 1;
     #Instead, learn XPath and access the elements you actually need:
