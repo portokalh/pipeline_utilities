@@ -990,8 +990,12 @@ sub file_checksum {
     #use Digest::MD5 qw(md5 md5_hex md5_base64); 
     require Digest::MD5;
     # THIS LINE BREAKS ON NEW MACS! Known functional perl 5.12(mac OS 10.7)
-    #Digest::MD5->import qw(md5 md5_hex md5_base64); 
-    Digest::MD5 import qw(md5 md5_hex md5_base64);  
+    #Digest::MD5->import qw(md5 md5_hex md5_base64); # works on old, but not new
+    #Digest::MD5 import qw(md5 md5_hex md5_base64);  # works on new and old
+    #Digest::MD5 import; #FAILS on new!!!! WTF!!!!
+    Digest::MD5->import(qw(md5 md5_hex md5_base64));  #works everwhere.
+
+    
     # These two tests are syntax errors
     #Digest::MD5::import qw(md5 md5_hex md5_base64); 
     #Digest->MD5->import qw(md5 md5_hex md5_base64); 
@@ -1018,7 +1022,7 @@ sub link_checksum {
     require Digest::MD5;
     # THIS LINE BREAKS ON NEW MACS! Known functional perl 5.12(mac OS 10.7)
     #Digest::MD5->import qw(md5 md5_hex md5_base64); 
-    Digest::MD5 import qw(md5 md5_hex md5_base64); 
+    Digest::MD5->import( qw(md5 md5_hex md5_base64)); 
     my $data = readlink $file or die "could not read link $file, error $!\n";
     #print("md5 calc on $file\n");
     my $md_calc=Digest::MD5->new ;
@@ -1730,7 +1734,9 @@ sub writeTextFile {
 sub xml_read {
 # -------------
     require XML::Rules;
-    XML::Rules->import;
+    # Imports similar to this BROKE ON NEW MACS! Those used qw(list of things). It is known functional perl 5.12(mac OS 10.7). 
+    #XML::Rules->import;
+    XML::Rules->import();
     my ($xml_file,$options)=@_;
 
     if ( 1 ) {
@@ -1771,7 +1777,9 @@ sub xml_read {
 
 sub xml_to_string {
     require XML::Rules;
-    XML::Rules->import;
+    # Imports similar to this BROKE ON NEW MACS! Those used qw(list of things). It is known functional perl 5.12(mac OS 10.7). 
+    #XML::Rules->import;
+    XML::Rules->import();
     my ( $xml_ref,$xml_file,$outpath) = @_;
     my $rules = XML::Rules::inferRulesFromExample( $xml_file );# could pass many xml files here to form rules, might be good to grab all xml's we know about.
     my $parser = XML::Rules->new( rules => $rules );
