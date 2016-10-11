@@ -2633,7 +2633,7 @@ sub fileparts {
     	return($name,$path,$suffix);
     } else {
 	if ( $ver !=2 && $ver !=3) {
-	    funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation,3 for matlab emulation, but only first file extension.");
+	    funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation,3 for matlab emulation with single trailing file extension.");
 	}
 	return($path,$name,$suffix);
     }
