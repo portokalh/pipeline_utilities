@@ -50,7 +50,9 @@ sub apply_noise_reduction {
 	      $Hf_out->set_value("${hf_nii_id}-nii-path",$out_nii);   
 
 	      if ( $noise_reduction_type eq 'SUSAN') {
-		  use ENV ;
+		  #use ENV ;
+		  require ENV;
+		  ENV->import();
 		  $ENV{FSLOUTPUTTYPE}="NIFTI";
 		  push(@cmd,fsl_noise_reduction($in_nii, $hf_nii_id,$Hf_out->get_value("engine-app-fsl-dir")));
 	      } elsif ( $noise_reduction_type eq 'Bilateral'){
@@ -83,7 +85,8 @@ sub apply_noise_reduction {
       $cmd[0] = 'NO NOISE CORRECTION FOUND';
       my $noise_reduction_type = $Hf_out->get_value('noise_reduction');
       if ( $noise_reduction_type eq 'SUSAN') {
-	  use ENV ;
+	  require ENV;
+	  ENV->import();
 	  $ENV{FSLOUTPUTTYPE}="nii";
 	  @cmd=fsl_noise_reduction($in_nii, $hf_nii_id,$Hf_out->get_value("engine-app-fsl-dir"));
       } elsif ( $noise_reduction_type eq 'Bilateral'){

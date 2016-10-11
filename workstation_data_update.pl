@@ -121,11 +121,18 @@ for my $remote_data_file (@list ) {
    # strip remote path to relative path to engine_data_dir
     my ($rel_path)=  $remote_data_file =~ /$remote_data_dir(.*)$/x;
     
-    my ($data_name,$p,$s)=fileparts($rel_path);
-    my $rel_md5="$p$data_name.md5";
+    # OLD WAY
+    #my ($data_name,$p,$s)=fileparts($rel_path);
+    #my $rel_md5="$p$data_name.md5";
 
     #print("rel path $rel_path\n");
     #print("rel  md5 $rel_md5\n");
+
+    my ($p,$data_name,$e)=fileparts($rel_path,3);
+    $data_name=$data_name.$e;
+    #my $chk_file=$p.$n.'.md5'; #previous checksum format where we dropped the file extension.
+    my $rel_md5=$p.$data_name.".md5";
+
 
     # 
     # get md5 remote file
