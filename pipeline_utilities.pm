@@ -651,8 +651,9 @@ sub stop_fifo_program {
     my ( $app,$stdin_fifo,$logpath) = @_;
     # find app that is running, with stdin_fifo, and logpath, these should all show up in a ps call.
     my $stopped=-1;
-    my $cmd="fuser $logpath 2>&1"; # may work as a way to find the process attached to a given log, which should work well.
-    print STDERR ("FIFO_Stop: $stdin_fifo...\n");
+    my $cmd="fuser $logpath 2>&1"; # Get the PID's of processes looking at the logpath. Put stderr to stdout.
+    #    may work as a way to find the process attached to a given log, which should work well.
+    print STDERR ("FIFO_Stop: $stdin_fifo -> $logpath ...\n");
     #print STDERR ($cmd."\n" );
     my $o_string = `$cmd `;
     chomp($o_string);
@@ -672,14 +673,14 @@ sub stop_fifo_program {
 	    $on--;
 	}
     }
-    if ($#out>=0) {
+    if ($#out>=0 && $file_path == $logpath) {
 	print STDERR ("PID's to kill.\n\t".join("\n\t",@out)."\n");
 	if ( $#out>0 ) {
 	    print STDERR ( "WARNING: More than one process attached to the watched file!\n NOTIFY JAMES \n");
 	}
 	$stopped=kill 'KILL',@out;
     } else {
-	print STDERR ("No process open for $file_path.\n");
+	print STDERR ("No process open for $logpath or fuser fail.\n");
 	$stopped=0;
     }
     return $stopped;
