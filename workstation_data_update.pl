@@ -5,6 +5,7 @@ use Env qw(PIPELINE_SCRIPT_DIR);
 # generic incldues
 use Cwd qw(abs_path);
 use File::Basename;
+use File::Path qw(make_path);
 use lib dirname(abs_path($0));
 use Env qw(RADISH_PERL_LIB WKS_SETTINGS);
 use vars qw($PIPELINE_VERSION $PIPELINE_NAME $PIPELINE_DESC $HfResult $GOODEXIT $BADEXIT ); #$test_mode
@@ -32,7 +33,8 @@ use civm_simple_util qw(get_engine_hosts);
 #my $file_pat=".*\.nii(\.gz)?\$"; 
 #my $file_pat="(.*\.nii(?:\.gz)?)|(.*\.txt)|(.*\.xml)\$";
 #my $file_pat="((.*\.nii(?:\.gz)?)|(.*\.txt)|(.*\.xml))\$";
-my $file_pat="((.*\.nii(\.gz)?)|(.*\.txt)|(.*\.xml))\$";
+#my $file_pat="((.*\.nii(\.gz)?)|(.*\.txt)|(.*\.xml)|(.*\.am))\$";
+my $file_pat="((.*\.nii(\.gz)?)|(.*\.txt)|(.*xls)|(.*xlsx)|(.*\.xml)|(.*\.am))\$";
 my $lead_data_system="crete";#take this in via variable?
 my @eng_hosts=get_engine_hosts($WKS_SETTINGS);
 my $EC      =load_engine_deps();
@@ -66,6 +68,31 @@ my @list;
 push(@list,ssh_call::get_dir_listing($data_EC->get_value('engine'),
 				     $remote_data_dir."/atlas"." -type l",
 				     "[^.]*"));
+my @dirs_to_check=();
+push(@dirs_to_check,@ARGV);
+push(@dirs_to_check,ssh_call::get_dir_listing($data_EC->get_value('engine'),
+					    $remote_data_dir."/atlas"." -type d",
+					    "[^.]*"));
+for(my $fn=0;$fn<=$#dirs_to_check;$fn++){
+    if ( $dirs_to_check[$fn] =~ /$data_EC->get_value(engine_waxholm_canonical_images_dir)|$data_EC->get_value(engine_waxholm_labels_dir)/ ) {
+	print("found");
+    }
+}
+
+print(join(" ",@dirs_to_check)."\n");
+#print($#dirs_to_check."\n");
+
+#engine_data_directory
+while($#dirs_to_check>=0 ) { 
+    my $t_dir=shift @dirs_to_check;
+    print("Adding contents of dir $t_dir\n");
+    my @filepaths=ssh_call::get_dir_listing($data_EC->get_value('engine'),$t_dir,$file_pat);
+    
+#     for(my $fn=0;$fn<=$#filepaths;$fn++){
+# 	$filepaths[$fn]=$t_dir.'/'.$filepaths[$fn];
+#     }
+    push(@list,@filepaths);
+}
 push(@list,ssh_call::get_dir_listing($data_EC->get_value('engine'),
 				     $data_EC->get_value('engine_waxholm_canonical_images_dir'),
 				     $file_pat));
@@ -79,30 +106,7 @@ if ( $#list < 0  ) {
 	  $data_EC->get_value('engine_waxholm_labels_dir').".\n"); }
 
 
-my @dirs_to_check=ssh_call::get_dir_listing($data_EC->get_value('engine'),
-					    $remote_data_dir."/atlas"." -type d",
-					    "[^.]*");
 
-for(my $fn=0;$fn<=$#dirs_to_check;$fn++){
-    if ( $dirs_to_check[$fn] =~ /$data_EC->get_value(engine_waxholm_canonical_images_dir)|$data_EC->get_value(engine_waxholm_labels_dir)/ ) {
-	print("found");
-    }
-}
-
-print(join(" ",@dirs_to_check)."\n");
-#print($#dirs_to_check."\n");
-push(@dirs_to_check,@ARGV);
-#engine_data_directory
-while($#dirs_to_check>=0 ) { 
-    my $t_dir=shift @dirs_to_check;
-    print("Adding contents of dir $t_dir\n");
-    my @filepaths=ssh_call::get_dir_listing($data_EC->get_value('engine'),$t_dir,$file_pat);
-    
-#     for(my $fn=0;$fn<=$#filepaths;$fn++){
-# 	$filepaths[$fn]=$t_dir.'/'.$filepaths[$fn];
-#     }
-    push(@list,@filepaths);
-}
 @list=uniq(@list);
 if ( $#list < 0  ) {
     print("All dirs empty\n"); 
@@ -140,7 +144,8 @@ for my $remote_data_file (@list ) {
     my $fp=$in.dirname($rel_md5);
     if ( ! -d $fp ) {
 	#print("mkdir $fp\n");
-	mkdir($fp,0777) or die("couldnt make dest folder $fp");
+	#mkdir($fp,0777) or die("couldnt make dest folder $fp");
+	make_path($fp,0777) or die("couldnt make dest folder $fp");
     }
 
     if ( -f $in.$rel_md5) { # rm file if it exists
@@ -190,7 +195,10 @@ for my $remote_data_file (@list ) {
 
 	if ( $cp_file ) {
 	    if ( ! -d dirname($local_data_dir.$rel_path) ) {
-		mkdir(dirname($local_data_dir.$rel_path),0777) or die("Local atlas dir missing for ".dirname($local_data_dir.$rel_path)."and could not be created\n");
+		#mkdir(dirname($local_data_dir.$rel_path),0777) 
+		    #or die("Local atlas dir missing for ".dirname($local_data_dir.$rel_path)."and could not be created\n");
+		make_path(dirname($local_data_dir.$rel_path),0777) 
+		    or die("Local atlas dir missing for ".dirname($local_data_dir.$rel_path)."and could not be created\n");
 	    }
 	    print("copying:$rel_path to $local_data_dir\n");
    		#ssh_call::get_file($data_EC->get_vlaau
