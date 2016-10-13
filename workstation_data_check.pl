@@ -43,7 +43,8 @@ if (! getopts('ud:', \%opt)) {
 #my $file_pat='((.*\.nii(?:\.gz)?)|(.*\.txt)|(.*\.xml))$';
 #my $file_pat="((.*\.nii(?:\.gz)?)|(.*\.txt)|(.*\.xml))\$";
 #my $file_pat="((.*\.nii(\.gz)?)|(.*\.txt)|(.*\.xml)|(.*\.am))\$";
-my $file_pat="((.*\.nii(\.gz)?)|(.*\.txt)|(.*xls)|(.*xlsx)|(.*\.xml)|(.*\.am))\$";
+#my $file_pat="((.*\.nii(\.gz)?)|(.*\.txt)|(.*xls)|(.*xlsx)|(.*\.xml)|(.*\.am))\$";
+my $file_pat="((.*\.nii(\.gz)?)|(.*\.csv)|(.*\.txt)|(.*xls(x)?)|(.*\.xml)|(.*\.am))\$";
 #  my ($identifier,@required_values) = @_;#runno
 #my ($local_input_dir, $local_work_dir, $local_result_dir, $result_headfile, $EC)=new_get_engine_dependencies('PU_TEST',());
 my $EC      =load_engine_deps();
