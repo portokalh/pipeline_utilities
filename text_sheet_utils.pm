@@ -153,10 +153,11 @@ sub loader {
 	    $t_line =~ s/[\r\n]//gx; # found some hanging \r's and some \n's. This'll fix those right up.
 	    my @tt_entry=split($separator,$t_line);
 	    if ( scalar(@tt_entry) != scalar(keys(%$h_hash)) ) {
-		print("Bailing on bad entry with ($separator)\n");
+		#print("Bailing on bad entry with ($separator)\n");
+		print("Incomplete entry with ($separator)\n");
 		print("\t".scalar (@tt_entry)." != ".scalar(keys(%$h_hash))."(".join(":",@tt_entry).")\n");
 		Data::Dump::dump($h_hash);
-		next;
+		#next;
 	    }
 	    # color table is form of,
 	    # VALUE NAME RED GREEN BLUE ALPHA
@@ -209,7 +210,7 @@ sub loader {
 	    }
 	}
     }
-    $t_table->{"Header"}=\%out_header;
+    $t_table->{"Header"}=\%out_header; # < < < HERE'S THE HEADER!!
     return $t_table;
 }
 
