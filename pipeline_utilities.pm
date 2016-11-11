@@ -649,6 +649,18 @@ sub start_fifo_program {
 sub stop_fifo_program {
 # -------------
     my ( $app,$stdin_fifo,$logpath) = @_;
+
+
+#    pids=`ps -ax | grep -i matlab | grep fifo |awk '{print $1}'`;
+#    if [ "X_$pids" != "X_" ]; 
+#    then
+#	kill $pids
+#    fi
+#    # alt call
+#    # kill `ps -ax | grep -i matlab | grep fifo | cut -d ' ' -f1`
+#    rm /Volumes/workstation_home/matlab_fifos/*fifo*
+
+
     # find app that is running, with stdin_fifo, and logpath, these should all show up in a ps call.
     my $stopped=-1;
     my $cmd="fuser $logpath 2>&1"; # Get the PID's of processes looking at the logpath. Put stderr to stdout.
@@ -673,7 +685,7 @@ sub stop_fifo_program {
 	    $on--;
 	}
     }
-    if ($#out>=0 && $file_path == $logpath) {
+    if ($#out>=0 && $file_path eq "$logpath") {
 	print STDERR ("PID's to kill.\n\t".join("\n\t",@out)."\n");
 	if ( $#out>0 ) {
 	    print STDERR ( "WARNING: More than one process attached to the watched file!\n NOTIFY JAMES \n");
