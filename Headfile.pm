@@ -22,13 +22,14 @@
 # 120731 james Updated copy_in to allow a prefix and a post fix to be put around the key value
 #              from the incoming file. Either of them can be blank or undefined. 
 # 160731 james cleaned out goofy code in get_keys.
+# 161121 james cleaned up new function and improved the status message additions to the check function.
 
 package Headfile;
 use strict;
 ## doesn't work on intel mac: use diagnostics;
 ###use IO::File;
 use IO qw(Handle File);
-my $VERSION = "160731";
+my $VERSION = "161121";
 my $COMMENT = 0;
 
 # Constructor --------
@@ -38,11 +39,15 @@ sub new
 # Constructor of object of headfile class
     my ($classname, $mode, $in_headfile_path) = @_;
     # mode = ro, new, rw, rc, pfile, nf correspond to
-    #  existing file/read only, new file, existing/update, 
-    #  existing/(but write to copy, not original),
-    #  read pfile header,
-    #  nf == no file: just use hash, never write a file. 
-    # in_headfile_path: input headfile to be read, for "rw" you spec output file at time of write. 
+    #  nf   = no file: just use hash, never write a file.
+    #  new  = new file,
+    #  ro   = existing file/read only,    
+    #  rw   = existing/update, 
+    #  rc   = existing/(but write to copy, not original),
+    #  pfile= read pfile header,
+    #  nifti= read nifti header,
+    #  
+    #  in_headfile_path: input headfile to be read, for "rw" you spec output file at time of write. 
     #                   for "pfile" you spec path of pfile to read. 
     # When you call, the first argument is automatically added to the argument list
     # and contains the class name, so use no explicit $classname in call.
@@ -50,37 +55,39 @@ sub new
     # then to use your object, for example: $input_headfile->check; 
 
     my $self = {}; # an anonymous reference
-
+    if ( $mode eq "nii" ) { # convert nifti shorthand so our check code is simpler
+	print STDERR "switching mode nii -> nifti, please update your code\n";
+	$mode="nifti";
+    }
     $self->{'__in_path'} = $in_headfile_path;
     $self->{'__mode'} = $mode;
-#  my $time = time;
-#  $self->{'__filehandle'} = "FH_$time";
+
     my %h = ();  # for values 
     $self->{'__hashref'} = \%h;
     my @c = (); # for comments 
     $self->{'__comment_arrayref'} = \@c;
-
-    if ($mode ne 'nf') {
-	# does path exist, etc?
-	my $exists = 0;
-	my $readable = 1;
-	my $writeable = 1;
-	if (-e $in_headfile_path) { 
-	    $exists = 1; 
-	    $readable = (-r $in_headfile_path); 
-	    $writeable = (-w $in_headfile_path);
+    
+    my $exists = 0;
+    my $readable = 1;
+    my $writeable = 1;
+    if (-e $in_headfile_path) { 
+	$exists = 1; 
+	$readable = (-r $in_headfile_path); 
+	$writeable = (-w $in_headfile_path);
+    } elsif ( $mode eq 'new' ) {
+	if ( open SESAME, ">$in_headfile_path") {
+	    close SESAME;
+	} else {
+	    $readable = 0;
+	    $writeable = 0;
 	}
-	if ($mode eq 'rc') { $writeable = 1};  # this is a bit of a cheat cause we don't check that different file written to.
-	$self->{'__exists'} = $exists;
-	$self->{'__readable'} = $readable;
-	$self->{'__writeable'} = $writeable;
     }
-    else {
-	# 'nf' mode means there is no input or output file
-	$self->{'__exists'} = 0;
-	$self->{'__readable'} = 0;
-	$self->{'__writeable'} = 1;  # you can write this out to a new file
-    }
+    
+    if ($mode eq 'rc') { $writeable = 1};  # this is a bit of a cheat cause we don't check that different file written to.
+    $self->{'__exists'} = $exists;
+    $self->{'__readable'} = $readable;
+    $self->{'__writeable'} = $writeable;
+    
     bless $self, $classname; # Tell $self it contains the address of an object of package classname
     return ($self); 
 }
@@ -96,50 +103,29 @@ sub check {
     my $readable = $self->{'__readable'};
     my $writeable = $self->{'__writeable'};
     my $ok = 0;
-    if ($mode eq 'ro') {
-	if ($exists && $readable) {$ok = 1;}
-	else {print STDERR "check: headfile not ok for ro\n";};
-    }
-    elsif ($mode eq 'rc') {
-	# read an existing file / create (write to a new file)
-	if ($exists && $readable) {$ok = 1;}
-	else {print STDERR "check: headfile not ok for rc\n";};
-    }
-    elsif ($mode eq 'rw') {
-	if ($exists && $writeable && $readable) {$ok = 1;}
-	else {print STDERR "check: headfile not ok for rw\n";};
-    }
-    elsif ($mode eq 'pfile') {
-	if ($exists && $writeable && $readable) {$ok = 1;}
-	else {print STDERR "check: headfile not ok for pfile\n";};
-    }
-    elsif ($mode eq 'nii') {
-	if ($exists && $writeable && $readable) {$ok = 1;}
-	else {print STDERR "check: headfile not ok for pfile\n";};
-    }
-    elsif ($mode eq 'nf') {
-	# No headfile to start with,
-	# but you can write to a new file, later.
-	if (!$exists) {$ok = 1;}
-	else {print STDERR "check: headfile not ok for nf=no actual file\n";};
-    }
-    elsif ($mode eq 'new') {
-	if (!$exists) {
-	    my $path = $self->{__in_path};
-	    if ( open SESAME, ">$path") {
-		$ok = 1;
-		##close $SESAME;
-		close SESAME;
-	    }
-	    else {print STDERR "check: desired new headfile cannot be opened\n";}
+
+    my @msgs=();
+    # if it should exist
+    if ($mode !~ /^n..?$/ && ! $exists ) { # not new or nf && not exist, bad bad.
+	push(@msgs,"because ! exist");
+    } elsif ( $mode !~ /^n..?$/ ) { # not nf or new, && exists
+	if ( ! $readable ) {
+	    push(@msgs,"becuase ! $readable");
+	} elsif ( $mode =~ /^r[wc]$/ && ! $writeable ) {
+	    push(@msgs,"because ! $writeable");
+	} else {
+	    $ok=1;
 	}
-	else {print STDERR "check: desired new headfile already exists\n";}
+    } elsif ( $mode =~ /^n..?$/ && $exists ) {
+	push(@msgs,"because exists"); # nf and new shouldnt exist
+    } elsif ($mode eq 'new' && ! $writeable ) {
+	push(@msgs,"because ! writeable");
+    } else {
+	# success mode.
+	$ok=1;
     }
-    else { print STDERR "check: don't understand headfile open mode: $mode\n"; }
     if ( ! $ok ) {
-	if (! $writeable) { print STDERR "because ! writeable\n"; }
-	if (! $readable) { print STDERR "because ! writeable\n"; }
-	if (! $exists) { print STDERR "because ! writeable\n"; }
+	print STDERR "check: headfile $self->{__in_path} not ok for $mode\n".join("\n",@msgs)."\n";
     }
     return ($ok);
 }
@@ -193,6 +179,8 @@ sub read_headfile {
 	}
     }
     else {
+	# insert other read types here?
+	#if ($self{'__mode'} !~ /^n..?/ && ! $exists ) { # not new or nf && not exist, bad bad.
 	print STDERR "Attempt to read newly created headfile\n"; 
 	return (0);
     }
@@ -429,7 +417,8 @@ sub read_nii_header {
     my ($self, $nii_header_reader_app, $nii_version) = @_;
 # read nii header into hash using streaming reader app you specify
 
-    if ($self->{'__mode'} eq "nii") {
+    if ($self->{'__mode'} eq "nii" 
+	|| $self->{'__mode'} eq "nifti" ) {
 	if (! -e $nii_header_reader_app) {
 	    # the headfile reader lookup in nii_header.pm prefixes error results as shown above 
 	    print STDERR "Headfile::read_nii_header Problem finding nii header app supplied:  $nii_header_reader_app\n"; 
