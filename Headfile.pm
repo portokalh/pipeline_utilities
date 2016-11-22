@@ -126,6 +126,9 @@ sub check {
     }
     if ( ! $ok ) {
 	print STDERR "check: headfile $self->{__in_path} not ok for $mode\n".join("\n",@msgs)."\n";
+	$self->{'__valid'}=0;
+    } else {
+	$self->{'__valid'}=1;
     }
     return ($ok);
 }
