@@ -15,8 +15,7 @@ use strict;
 use warnings;
 
 my $GOODEXIT = 0;
-my $BADEXIT = 1;
-my $ERROR_EXIT = $BADEXIT;
+my $ERROR_EXIT = 1;
 my $use_csh_scripts = 0 ; 
 #my $ARCHIVE_TAG = 1;   # select write of archive_tag file (READY_) used by CIVM archive 
 #my $READY_ARCHIVE_TAG = "READY_";  # name of file ready to be chosen for archive 
@@ -181,7 +180,7 @@ if ($#found_runnos>=0) {
 if ($#missing_runnos>=0) {
     my $err=join ("find",@error_m);
     printd(0,$err.join("\n".$err,@missing_runnos)."\n");
-    exit $BADEXIT;
+    exit $ERROR_EXIT;
 }
 
 ###

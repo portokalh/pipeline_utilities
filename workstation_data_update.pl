@@ -8,16 +8,16 @@ use File::Basename;
 use File::Path qw(make_path);
 use lib dirname(abs_path($0));
 use Env qw(RADISH_PERL_LIB WKS_SETTINGS);
-use vars qw($PIPELINE_VERSION $PIPELINE_NAME $PIPELINE_DESC $HfResult $GOODEXIT $BADEXIT ); #$test_mode
-if (  ! defined($BADEXIT) ) {
-    $BADEXIT=1;
+use vars qw($PIPELINE_VERSION $PIPELINE_NAME $PIPELINE_DESC $HfResult $GOODEXIT $ERROR_EXIT ); #$test_mode
+if (  ! defined($ERROR_EXIT) ) {
+    $ERROR_EXIT=1;
 }
 if (  ! defined($GOODEXIT) ) {
     $GOODEXIT=0;
 }
 if (! defined($RADISH_PERL_LIB)) {
     print STDERR "Cannot find good perl directories, quiting\n";
-    exit $BADEXIT;
+    exit $ERROR_EXIT;
 }
 
 use lib split(':',$RADISH_PERL_LIB);
@@ -50,7 +50,7 @@ while(!ssh_call::works($lead_data_system ) && $#eng_hosts>=0) {
 
 if (!ssh_call::works($lead_data_system) ) {
     print("No other data systems available, unable to update workstation_data\n");
-    exit 1 ;
+    exit $ERROR_EXIT ;
 }
 
 my $data_EC=load_engine_deps($lead_data_system);

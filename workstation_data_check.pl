@@ -8,16 +8,16 @@ use File::Basename;
 use Data::Dump qw(dump);
 use lib dirname(abs_path($0));
 use Env qw(RADISH_PERL_LIB);
-use vars qw($PIPELINE_VERSION $PIPELINE_NAME $PIPELINE_DESC $HfResult $GOODEXIT $BADEXIT ); #$test_mode
-if (  ! defined($BADEXIT) ) {
-    $BADEXIT=1;
+use vars qw($PIPELINE_VERSION $PIPELINE_NAME $PIPELINE_DESC $HfResult $GOODEXIT $ERROR_EXIT ); #$test_mode
+if (  ! defined($ERROR_EXIT) ) {
+    $ERROR_EXIT=1;
 }
 if (  ! defined($GOODEXIT) ) {
     $GOODEXIT=0;
 }
 if (! defined($RADISH_PERL_LIB)) {
     print STDERR "Cannot find good perl directories, quiting\n";
-    exit $BADEXIT;
+    exit $ERROR_EXIT;
 }
 
 use lib split(':',$RADISH_PERL_LIB);
