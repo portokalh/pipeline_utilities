@@ -986,7 +986,7 @@ sub data_integrity {
 	} else {
 	    if ( $ver !=2 ) {
 		#version other than 2 describe failure but keep operating in new mode.
-		funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation.");
+		funct_obsolete("data_integrity","1 simple bool sucess, 2 return md5.");
 	    }
 	    # reutrn our md5 as array ref.
 	    #$data_check = $md5[0];
