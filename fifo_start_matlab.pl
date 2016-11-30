@@ -39,7 +39,7 @@ my %opt;
 my $work_dir;
 my $log_path;
 { # optcheck
-  if (! getopts('d:', \%opt)) {
+  if (! getopts('md:', \%opt)) {
 	usage_message("Problem with command line options.\n");
     }
     if ( defined $opt{d} ) { # -d debug mins
@@ -57,8 +57,13 @@ if (! defined $log_path) {
 #
 #    $log_path='> '."$work_dir/matlab_${function_m_name}";
     $log_path='> '."$work_dir/matlab_generic";
-
 }
+
+
+if ( defined $opt{m} &&! -d $work_dir) {
+    mk_path($work_dir);
+}
+
 my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$log_path);
 my $Hf=load_engine_deps($WORKSTATION_HOSTNAME);
 my $matlab_app  = $Hf->get_value('engine_app_matlab');
