@@ -660,42 +660,56 @@ sub stop_fifo_program {
 #    # alt call
 #    # kill `ps -ax | grep -i matlab | grep fifo | cut -d ' ' -f1`
 #    rm /Volumes/workstation_home/matlab_fifos/*fifo*
-
-
-    # find app that is running, with stdin_fifo, and logpath, these should all show up in a ps call.
-    my $stopped=-1;
-    my $cmd="fuser $logpath 2>&1"; # Get the PID's of processes looking at the logpath. Put stderr to stdout.
-    #    may work as a way to find the process attached to a given log, which should work well.
     print STDERR ("FIFO_Stop: $stdin_fifo -> $logpath ...\n");
-    #print STDERR ($cmd."\n" );
-    my $o_string = `$cmd `;
-    chomp($o_string);
-    #print STDERR ( "\tfuser_string:$o_string\n");
-    my @out=split("\n",$o_string);
-    chomp(@out);
-    @out=split(':',$out[0]);
-    #print STDERR ("\tfuser_out = ".join(',', @out)."\n");
+    my $oldway=0;
+    my $file_path;
+    my $stopped=-1;
+    if ( $oldway){
+	# find app that is running, by logpath, these should all show up in a ps call.
+	my $cmd="fuser $logpath 2>&1"; # Get the PID's of processes looking at the logpath. Put stderr to stdout.
+        # This has some issus with network mounts.
+	#    may work as a way to find the process attached to a given log, which should work well.
+	
+	#print STDERR ($cmd."\n" );
+	my $o_string = `$cmd `;
+	chomp($o_string);
+	#print STDERR ( "\tfuser_string:$o_string\n");
+	my @out=split("\n",$o_string);
+	chomp(@out);
+	@out=split(':',$out[0]);
+	#print STDERR ("\tfuser_out = ".join(',', @out)."\n");
+	
+	$file_path=shift(@out);
+	@out = split(' ',$out[0]);
 
-    my $file_path=shift(@out);
-    @out = split(' ',$out[0]);
-    print STDERR ("\twatched_file = $file_path\n");
-    # <= BUG ?
-    for (my $on=0;$on<$#out;$on++){ 
-	if ($out[$on]!~ m/[0-9]+/x ) {
-	    shift(@out);
-	    $on--;
+	print STDERR ("\twatched_file = $file_path\n");
+	# <= BUG ?
+	for (my $on=0;$on<$#out;$on++){ 
+	    if ($out[$on]!~ m/[0-9]+/x ) {
+		shift(@out);
+		$on--;
+	    }
 	}
-    }
-    if ($#out>=0 && $file_path eq "$logpath") {
-	print STDERR ("PID's to kill.\n\t".join("\n\t",@out)."\n");
-	if ( $#out>0 ) {
-	    print STDERR ( "WARNING: More than one process attached to the watched file!\n NOTIFY JAMES \n");
+	if ($#out>=0 && $file_path eq "$logpath") {
+	    print STDERR ("PID's to kill.\n\t".join("\n\t",@out)."\n");
+	    if ( $#out>0 ) {
+		print STDERR ( "WARNING: More than one process attached to the watched file!\n NOTIFY JAMES \n");
+	    }
+	    $stopped=kill 'KILL',@out;
+	} else {
+	    print STDERR ("No process open for $logpath or fuser fail.\n");
+	    $stopped=0;
 	}
-	$stopped=kill 'KILL',@out;
-    } else {
-	print STDERR ("No process open for $logpath or fuser fail.\n");
-	$stopped=0;
+    }else{
+	my $cmd="fuser $logpath 2> /dev/null"; # Get the PID's of processes looking at the logpath. Put stderr to stdout.
+	my $o_string = `$cmd `;
+	chomp($o_string);
+	# o_string should now be the pid.
+	print STDERR ("PID's to kill.\n\t".join("\n\t",$o_string)."\n");
+	$stopped=kill 'KILL',$o_string;
+
     }
+
     return $stopped;
 }
 # -------------
