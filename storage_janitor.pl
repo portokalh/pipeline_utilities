@@ -210,7 +210,7 @@ sub file_discovery {
 
     if ($os_type =~ /.*Darwin.*/x) {
 	# $cmd="find $scan_dir -mtime +$test_age -type f  -print0 | xargs -0 stat -f \"%TY-%Tm-%Td-%Tw_%TT|%T@|%AY-%Am-%Ad-%Aw_%AT|%A@|%s|%u|%h/%f\n\" ";
-	$cmd="find $scan_dir -mtime +$test_age -type f  -print0 | xargs -0 stat -t \"%F_%T\" -f \"%Sm|%m|%Sa|%a|%z|%Su|%N\" ";
+	$cmd="find $scan_dir -mtime +$test_age -type f -X -print0 | xargs -0 stat -t \"%F_%T\" -f \"%Sm|%m|%Sa|%a|%z|%Su|%N\" ";
 	warn ("Darwin support not good! We're after my (\$mod_time,\$mod_epoc,\$accesstime,\$access_epoc,\$bytesize,\$user,\$path,\@rest)=split('\|',\$line); trying $cmd\n");
     }
 
