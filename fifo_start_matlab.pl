@@ -1,4 +1,6 @@
 #!/usr/bin/perl
+$|++; # auto flush
+
 # simple matlab fifo starting program so we can bounce do some matlab.
 my $ERROR_EXIT = 1;
 my $GOOD_EXIT  = 0;
@@ -61,7 +63,7 @@ if (! defined $log_path) {
 
 
 if ( defined $opt{m} &&! -d $work_dir) {
-    mk_path($work_dir);
+    mkpath($work_dir);
 }
 
 my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$log_path);
