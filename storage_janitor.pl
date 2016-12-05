@@ -49,7 +49,8 @@ my $min_size="1M";     #minimum size. If there are no small files present, will 
 my $files_found=0;     #result, number of files matching criteria. a scan count.
 my $disk_safety_threshold=0.8;  # disk must be at least this % full before we start moving.
 my $disk_cleaning_threshold=0.5;   # if disk is at least this % full email users to clean up with the summary of who's the biggest.
-my $safety=0; # SAFETY variable, if set to 1 will not remove, will just build an rm script.
+my $safety=1; # SAFETY variable, if set to 1 will not remove, will just build an rm script.
+my $os_type=`uname`;   # get the os type so we can tell if we're mac os.
 
 ##### globals
 my $CLEANABLE_USERS='.*';#all uesrs are cleanable, used in testing or for targeting a specific user.
@@ -61,6 +62,9 @@ if( ! defined $SCAN_DIR && defined $ARGV[0] ){
     die "No scan location specified!\n";
 }
 my $HOST=$ENV{'HOSTNAME'};
+if (! defined $HOST || -z "$HOST" || $HOST=~/^\s*$/x ) {
+    $HOST=`hostname -s`;
+}
 
 
 my $interval_seconds=($test_age*24*60*60);
@@ -77,7 +81,10 @@ $current_epoc_time=$current_epoc_time-$rem; #floors to lowest interval from epoc
 
 my $dt = DateTime->from_epoch(epoch => $current_epoc_time );
 
-my $debug_val=0;#50;
+my $debug_val=0;
+if ($os_type =~ /.*Darwin.*/x) {
+    $debug_val=25;
+}
 
 my $TOTALKS=0;
 my $USEDKS=0;
@@ -122,6 +129,8 @@ my %user_definitions=(
 #    "rmd22" => [ qw(rmd22 jeeves.duhs.duke.edu /Volumes/glusterspace_relief/) ], 
     "rmd22" => [ qw(rmd22 localhost /nas4/rmd22) ], 
     "root" => [ qw(nobody nohost.should.ever.respond.to.this /nodrive/should/be/found) ],
+    "james" => [ qw(james panorama.duhs.duke.edu /Users/BiGDATADUMP) ], 
+    "omega" => [ qw(nobody nohost.should.ever.respond.to.this /nodrive/should/be/found) ],
     );
 if ( 0 ) {
     print(%user_definitions);
@@ -195,6 +204,17 @@ sub file_discovery {
     #my $cmd="find $scan_dir -size +$min_size -mtime +$test_age -type f -printf \"%TY-%Tm-%Td-%Tw_%TT|%T@|%AY-%Am-%Ad-%Aw_%AT|%A@|%s|%u|%h/%f\n\" ";
     #removed minsize
     my $cmd="find $scan_dir -mtime +$test_age -type f -printf \"%TY-%Tm-%Td-%Tw_%TT|%T@|%AY-%Am-%Ad-%Aw_%AT|%A@|%s|%u|%h/%f\n\" ";
+
+    ### find ~/Documents/MATLAB/ -mtime +7 -type f  -printf "%TY-%Tm-%Td-%Tw_%TT|%T@|%AY-%Am-%Ad-%Aw_%AT|%A@|%s|%u|%h/%f"
+    ### 2015-10-26-1_11:11:08.0000000000|1445872268.0000000000|2015-08-05-3_12:51:49.0000000000|1438793509.0000000000|146|jjc29|/home/jjc29/Documents/MATLAB/startup.m
+
+    if ($os_type =~ /.*Darwin.*/x) {
+	# $cmd="find $scan_dir -mtime +$test_age -type f  -print0 | xargs -0 stat -f \"%TY-%Tm-%Td-%Tw_%TT|%T@|%AY-%Am-%Ad-%Aw_%AT|%A@|%s|%u|%h/%f\n\" ";
+	$cmd="find $scan_dir -mtime +$test_age -type f  -print0 | xargs -0 stat -t \"%F_%T\" -f \"%Sm|%m|%Sa|%a|%z|%Su|%N\" ";
+	warn ("Darwin support not good! We're after my (\$mod_time,\$mod_epoc,\$accesstime,\$access_epoc,\$bytesize,\$user,\$path,\@rest)=split('\|',\$line); trying $cmd\n");
+    }
+
+
 
 #1970time->%A@
 
@@ -330,7 +350,7 @@ sub summarize_data {
     my $total_size=$TOTALKS*1024;
     ###
     # find all users storage janitor dir and get their size.
-    opendir(my $DIR, "$janitor_dir") or die $!;
+    opendir(my $DIR, "$janitor_dir") or die "$! problem with $janitor_dir";
     printf("Summary Processing\n");
     while ( my $d_name=readdir($DIR) ) {
 	if ( $d_name !~ /^([.].*)|(old)|(Elimination.*)$/ && -d $janitor_dir.'/'.$d_name  ) {
@@ -573,12 +593,14 @@ sub sum_files {
 	    chomp($entry);
 	    #my ($size,$path) =(0,"/testfile.txt");#= split('|',$_);
 	    my ($size,$path) = split('\|',$entry);
-	    if (! defined $path ) {
+	    if (! defined $path && -f $size ) {
 		$path=$size;
 		#$size=stat($path)->$size;
 		$size= -s $path || 0 ;
 	    }
 	    #printf("    add file $path\n");
+	    #$sum=$sum+$size unless ! -f $path;
+	    # testing for files is super slow! taken out.
 	    $sum=$sum+$size;
 	}
 	close( $FILE);
@@ -944,6 +966,24 @@ sub prepare_email {
 		print $c_fh ("To get a listing with easier to read size use, \"ls -lhrS `cat listfilepath |cut -d '|' -f 2-\`\"\n");
 		#print $c_fh ("To get a listing with easier to read size use, \"ls -lh `cat listfilepath |cut -d '|' -f 2-\`\"\n");
 		print $c_fh ("To get a listing of only the directories, \"for file in `cat listfilepath |cut -d '|' -f 2-\` ; do dirname \$file; done |sort -u \"\n");
+		# finds deepest folders, and gets their size
+		#( for name in `cat filelist_critical_*|cut -d '|' -f2|sort -u`; do echo ${name%/*};done) |sort -u | xargs  du -sh
+		print $c_fh ("To get a listing of directory sizes mentioned in critical: \n"
+			     ."\tWARNING-1: This doesnt exclude new files.\n"
+			     ."\tWARNING-2: This will be slow for many small files.\n"
+			     ."\tWARNING-3: This may only work on macs(not tested on Linux.\n"
+			     ."( for name in `cat filelist_critical_*|cut -d '|' -f2|sort -u`;"
+			     ."    do echo \${name\%/*}; done ) | sort -u | xargs du -sh\n");
+		# finds shallowest folders of this user, This is inefficient. Need a better way. Probably some inline perl is the best way to do this one. 
+		#( for name in `cat filelist_*|cut -d '|' -f2|sort -u`;    do echo ${name%/*} |sed "s|$BIGGUS_DISKUS||" |cut -d '/' -f2 ; done ) | sort -u | xargs du -sh
+                # for all the found file_list files make a c_filelist which has missing files removed.
+		# for lf in filelist_*.txt;do  echo $lf; while  read -r line; do if [ -f ${line#*|} ]; then echo "$line">>$s_dir/c_$lf ;fi ; done< $s_dir/$lf; done
+		print $c_fh ("If you clean up your files and want to update the filelists for accuracy, this will go through the files and create a new set which has all the missing files omitted.\n"
+			     ."s_dir=\"/path/to/my/summary/files\";\n"
+			     ."mkdir \$s_dir/_lfiles/; mv \$s_dir/filelist_*txt \$s_dir/_lfiles/;\n"
+			     ."for lfp in \$s_dir/_lfiles/filelist_*.txt;\n"
+			     ."\tdo echo \$lfp; lf=`basename \$lfp`; while  read -r line; do if [ -f \${line#*|} ];\n"
+			     ."\tthen echo \"\$line\">>\$s_dir/\$lf ;fi ; done< \$lfp; done;\n");
 		#use diagnostics;
 		#print ${out_hash{$d_name}} ($txt) unless ! defined ($out_hash{$d_name} );
 	    } else {
@@ -1136,10 +1176,14 @@ sub main {
 
     my $mail_commands=prepare_email($out_dir,$summary_txt,$summary_ref,$elimination_queue,$elimination_summary);
     #printf("%s\n",join(" ",@{$mail_commands}));
-    if($debug_val<50) {
-	my $cmd_status=command_batch($mail_commands);
+    if ($os_type =~ /.*Darwin.*/x) {
+	# right now we never send email on a mac.
+	print("MAC OS Not doing sendmail:\n".join("\n",@$mail_commands));
+	if($debug_val<20) {
+	    my $cmd_status=command_batch($mail_commands);
+	}
     }
-    
+   
     print("storage janitor complete!\n");
 }
 
