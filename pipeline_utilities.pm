@@ -1576,6 +1576,8 @@ sub load_deps {
 	    if ( -f $device_constants_path ) {
 		push(@warnings,"WARNING: OBSOLETE SETTINGS FILE USED, $device_file\n\tConsider updating system!");
 	    } 
+	} else {
+	    push(@warnings,"\t But we're ok we found the next one.\n");
 	}
     }
     my $device_constants ;
