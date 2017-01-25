@@ -94,6 +94,7 @@ execute_indep_forks
 executeV2
 start_pipe_script
 load_engine_deps
+load_deps
 new_get_engine_dependencies
 make_list_of_files
 my_ls
@@ -649,39 +650,66 @@ sub start_fifo_program {
 sub stop_fifo_program {
 # -------------
     my ( $app,$stdin_fifo,$logpath) = @_;
-    # find app that is running, with stdin_fifo, and logpath, these should all show up in a ps call.
-    my $stopped=-1;
-    my $cmd="fuser $logpath 2>&1"; # may work as a way to find the process attached to a given log, which should work well.
-    print STDERR ("FIFO_Stop: $stdin_fifo...\n");
-    #print STDERR ($cmd."\n" );
-    my $o_string = `$cmd `;
-    chomp($o_string);
-    #print STDERR ( "\tfuser_string:$o_string\n");
-    my @out=split("\n",$o_string);
-    chomp(@out);
-    @out=split(':',$out[0]);
-    #print STDERR ("\tfuser_out = ".join(',', @out)."\n");
 
-    my $file_path=shift(@out);
-    @out = split(' ',$out[0]);
-    print STDERR ("\twatched_file = $file_path\n");
-    # <= BUG ?
-    for (my $on=0;$on<$#out;$on++){ 
-	if ($out[$on]!~ m/[0-9]+/x ) {
-	    shift(@out);
-	    $on--;
+
+#    pids=`ps -ax | grep -i matlab | grep fifo |awk '{print $1}'`;
+#    if [ "X_$pids" != "X_" ]; 
+#    then
+#	kill $pids
+#    fi
+#    # alt call
+#    # kill `ps -ax | grep -i matlab | grep fifo | cut -d ' ' -f1`
+#    rm /Volumes/workstation_home/matlab_fifos/*fifo*
+    print STDERR ("FIFO_Stop: $stdin_fifo -> $logpath ...\n");
+    my $oldway=0;
+    my $file_path;
+    my $stopped=-1;
+    if ( $oldway){
+	# find app that is running, by logpath, these should all show up in a ps call.
+	my $cmd="fuser $logpath 2>&1"; # Get the PID's of processes looking at the logpath. Put stderr to stdout.
+        # This has some issus with network mounts.
+	#    may work as a way to find the process attached to a given log, which should work well.
+	
+	#print STDERR ($cmd."\n" );
+	my $o_string = `$cmd `;
+	chomp($o_string);
+	#print STDERR ( "\tfuser_string:$o_string\n");
+	my @out=split("\n",$o_string);
+	chomp(@out);
+	@out=split(':',$out[0]);
+	#print STDERR ("\tfuser_out = ".join(',', @out)."\n");
+	
+	$file_path=shift(@out);
+	@out = split(' ',$out[0]);
+
+	print STDERR ("\twatched_file = $file_path\n");
+	# <= BUG ?
+	for (my $on=0;$on<$#out;$on++){ 
+	    if ($out[$on]!~ m/[0-9]+/x ) {
+		shift(@out);
+		$on--;
+	    }
 	}
-    }
-    if ($#out>=0) {
-	print STDERR ("PID's to kill.\n\t".join("\n\t",@out)."\n");
-	if ( $#out>0 ) {
-	    print STDERR ( "WARNING: More than one process attached to the watched file!\n NOTIFY JAMES \n");
+	if ($#out>=0 && $file_path eq "$logpath") {
+	    print STDERR ("PID's to kill.\n\t".join("\n\t",@out)."\n");
+	    if ( $#out>0 ) {
+		print STDERR ( "WARNING: More than one process attached to the watched file!\n NOTIFY JAMES \n");
+	    }
+	    $stopped=kill 'KILL',@out;
+	} else {
+	    print STDERR ("No process open for $logpath or fuser fail.\n");
+	    $stopped=0;
 	}
-	$stopped=kill 'KILL',@out;
-    } else {
-	print STDERR ("No process open for $file_path.\n");
-	$stopped=0;
+    }else{
+	my $cmd="fuser $logpath 2> /dev/null"; # Get the PID's of processes looking at the logpath. Put stderr to stdout.
+	my $o_string = `$cmd `;
+	chomp($o_string);
+	# o_string should now be the pid.
+	print STDERR ("PID's to kill.\n\t".join("\n\t",$o_string)."\n");
+	$stopped=kill 'KILL',$o_string;
+
     }
+
     return $stopped;
 }
 # -------------
@@ -972,7 +1000,7 @@ sub data_integrity {
 	} else {
 	    if ( $ver !=2 ) {
 		#version other than 2 describe failure but keep operating in new mode.
-		funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation.");
+		funct_obsolete("data_integrity","1 simple bool sucess, 2 return md5.");
 	    }
 	    # reutrn our md5 as array ref.
 	    #$data_check = $md5[0];
@@ -1486,67 +1514,90 @@ use lib split(':',$RADISH_PERL_LIB);
 return 1; 
 }
 
-
-
 # ------------------
 sub load_engine_deps {
 # ------------------
-# load local engine_deps, OR load an arbitrary one, return the engine constants headfile
     my ($engine) = @_;
-    #requried_values=engine==hostname -s
-    #$engine=thishost.
-    
+    return load_deps($engine,"engine");
+}
+
+# ------------------
+sub load_deps {
+# ------------------
+# load local engine_deps, OR load an arbitrary one, return the engine constants headfile
+    my ($device,$type) = @_;
+  
     my @errors;
     my @warnings;
     use Env qw(PIPELINE_HOSTNAME PIPELINE_HOME WKS_SETTINGS WORKSTATION_HOSTNAME);
     
-
-    # alternate way to get the path to the engine constants file
-    #    if ( defined $WKS_SETTINGS) { $this_engine_constants_path = get_engine_constants_path($WKS_SETTINGS,$WORKSTATION_HOSTNAME); }
-
-    
-#    if (! defined($PIPELINE_HOSTNAME))       { push(@errors, "Environment variable WORKSTATION_HOSTNAME must be set."); }
+    # alternate way to get the path to the device constants file
+    # if ( defined $WKS_SETTINGS) { $this_device_constants_path = get_device_constants_path($WKS_SETTINGS,$WORKSTATION_HOSTNAME); }
     
     ### set the host
     if  ( ! defined($WORKSTATION_HOSTNAME)) { 
-	print("WARNING: obsolete variable PIPELINE_HOSTNAME used.\n");
+	push(@warnings,"WARNING: obsolete variable PIPELINE_HOSTNAME used.");
 	$WORKSTATION_HOSTNAME=$PIPELINE_HOSTNAME;
     }
-    if ( defined($engine)) { $WORKSTATION_HOSTNAME=$engine; };
+    if ( defined($device)) { $WORKSTATION_HOSTNAME=$device; };
     if (! defined($WORKSTATION_HOSTNAME)) { push(@warnings, "Environment variable WORKSTATION_HOSTNAME not set."); }
     
     ### set the dir
-    my $engine_constants_dir;
+    my $device_constants_dir;
     if ( ! defined($WKS_SETTINGS) ) { 
-	if (! -d $PIPELINE_HOME)             { push(@errors, "unable to find $PIPELINE_HOME"); }
-	print("WARNING: obsolete variable PIPELINE_HOME used to find dependenceis\n");
+	if (! -d $PIPELINE_HOME) { push(@errors, "unable to find $PIPELINE_HOME"); }
+	print("WARNING: obsolete variable PIPELINE_HOME used to find dependenceis");
 	$WKS_SETTINGS=$PIPELINE_HOME;
-	$engine_constants_dir="$WKS_SETTINGS/dependencies";
+	$device_constants_dir="$WKS_SETTINGS/dependencies";
     } else { 
-      $engine_constants_dir="$WKS_SETTINGS/engine_deps";
+	$device_constants_dir="$WKS_SETTINGS/".$type."_deps";
     }
-    
-    if (! -d $engine_constants_dir)      { push(@errors, "$engine_constants_dir does not exist."); }
+    if (! -d $device_constants_dir) { push(@errors, "$device_constants_dir does not exist."); }
     
     ### set the file name
-    my $engine_file =join("_","engine","$WORKSTATION_HOSTNAME","dependencies"); 
-    my $engine_constants_path = "$engine_constants_dir/".$engine_file;
-    if ( ! -f $engine_constants_path ) { 
-	$engine_file=join("_","engine","$WORKSTATION_HOSTNAME","pipeline_dependencies");
-	$engine_constants_path = "$engine_constants_dir/".$engine_file;
-	print("WARNING: OBSOLETE SETTINGS FILE USED, $engine_file\n")
+    my $device_file =join("_","$type","$device","dependencies"); 
+    my $device_constants_path = "$device_constants_dir/".$device_file;
+
+    # if ( ! -f $the_device_constants_path ){
+    # 	$device_type='nas';
+    # 	$device_file_name            = join("_",$device_type,$device,"radish_dependencies");
+    # 	print("Using nas device settings\n");
+    # 	$the_device_constants_path = join("/",$WKS_SETTINGS."/".$device_type."_deps/", $device_file_name); 
+    # }
+
+    if ( ! -f $device_constants_path ) {
+	push(@warnings,"WARNING: first constants path $device_constants_path missing");
+	$device_file=join("_","$type","$device","radish_dependencies");
+	$device_constants_path = "$device_constants_dir/".$device_file;
+	if ( ! -f $device_constants_path ) {
+	    push(@warnings,"WARNING: second constants path $device_constants_path missing");
+	    $device_file=join("_","$type","$device","pipeline_dependencies");
+	    $device_constants_path = "$device_constants_dir/".$device_file;
+	    if ( -f $device_constants_path ) {
+		push(@warnings,"WARNING: OBSOLETE SETTINGS FILE USED, $device_file\n\tConsider updating system!");
+	    } 
+	} else {
+	    push(@warnings,"\t But we're ok we found the next one.\n");
+	}
     }
-    
-    ### load engine_deps
-    my $engine_constants = new Headfile ('ro', $engine_constants_path);
-    if (! $engine_constants->check()) {
-	push(@errors, "Unable to open engine constants file $engine_constants_path\n");
+    my $device_constants ;
+    if (-f $device_constants_path ) {
+	### load device_deps
+	$device_constants = new Headfile ('ro', $device_constants_path);
+	if (! $device_constants->check()) {
+	    push(@errors, "Unable to open device constants file $device_constants_path");
+	}
+	if (! $device_constants->read_headfile) {
+	    push(@errors, "Unable to read device constants from headfile form file $device_constants_path");
+	}
     }
-    if (! $engine_constants->read_headfile) {
-	push(@errors, "Unable to read engine constants from headfile form file $engine_constants_path\n");
+    if (scalar(@warnings)>0) {
+	print(join("\n",@warnings)."\n");
     }
-    
-    return $engine_constants;
+    if (scalar(@errors)>0) {
+	print(join(", ",@errors)."\n");
+    }
+    return $device_constants;
 }
 
 # ------------------
@@ -2655,7 +2706,7 @@ sub fileparts {
     	return($name,$path,$suffix);
     } else {
 	if ( $ver !=2 && $ver !=3) {
-	    funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation,3 for matlab emulation, but only first file extension.");
+	    funct_obsolete("fileparts","1 for bad version, 2 for correct matlab emulation,3 for matlab emulation with single trailing file extension.");
 	}
 	return($path,$name,$suffix);
     }

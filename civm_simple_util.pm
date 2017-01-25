@@ -232,12 +232,26 @@ sub file_exists {
     my $status = 0;
 #    use File::Basename;
 #    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
-    my ($n,$p,$s) = fileparse($fullname,qr/\.[^.]*$/);
+    #my ($n,$p,$s) = fileparse($fullname,qr/\.[^.]*$/);
+
+    my ($n,$p,$s) = fileparse($fullname);    #Isnt this equally effective? Note $s will be empty string.
 
     opendir(DIR, "$p") or die $!;
-    my @matches = grep(/^$n$s/, readdir(DIR));
-    closedir(DIR);
+    my @matches = grep(/^$n$s/i, readdir(DIR)); # this is good for nomal operations. This is also CASE-INSENSITIVE becuase of macs, and irrevant curators.
+    
+    # the following is for exceptional test conditionsl
+    if ( 0 ) {
+	my @matches;
+	while (my $f= readdir(DIR) ) {
+	    print($f." =~ $n\n");
+	    if ( $f =~ /$n/i ) {
+		push (@matches,$f);
+	    }
+	}
+    }
 
+
+    closedir(DIR);
     if ($#matches>=0) {
 	$status=1;
     }
