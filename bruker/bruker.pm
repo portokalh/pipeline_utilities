@@ -85,6 +85,7 @@ determine_volume_type
 read_til_next_keyline
 input_files
 @knownmethods
+@radial_methods
 );
 }    
 # aoaref_get_single
@@ -103,11 +104,12 @@ my $Hfile = 0;
 my $NAME = "bruker lib";
 my $VERSION = "2013/04/29";
 my $COMMENT = "Bruker meta data functions";
-use vars qw(@knownmethods);
+use vars qw(@knownmethods @radial_methods);
 
 my @cartesian_3D_methods= qw( FLASH MGE RARE MSME DtiStandard dtiStandard_1 GEFC jcn_20160129_DTI jcn_20160130_DTI jcn_20151109_MGE); 
 my @cartesian_2D_methods= qw(MDEFT fLASH_MRE) ;
-my @radial_methods=qw( UTE UTE3D ute3d_keyhole Bruker:SPIRAL Bruker:DtiSpiral ute3df);
+#my @radial_methods=qw( UTE UTE3D ute3d_keyhole Bruker:SPIRAL Bruker:DtiSpiral ute3df);
+@radial_methods=qw( UTE UTE3D ute3d_keyhole Bruker:SPIRAL Bruker:DtiSpiral ute3df);
 push(@knownmethods,@cartesian_3D_methods);
 push(@knownmethods,@cartesian_2D_methods);
 push(@knownmethods,@radial_methods);
