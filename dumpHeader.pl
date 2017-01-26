@@ -84,6 +84,7 @@ our $verbose=0;
 	$cmdopts="${cmdopts}o";
 	print("\nOverwrite enabled!\n") if $verbose;
     }
+
 #     if (defined $opt{e}) { # -e
 # 	$data_exists = 1; # if data has already been copied, we'll work with local data
 # 	$cmdopts="${cmdopts}e";
@@ -95,6 +96,7 @@ our $verbose=0;
 	my $name;
 	($name,$directory)=fileparse( $directory);
     }
+    $cmdopts=$cmdopts."d$debug_val ".$scanner.' '.$directory.' '.$hf_path;
 }
 
 { # main
@@ -170,7 +172,7 @@ my $the_scanner_constants_path = join("/",$RADISH_RECON_DIR, $scanner_file_name)
     if (! $Hfile->check()) {
 	error_out("Unable to open file $hf_path\n");
     }
-
+    $Hfile->set_value('dump_command','dumpHeader -'.$cmdopts);
 ###
 # load files
 ###
