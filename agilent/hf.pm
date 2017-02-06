@@ -897,6 +897,13 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
     
     $report_order='xpycz';
 
+    # seqcon variable in header has some influence on this.
+    # We used to always have seqcon = ncccn. (or so i'm told).
+    # However for big scans we had to change it to seqcon = nccsn.
+    # This changed that particular dataset from ray_block_order=xpyzc   to    ray_block_order=xcpy.
+    # NOTE: there was no c and no p, so our code corretion here will just drop zc.
+    # We were missing the celem handleing in our 4D for that dataset, it was added just to see if that did the trick.
+    
     if ( $vol_type =~ /2D/x ){
 	printd(25,"Volume 2D detected setting special 2D dimensional order\n");
 	$dim_order='xpcyzt';
@@ -920,7 +927,19 @@ sub copy_relevent_keys  { # ($agilent_header_hash_ref, $hf)
 	#$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
 	$dim_order='xpyzct'; # this worked for an acq of dti with multi channel xyzct, eg no p
 	$report_order='xpyzc';
+	if ( ($hf->get_value($data_prefix."seqcon") ne 'NO_KEY')
+	     && ( $hf->get_value($data_prefix."seqcon") eq 'nccsn' ) ) {
+	    printd(10,"\n\nWARNING:!!!!!\n\nEXTRA SPECIAL 4D case enabled. NEW DIMENSION ORDERING.\n");
+	    $dim_order='xpcytz';
+	    if ( ($hf->get_value($data_prefix."celem") ne 'NO_KEY')  
+		 && ( $hf->get_value($data_prefix."celem") != $hf->get_value($s_tag.'channels') ) ) {
+		printd(10,"\n\nWARNING:!!!!!\n\nEXTRA SPECIAL 4D case enabled, EVERY SLICE IS CONSIDERED ITS OWN BLOCK\n YOU HAVE DONE SOMETHING NEW AND/OR STRANGE IN YOUR ACQUISTIION, STOP THAT!\n");
+		sleep_with_countdown(15);
+		$report_order='xpcy';
+	    }
+	}
     }
+    
     $hf->set_value("${s_tag}vol_type",$vol_type);
     $hf->set_value("${s_tag}vol_type_detail",$vol_detail);
     $hf->set_value("${s_tag}dimension_order",$dim_order);

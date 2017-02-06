@@ -18,12 +18,15 @@ $debug_locator
 )
 };
 use civm_simple_util qw(load_file_to_array write_array_to_file printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);# debug_val debug_locator);di
-
 #use Data::Dump qw(dump);
+
 require Data::Dump;
 Data::Dump->import(qw(dump));
 
 sub text_header_parse {
+    #require Data::Dump;
+    #Data::Dump->import(qw(dump));
+
     my ($line,$separator)=@_;
     my $h_hash={};
     # standard separators
@@ -41,7 +44,7 @@ sub text_header_parse {
     } else {	
 	warn("No separator defined");
     }
-    dump($line,@separators);
+    Data::Dump::dump($line,@separators);
     my @parts;
     my $sep_i=0;
     while(scalar (@parts) < 2 && $sep_i < scalar(@separators) ) {
@@ -63,9 +66,13 @@ sub text_header_parse {
 
 
 sub loader {
+    #require Data::Dump;
+    #Data::Dump->import(qw(dump));
+
     my ($path_text_table,$h_hash,@junkybits)=@_;
     my @text_lines;
     load_file_to_array($path_text_table,\@text_lines);
+    #dump(@text_lines);
     # get splitter out of the header_hash
     my $splitter=$h_hash->{"Splitter"};
     if (defined $splitter ) {
@@ -146,10 +153,11 @@ sub loader {
 	    $t_line =~ s/[\r\n]//gx; # found some hanging \r's and some \n's. This'll fix those right up.
 	    my @tt_entry=split($separator,$t_line);
 	    if ( scalar(@tt_entry) != scalar(keys(%$h_hash)) ) {
-		print("Bailing on bad entry with ($separator)\n");
+		#print("Bailing on bad entry with ($separator)\n");
+		print("Incomplete entry with ($separator)\n");
 		print("\t".scalar (@tt_entry)." != ".scalar(keys(%$h_hash))."(".join(":",@tt_entry).")\n");
-		dump($h_hash);
-		next;
+		Data::Dump::dump($h_hash);
+		#next;
 	    }
 	    # color table is form of,
 	    # VALUE NAME RED GREEN BLUE ALPHA
@@ -164,7 +172,7 @@ sub loader {
 	    } else {
 		# foreach splitter
 		if (not defined($h_hash->{$splitter->{"Input"}[0]}) ){
-		    dump(@tt_entry);
+		    Data::Dump::dump(@tt_entry);
 		    next;
 		}
 		my $in_index=$h_hash->{$splitter->{"Input"}[0]};
@@ -202,7 +210,7 @@ sub loader {
 	    }
 	}
     }
-    $t_table->{"Header"}=\%out_header;
+    $t_table->{"Header"}=\%out_header; # < < < HERE'S THE HEADER!!
     return $t_table;
 }
 

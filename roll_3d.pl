@@ -15,8 +15,7 @@ use strict;
 use warnings;
 
 my $GOODEXIT = 0;
-my $BADEXIT = 1;
-my $ERROR_EXIT = $BADEXIT;
+my $ERROR_EXIT = 1;
 my $use_csh_scripts = 0 ; 
 #my $ARCHIVE_TAG = 1;   # select write of archive_tag file (READY_) used by CIVM archive 
 #my $READY_ARCHIVE_TAG = "READY_";  # name of file ready to be chosen for archive 
@@ -181,7 +180,7 @@ if ($#found_runnos>=0) {
 if ($#missing_runnos>=0) {
     my $err=join ("find",@error_m);
     printd(0,$err.join("\n".$err,@missing_runnos)."\n");
-    exit $BADEXIT;
+    exit $ERROR_EXIT;
 }
 
 ###
@@ -240,7 +239,7 @@ for my $runno (@runnos) {
     my @imgs=glob("${hfdir}/*imx*");# all imx...
     #print("$runno${tc}imx[.][0]+[1]?[.]raw");
     my @first_imgs=grep(/$runno${tc}imx[.][0]+[1]?[.]raw/, @imgs);
-    if ( $#first_imgs> 0 ) { error_out("too many first imagse, somethingwent wrong"); }
+    if ( $#first_imgs> 0 ) { error_out("too many first images, something went wrong"); }
     
     ### check for previous, and clean them up.
     if ( -e "${hfdir}orig" ) {
@@ -252,7 +251,7 @@ for my $runno (@runnos) {
 	    #`rm -fr ${hfdir}last`;
 	    printd(5,"WARNING: Re-run multiple times, behavior uncertain!\n");
 	    #`$cmd`;
-	    $cmd="cp -f ${hfpath} ${hfdir}last/.";
+	    $cmd="cp -fp ${hfpath} ${hfdir}last/.";
 	    `$cmd`;
 	}
 	my @o_imgs=glob("${hfdir}/*imx*");
@@ -282,6 +281,7 @@ for my $runno (@runnos) {
     @imgs=glob("${hfdir}*imx*");
     #@first_imgs=grep("$runno${tc}imx[.][0]+[1]?[.]raw", @imgs);
     @first_imgs=grep(/$runno${tc}imx[.][0]+[1]?[.]raw/, @imgs);
+
     if ( $#first_imgs!=0 && $#imgs>=0) {
 	my ($st,$img_suffix,@erros)=get_image_suffix($hfdir,$runno);
  	if ( ! defined $img_suffix || $st) { 
