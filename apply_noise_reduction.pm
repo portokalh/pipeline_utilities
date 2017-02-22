@@ -41,7 +41,7 @@ sub apply_noise_reduction {
 	  sleep(5);
 	  for $hf_nii_id (@in_setid_list) {
 	      $in_nii = $Hf_out->get_value("${hf_nii_id}-nii-path");
-	      my ($name,$path,$extension)=fileparts($in_nii);
+	      my ($path,$name,$extension)=fileparts($in_nii,3);
 	      $name = $name . "_${noise_reduction_type}${extension}";
 	      my $out_nii = $path . $name ;
 	      $Hf_out->set_value("${hf_nii_id}-noise-reduction-input-nii-path",$in_nii);
@@ -54,7 +54,10 @@ sub apply_noise_reduction {
 		  require ENV;
 		  ENV->import();
 		  $ENV{FSLOUTPUTTYPE}="NIFTI";
-		  push(@cmd,fsl_noise_reduction($in_nii, $hf_nii_id,$Hf_out->get_value("engine-app-fsl-dir")));
+		  my $fsl_dir=$Hf_out->get_value("engine-app-fsl-dir");
+		  if($fsl_dir eq "NO_KEY" || $fsl_dir eq "EMPTY_VALUE" || $fsl_dir eq "UNDEFINED_VALUE") {
+		      $fsl_dir=$Hf_out->get_value("engine_app_fsl_dir");}
+		  push(@cmd,fsl_noise_reduction($in_nii, $hf_nii_id,$fsl_dir));
 	      } elsif ( $noise_reduction_type eq 'Bilateral'){
 		  push(@cmd,matlab_noise_reduction($in_nii, $hf_nii_id, $Hf_out));
 	      } elsif ( $noise_reduction_type eq 'ANTS'){
@@ -102,7 +105,7 @@ sub apply_noise_reduction {
       } 
       # only set values on sucess, not sure i like this syntax.
 #      print("Noise reduction success\n");
-      my ($name,$path,$extension)=fileparts($in_nii);
+      my ($path,$name,$extension)=fileparts($in_nii,3);
       $name = $name . "_${noise_reduction_type}${extension}";
       my $out_nii = $path . $name ;
       $Hf_out->set_value("${hf_nii_id}-noise-reduction-input-nii-path",$in_nii);
@@ -124,7 +127,7 @@ sub matlab_noise_reduction {
 # ------------------
     my ( $in_nii, $hf_nii_id, $Hf_out) = @_;
     my @cmdlist=();
-    my ($name,$path,$extension)=fileparts($in_nii);
+    my ($path,$name,$extension)=fileparts($in_nii,3);
     print("File parts returned path:$path  $name  $extension\n") if( $debug_val>=35);
     my $suffix="Bilateral"; # could make this variable by setting a hf key.
     my $out_nii = $path . $name . "_${suffix}${extension}";
@@ -146,7 +149,7 @@ sub fsl_noise_reduction {
 # ------------------
     my ( $in_nii, $hf_nii_id, $fsl_dir) = @_;
 
-    my ($name,$path,$extension)=fileparts($in_nii);
+    my ($path,$name,$extension)=fileparts($in_nii,3);
     print("File parts returned path:$path  $name  $extension\n") if( $debug_val>=35);
     my $dimensions = 3;
     
