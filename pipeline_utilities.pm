@@ -490,6 +490,16 @@ sub get_matlab_fifo {
     use Env qw(WORKSTATION_HOME WORKSTATION_HOSTNAME FIFO_NAME);
     my $fifo_registry=$WORKSTATION_HOME."/../matlab_fifos/";
     my $fifo_dir=$work_dir."";
+    my $cmd="mkfifo $fifo_dir/test";
+    my $fifo_check=execute(1,"fifo test",$cmd);
+    
+    `rm $fifo_dir/test`;
+    if( ! $fifo_check) {
+	print STDERR ("FIFO Not supported in work dir\n");
+	$fifo_dir="/tmp";
+	#$cmd="mk_fifo $fifo_dir/test";
+	#$fifo_check=execute(1,"fifo test",$cmd);	
+    }
     if ( $fifo_dir !~ m/^.*[\/]$/x ) {
 	#print STDERR ("FIFO Dir check added a slash\n");
 	$fifo_dir=$fifo_dir."/";
