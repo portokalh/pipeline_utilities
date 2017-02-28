@@ -12,7 +12,7 @@ package hoaoa;
 use strict;
 use warnings;
 use Carp;
-use List::MoreUtils qw(uniq);
+#use List::MoreUtils qw(uniq);
 
 use Env qw(RADISH_PERL_LIB);
 if (! defined($RADISH_PERL_LIB)) {
