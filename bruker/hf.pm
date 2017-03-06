@@ -421,7 +421,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	if ( $hf->get_value($data_prefix."PVM_Isotropic") eq "Isotropic_Matrix") {
 	    $slices=$matrix[0];
 	} else { 
-	,    printd(45, "\tNot isotropic with ".$hf->get_value($data_prefix."PVM_Isotropic") ."\n");
+	    printd(45, "\tNot isotropic with ".$hf->get_value($data_prefix."PVM_Isotropic") ."\n");
 	    #printd(15,"setting to matrix element\n");
 	    if ($#matrix >1 ) {
 		$slices=$matrix[2];
