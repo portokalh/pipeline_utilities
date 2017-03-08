@@ -258,7 +258,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 
 	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."$prefered_matrix_key"));
 	if ( $#matrix == 0 ) { 
-	    
+	    #die ("ERROR getting matrix");
 	}
 #         if ( $#matrix > 0 ) { 
 # 	     @matrix=@{$hf->{"$prefered_matrix_key"}->[0]};
@@ -413,15 +413,22 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         }
     } elsif ($#matrix == 0 || $isradial==1 ) {
 	$vol_type="radial";
-	$y=$matrix[0];
+	if ( $#matrix > 0 ) { 
+	    $y=$matrix[1]; 
+	} else {
+	    $y=$matrix[0];
+	}
 	if ( $hf->get_value($data_prefix."PVM_Isotropic") eq "Isotropic_Matrix") {
 	    $slices=$matrix[0];
 	} else { 
 	    printd(45, "\tNot isotropic with ".$hf->get_value($data_prefix."PVM_Isotropic") ."\n");
+	    #printd(15,"setting to matrix element\n");
+	    if ($#matrix >1 ) {
+		$slices=$matrix[2];
+	    }
 	}
     }
-
-
+    #die("$x,$y,$z _ $slices \n".join(",",@matrix)."\n");
 # ###### MDEFT LAME FIX
 # at some point i've managed to remove the need for this fudgery.
 #     if ( $method =~ m/MDEFT/x && $extraction_mode_bool ) {
@@ -570,6 +577,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	printd(90,"\tz<-slices\n");
 	$z=$slices;
     }
+
     if ( $hf->get_value($data_prefix."KeyHole") ne 'NO_KEY') {
 	$vol_detail=$vol_detail.'-keyhole';
     }
