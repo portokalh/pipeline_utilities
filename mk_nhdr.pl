@@ -74,7 +74,9 @@ our %opt;
 our $cmdopts='';
 
 if (! getopts('sh', \%opt)) {
-    print STDERR ("Problem with command line options.\n");
+    print STDERR ("Problem with command line options.\n".
+		  "s - do not filp orientation around\n".
+		  "h - over write last created headfile.\n");
     exit 1;
 }
 if (defined $opt{s}) {  
@@ -183,54 +185,6 @@ if ($#ARGV < 0 ) {
 	    #hf_aliasinsert(1,2,3);
 
 	    $hf->write_headfile($hfpath); # this should be enabled once we figure out our orientation bits
-
-	    
-	    
-	    if ( $hf->get_value("nifti_type") =~ m/^[fF][lL][oO][aA][tT]/x ) {
-		$data_type="float";
-		$data_min=1500;
-		$data_max=32767;
-	    } elsif ( $hf->get_value("nifti_type") =~ m/[iI][nN][tT]/x ) {
-		if ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]8/x ) {
-		    $data_type="uchar";
-		    $data_min=0;
-		    $data_max=255;
-		} elsif ( $hf->get_value("nifti_type") =~ m/^[iI][nN][tT]8/x ) {
-		    $data_type="char";
-		    $data_min=0;
-		    $data_max=126;
-		} elsif ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]16/x ) {
-		    $data_type="ushort";
-		    $data_min=0;
-		    $data_max=40000;
-		} elsif ( $hf->get_value("nifti_type") =~ m/^[iI][nN][tT]16/x ) {
-		    $data_type="short";
-		    $data_min=0;
-		    $data_max=20000;
-		} elsif ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]32/x ) {
-		    $data_type="uint";
-		    $data_min=0;
-		    $data_max=65535;
-		} elsif ( $hf->get_value("nifti_type") =~ m/^[iI][nN][tT]32/x ) {
-		    $data_type="uint";
-		    $data_min=0;
-		    $data_max=65535;
-		} else {
-		    $data_type="int";
-		    $data_min=0;
-		    $data_max=32767;
-		}
-	    } elsif ( $hf->get_value("nifti_type") =~ m/^[Rr][Gg][Bb]24$/x ) {
-		$data_type="uchar";
-		$data_type_k0="\"vector\"" ;
-		$data_type_dir0="none ";
-		$data_type_dim0=3;
-		$data_min=0;
-		$data_max=127;
-		#$ndims=4;
-	    } else {
-		exit "error with generated hf, unrecognized data type in nifti_type field";
-	    }
 	    if ( $hf->get_value("fov_dim") =~ m/Unknown/x ) {
 		print STDERR "WARNING:unknown dimension units, ASSUMING mm!\n";
 		$hf->set_value("fov_dim","mm");
@@ -255,8 +209,56 @@ if ($#ARGV < 0 ) {
 	    print "Opening headfile\n";
 	    $hf = new Headfile('ro',$hfpath);
 	    $hf->read_headfile();
-	    
 	}
+
+	
+	
+	if ( $hf->get_value("nifti_type") =~ m/^[fF][lL][oO][aA][tT]/x ) {
+	    $data_type="float";
+	    $data_min=1500;
+	    $data_max=32767;
+	} elsif ( $hf->get_value("nifti_type") =~ m/[iI][nN][tT]/x ) {
+	    if ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]8/x ) {
+		$data_type="uchar";
+		$data_min=0;
+		$data_max=255;
+	    } elsif ( $hf->get_value("nifti_type") =~ m/^[iI][nN][tT]8/x ) {
+		$data_type="char";
+		$data_min=0;#-127->128
+		$data_max=126;
+	    } elsif ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]16/x ) {
+		$data_type="ushort";
+		$data_min=0;
+		$data_max=40000;
+	    } elsif ( $hf->get_value("nifti_type") =~ m/^[iI][nN][tT]16/x ) {
+		$data_type="short";
+		$data_min=0;
+		$data_max=20000;
+	    } elsif ( $hf->get_value("nifti_type") =~ m/^[uU][iI][nN][tT]32/x ) {
+		$data_type="uint";
+		$data_min=0;
+		$data_max=65535;
+	    } elsif ( $hf->get_value("nifti_type") =~ m/^[iI][nN][tT]32/x ) {
+		$data_type="uint";
+		$data_min=0;
+		$data_max=65535;
+	    } else {
+		$data_type="int";
+		$data_min=0;
+		$data_max=32767;
+	    }
+	} elsif ( $hf->get_value("nifti_type") =~ m/^[Rr][Gg][Bb]24$/x ) {
+	    $data_type="uchar";
+	    $data_type_k0="\"vector\"" ;
+	    $data_type_dir0="none ";
+	    $data_type_dim0=3;
+	    $data_min=0;
+	    $data_max=127;
+	    #$ndims=4;
+	} else {
+	    exit "error with generated hf, unrecognized data type in nifti_type field";
+	}
+	
 # 	#name type matches for max min
 # 	if ( $name =~ m/.*adc/x ) { 
 # 	} elsif ( $name =~ m/.*_fa/) {
@@ -281,13 +283,19 @@ if ($#ARGV < 0 ) {
 #unu make -h -i ./aneurism.raw.gz -t uchar -s 256 256 256 -sp 1 1 1 \
 #-c aneurism -e gzip -o aneur.nhdr
 	my $center_volume_string="";
-	my @origin=(
+	my @origin=( # formerly - 1 and 2.
  	    -(split / /,$hf->get_value("transform1") )[3],
  	    -(split / /,$hf->get_value("transform2") )[3],
  	    (split / /,$hf->get_value("transform3") )[3]
 	    );
+	#@origin=(
+ 	#    (split / /,$hf->get_value("transform1") )[3],
+ 	#    (split / /,$hf->get_value("transform2") )[3],
+ 	#    (split / /,$hf->get_value("transform3") )[3]
+	#    );
 	#@origin=(0,0,0);
 	if ( $origin[0] == 0 && $origin[1] == 0 && $origin[2] == 0 ) {
+	    print("Junk origin, using 1/2 volume\n");
 	    @origin = (
 		0-floor($hf->get_value('fovx')/2),
 		0-floor($hf->get_value('fovy')/2),
@@ -304,10 +312,16 @@ if ($#ARGV < 0 ) {
 	my @t1=(split / /,$hf->get_value("transform1") )[0, 1, 2];
 	my @t2=(split / /,$hf->get_value("transform2") )[0, 1, 2];
 	my @t3=(split / /,$hf->get_value("transform3") )[0, 1, 2];
-	
+	foreach (@t1) {
+	    $_=$_*-1;
+	}
+	foreach (@t2) {
+	    $_=$_*-1;
+	}
 
 	if ( $civmorient ) {
-	    # orientaiton correction for rat/mouse/mulatta data... 
+	    # orientaiton correction for rat/mouse/mulatta data...
+	    print("CIVM orientation repair \n");
 	    @t2=(split / /,$hf->get_value("transform1") )[0, 1, 2];
 	    @t1=(split / /,$hf->get_value("transform2") )[0, 1, 2];
 	    @t3=(split / /,$hf->get_value("transform3") )[0, 1, 2];
