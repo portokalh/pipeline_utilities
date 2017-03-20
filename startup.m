@@ -1,4 +1,4 @@
-
+if ~isdeployed
 display=false;
 old_paths={
     '/pipe_home/script/matlab_functions_local'
@@ -112,3 +112,4 @@ for p=length(patharray):-1:1
 end
 
 clear workstation_home paths genpaths old_paths old_genpaths  patharray p display 
+end

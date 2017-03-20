@@ -1649,7 +1649,7 @@ sub create_affine_transform {
       my $opts1 = "-i 0 --use-Histogram-Matching --rigid-affine true --MI-option 32x8000 -r Gauss[3,0.5]";
       my $opts2 = "--number-of-affine-iterations $affine_iter --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4 -v";  
       
-      $cmd = "${ants_app_dir}antsRegistration -d 3 -r [$A_path,$B_path,1] ". 
+      $cmd = "${ants_app_dir}antsRegistration -d 3 --verbose 1 -r [$A_path,$B_path,1] ". 
 	  "-m Mattes[$A_path,$B_path,1,32,random,0.3] -t rigid[0.1] -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 ".
 	  " ${q_string} ${r_string} ".
 	  " -u 1 -z 1 -o $result_transform_path_base --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4";
@@ -1658,7 +1658,7 @@ sub create_affine_transform {
 
       my $opts1 = "-i 0 ";
       my $opts2 = "--number-of-affine-iterations $affine_iter --affine-metric-type MSQ";  
-     $cmd = "${ants_app_dir}antsRegistration -d 3 -r [$A_path,$B_path,1] ".
+     $cmd = "${ants_app_dir}antsRegistration -d 3 --verbose 1 -r [$A_path,$B_path,1] ".
 	 " -m MeanSquares[$A_path,$B_path,1,32,random,0.3] -t translation[0.1] -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
 	 " -m MeanSquares[$A_path,$B_path,1,32,random,0.3] -t rigid[0.1]       -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
 	 " -m MeanSquares[$A_path,$B_path,1,32,random,0.3] -t affine[0.1]      -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
@@ -1666,7 +1666,7 @@ sub create_affine_transform {
 	 "  -u 1 -z 1 -o $result_transform_path_base --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4";
   } elsif ($xform_code eq 'full_affine') {
 
-     $cmd = "${ants_app_dir}antsRegistration -d 3 -r [$A_path,$B_path,1] ".
+     $cmd = "${ants_app_dir}antsRegistration -d 3 --verbose 1 -r [$A_path,$B_path,1] ".
 	 " -m Mattes[$A_path,$B_path,1,32,random,0.3] -t affine[0.1]      -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
 	 " ${q_string} ${r_string} ".
 	 "  -u 1 -z 1 -o $result_transform_path_base --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4";
@@ -1820,26 +1820,49 @@ sub cluster_exec {
     if (! defined $verbose) {$verbose = 1;}
 
     if ($test) {
-	$queue_command = "-p overload";#"-p matlab";#Not sure why switched from overload to matlab...have now switched back.
-	$time_command = "-t 15"; # -t 180
-	push(@sbatch_commands,$time_command);     
+	#$queue_command = "-p overload";#"-p matlab";#Not sure why switched from overload to matlab...have now switched back.
+	#$time_command = "-t 15"; # -t 180
+	#push(@sbatch_commands,$time_command); 
+	$queue_command = "-p high_priority";    
     } elsif ($custom_q == 1) {
 	$queue_command = "-p $my_queue";
     }
     push(@sbatch_commands,$queue_command);
 
+   # push(@sbatch_commands,"-m cyclic");    
+
     if (defined $node) {
-	$node_command = "-w $node";
-	push(@sbatch_commands,$node_command);
+	if ($node =~ /,/) {
+	    ($node,$local_reservation) = split(',',$node);
+	    $node_command = "-w $node";
+	    push(@sbatch_commands,$node_command);
+	    $reservation_command = "--reservation=${local_reservation}";
+	    push(@sbatch_commands,$reservation_command);
+	} else {
+	    if ($node =~ /^(civm)/) {
+		$local_reservation = 0;
+		$node_command = "-w $node";
+		push(@sbatch_commands,$node_command);
+	    } else {
+		$local_reservation = $node;
+		$reservation_command = "--reservation=${local_reservation}";
+		push(@sbatch_commands,$reservation_command);
+	    }
+	}
     }
 
 
-    if (! defined $memory) {
+    if ((! defined $memory) ||($memory eq ''))  { #12 December 2016: Added memory eq '' so we can more easily trigger the default.
 	$memory_command = " --mem ${default_memory} ";
     } else {
         $memory_command = " --mem $memory ";
     }
     push(@sbatch_commands,$memory_command);
+
+
+    #my $verbose_command = " -v 1"; # Oops! Inserted during the week of 24-28 Oct 2016 
+    my $verbose_command = " -v"; # However, this fixes an issue with antsRegistration calls, NOT sbatch calls!
+    push(@sbatch_commands,$verbose_command);  # It would have been fine without the "1", dammit
 
     my $sharing_is_caring =  ' -s ';  # Not sure if this is still needed.
     push(@sbatch_commands,$sharing_is_caring);
@@ -1847,7 +1870,7 @@ sub cluster_exec {
     my ($batch_path,$batch_file,$b_file_name);
     my $msg = '';
     my $jid=1;
-    if (! $test) {
+    if ((! $test) && ($verbose != 3))  {
 	execute_log($do_it,$annotation,$cmd,$verbose);
     }
     if ($do_it) {
@@ -1891,9 +1914,11 @@ sub cluster_exec {
 	}
 	
 	# this works, but alternate call might be nicer.
-	$bash_call_with_visible_options = "sbatch ${slurm_out_command} ${sharing_is_caring} ${node_command} ${queue_command} ${memory_command} ${time_command} ${batch_file}";
+	$bash_call_with_visible_options = "sbatch ${slurm_out_command} ${sharing_is_caring} ${verbose_command} ${node_command} ${reservation_command} ${queue_command} ${memory_command} ${time_command} ${batch_file}";
 	my $bash_call = "sbatch ${batch_file}";
-	print "sbatch command is: ${bash_call_with_visible_options}\n";
+	if ($verbose != 3) {
+	    print "sbatch command is: ${bash_call_with_visible_options}\n";
+	}
 	($msg,$jid)=`$bash_call` =~  /([^0-9]+)([0-9]+)/x;
 	if ( $msg !~  /.*(Submitted batch job).*/) {
 	    $jid = 0;
@@ -1909,10 +1934,16 @@ sub cluster_exec {
 	return 0;
     }
     if ($jid > 1) {
-	print STDOUT " Job Id = $jid.\n";
+	if ($verbose != 3) {
+	    print STDOUT " Job Id = $jid.\n";
+	} else {
+	    print STDOUT "$jid";
+	}
 	if ($batch_file ne '') {
 	    my $new_name = $batch_path.'/'.$jid."_".$b_file_name;
-	    print "batch_file = ${batch_file}\nnew_name = ${new_name};\n\n";
+	    if ($verbose != 3) {	   
+		print "batch_file = ${batch_file}\nnew_name = ${new_name};\n\n";
+	    }
 	    rename($batch_file, $new_name); 		
         }
     }
@@ -1956,21 +1987,36 @@ sub execute_log {
 sub cluster_wait_for_jobs {
 # ------------------
     my ($interval,$verbose,$sbatch_location,@job_ids)=@_;
-   
-    my $jobs = join(',',@job_ids);
     my $check_for_slurm_out = 1;
-
     if (! -d $sbatch_location) {
-	$jobs=$sbatch_location.','.$jobs;
+	unshift(@job_ids,$sbatch_location);
 	$check_for_slurm_out = 0;
     }
+    my $jobs;
+   if ($job_ids[1] ne ''){    
+	$jobs = join(',',@job_ids);
+   } elsif ($job_ids[0] ne '') {
+       $jobs = $job_ids[0];
+   }
+
+    my $number_of_jobs = 0;
+    if ($job_ids[0] ne '') {
+	$number_of_jobs = scalar(@job_ids);
+    }
+    print " Number of jobs = ${number_of_jobs}\n";
+
     sleep(1);
     my $completed = 0;
+    my $in_jobs=$jobs;
     if ($jobs ne '') {
-	print STDOUT "SLURM: Waiting for multiple jobs to complete";
-	#print "jobs = $jobs\n\n"; ##	
+	#print STDOUT "SLURM: Waiting for multiple jobs to complete";
+	print STDOUT "SLURM: Waiting for jobs $jobs to complete";	
 	while ($completed == 0) {
-	    if (`squeue -j $jobs -o "%i %t"` =~ /(CG|PD|R)/) { #`sacct -n -j $jobs -o State` =~ /(COMPLETING|PENDING|RUNNING)/) {
+
+	    my $test_1 = `sacct -j $jobs -o JobName%50,State | grep -v '.batch' | grep -cE 'FAIL|CANCEL|COMPLETED|DEADLINE|PREEMPTED|TIMEOUT'`;
+	    # 11 November 2016: Changed test condition for whether or not we continue...now we look for the number of jobs that have the "no more work will be done" conditions.
+	    if ($test_1 < $number_of_jobs) {
+	    #if (`squeue --noheader -j $jobs -o "%i %t"` =~ /(CG|PD|R|S[^T])/) { #`sacct -n -j $jobs -o State` =~ /(COMPLETING|PENDING|RUNNING|SUSPENDED)/) { # 16 Sept 2016: added SUSPENDED
 		if ($verbose) {print STDOUT ".";}
 		my $throw_error=0;
 		if ($check_for_slurm_out) {
@@ -1982,9 +2028,12 @@ sub cluster_wait_for_jobs {
 			if (`sacct -n -j $job -o State` =~ /RUNNING/){   
 			    my $slurm_out_file = "${sbatch_location}/slurm-${job}.out";
 			    if (! -e $slurm_out_file) {
-				$throw_error = 1;
-				push(@bad_jobs,$job);
-				$missing_files=$missing_files."${slurm_out_file}\n";
+				sleep(10);
+				if (! -e $slurm_out_file) {
+				    $throw_error = 1;
+				    push(@bad_jobs,$job);
+				    $missing_files=$missing_files."${slurm_out_file}\n";
+				}
 			    }
 			}
 		    }
@@ -2011,12 +2060,12 @@ sub cluster_wait_for_jobs {
 			my $email_content = $subject_line.$error_message.$time_stamp;
 			`echo "${email_content}" > ${email_file}`;
 			`sendmail -f $process.civmcluster1\@dhe.duke.edu rja20\@duke.edu < ${email_file}`;
-			`scancel ${bad_jobs}`;
+			`scancel ${bad_jobs}`; #29 Nov 2016: commented out because of delayed slurm-out files causing unwarrented cancellations #9 Dec 2016, trying to mitigate witha 10 second wait, and the cancelling if still no slurm out file
 			log_info($error_message);
 		    }
 		}
 		sleep($interval);
-	    } else {
+	    } else { 
 		$completed = 1;
 		print STDOUT "\n";
 	    }
@@ -2024,6 +2073,8 @@ sub cluster_wait_for_jobs {
     } else {
 	$completed = 1;
     }
+   # my $msg = `sacct -j $in_jobs -o JobName%50,State`;
+   # print "$msg\n";
     sleep(1);
     return($completed);
 }
@@ -2058,19 +2109,26 @@ sub get_nii_from_inputs {
 
     my ($inputs_dir,$runno,$contrast) = @_;
     my $error_msg='';
-    
+    my $test_contrast;
+    if ((defined $contrast) && ($contrast ne '')) {
+	$test_contrast = "_${contrast}";
+    } else {
+	$test_contrast = "";
+    }
+
+
     if (-d $inputs_dir) {
 	opendir(DIR, $inputs_dir);
-	my @input_files_1= grep(/($runno).*_($contrast)\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR));
+	my @input_files_1= grep(/^($runno).*(${test_contrast})\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR)); #27 Dec 2016, added "^" because new phantom naming method of prepending (NOT substituting) "P" "Q" etc to beginning of runno results in ambiguous selection of files. Runno "S64944" might return "PS64944" "QS64944" or "S64944".
 
 	my $input_file = $input_files_1[0];
 	if (($input_file eq '') || (! defined $input_file)) {
 	opendir(DIR, $inputs_dir);
-	my @input_files_2= grep(/($runno).*_($contrast)_.*\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR));
+	my @input_files_2= grep(/^($runno).*(${test_contrast})_.*\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR)); #28 Dec 2016, added "^" like above.
 	    $input_file = $input_files_2[0];
 	    if (($input_file eq '') || (! defined $input_file)) {
 		opendir(DIR, $inputs_dir);
-		my @input_files_3= grep(/($runno).*_($contrast).*\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR));
+		my @input_files_3= grep(/^($runno).*(${test_contrast}).*\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR));  #28 Dec 2016, added "^" like above.
 		$input_file = $input_files_3[0];
 	    }
 	}
@@ -2213,8 +2271,9 @@ sub symbolic_link_cleanup {
 # ------------------
 sub headfile_list_handler {
 # ------------------
-    my ($current_Hf,$key,$new_value,$invert) = @_;
+    my ($current_Hf,$key,$new_value,$invert,$replace) = @_; # 17 November 2016: Added replace to support iterative capabilities, where we only want to track the latest diffeo warp.
     if (! defined $invert) { $invert = 0;}
+    if (! defined $replace) { $replace = 0;}
 
     my $list_string = $current_Hf->get_value($key);
     if ($list_string eq 'NO_KEY') {
@@ -2222,11 +2281,18 @@ sub headfile_list_handler {
     }
 
     my @list_array = split(',',$list_string);
-   
+    my $trash;
+
     if ($invert) {
+	if ($replace) {
+	    $trash = pop(@list_array);
+	}
 	push(@list_array,$new_value);
 	#$list_string=$list_string.",".$new_value;
     } else {
+	if ($replace) {
+	    $trash = shift(@list_array);
+	}
 	unshift(@list_array,$new_value);
 	#$list_string=$new_value.",".$list_string;
     }
@@ -2292,8 +2358,10 @@ sub data_double_check { # Checks a list of files; if a file is a link, double ch
 	if ($file_to_check =~/[\n]+/) {
 	    $number_of_bad_files++;
 	} else {
+	    #print " File to check 1: ${file_to_check}\n";
 	    while (-l $file_to_check) {
 		($name,$path,$ext) = fileparts($file_to_check);
+		#print " File to check 2: ${file_to_check}\n";
 		$file_to_check = readlink($file_to_check);
 		if ($file_to_check !~ /^\//) {
 		    $file_to_check = $path.$file_to_check;
@@ -2301,6 +2369,8 @@ sub data_double_check { # Checks a list of files; if a file is a link, double ch
 	    }
 	    
 	    if (! -e $file_to_check) {
+		#my $msg = `ls -l $file_to_check`;
+		#print "$msg\n";
 		$number_of_bad_files++;
 	    }
 	}
@@ -2498,23 +2568,23 @@ sub compare_two_reference_spaces {
     my ($bb_and_sp_1,$bb_and_sp_2);
  #   my ($sp_1,$sp_2);
     
-    if (data_double_check($file_1)){
+    if ($file_1 =~ s/(\.gz)$//) {}
+    
+    if (! data_double_check($file_1)){
+	$bb_and_sp_1 = get_bounding_box_and_spacing_from_header($file_1);  # Attempted to make this impervious to the presence or absence of .gz 14 October 2016
+    } elsif (! data_double_check($file_1.'.gz')) {
+	$bb_and_sp_1 = get_bounding_box_and_spacing_from_header($file_1.'.gz');
+    }  else {
 	$bb_and_sp_1 = $file_1;
-#	$sp_1 = pop(@array);
-#	$bb_1 = join(' ',@array);
-    } else {
-	$bb_and_sp_1 = get_bounding_box_and_spacing_from_header($file_1);
-#	$sp_1 = get_spacing_from_header($file_1);
-#	chomp($sp_1);
-   }
-
-
-   if (data_double_check($file_2)){
-       $bb_and_sp_2 = $file_2;
-#       $sp_2 = pop(@array);
-#       $bb_2 = join(' ',@array);
-   } else {
+    }
+	
+   if ($file_2 =~ s/(\.gz)$//) {}
+   if (! data_double_check($file_2)){
        $bb_and_sp_2 = get_bounding_box_and_spacing_from_header($file_2);
+   } elsif (! data_double_check($file_2.'.gz')) {
+       $bb_and_sp_2 = get_bounding_box_and_spacing_from_header($file_2.'.gz');
+   } else {
+       $bb_and_sp_2 = $file_2;
    }
 
     my $result=0;
