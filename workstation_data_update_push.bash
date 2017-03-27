@@ -9,7 +9,17 @@ fi
 if [ ! -d $WORKSTATION_HOME/logs ] ; then 
     mkdir $WORKSTATION_HOME/logs;
 fi
-
+HOST_TYPE=`uname`;
+time_suffix="m";
+time_switch="mtime";
+if [ $HOST_TYPE != "Darwin" ]; then 
+    echo "ONLY WORKS ON MAC ";
+exit;
+fi
+if [ $HOST_TYPE == "Linux" ]; then
+time_suffix="";
+time_switch="mmin";
+fi
 hostlist="$@"
 if [ -z "$hostlist" ] 
 then
@@ -31,7 +41,7 @@ ssh_opts=" -o BatchMode=yes -o ConnectionAttempts=1 -o ConnectTimeout=1 -o Ident
 for host in `cat temphost.list | sort -u`
 do
     dir=`pwd`
-    if [ test `find "$WORKSTATION_HOME/logs/data_status_${host}.log" -mtime -${skip_check_age}m` ]; then
+    if [ test `find "$WORKSTATION_HOME/logs/data_status_${host}.log" -${time_switch} -${skip_check_age}${time_suffix}` ]; then
 	echo " --- updating host $host : $dir ---"
 	bash_cmd_string="$WORKSTATION_HOME/shared/pipeline_utilities/workstation_data_update.pl;"
 	echo "ssh $ssh_opts $host bash -c \"'$bash_cmd_string'\" 2>&1 > $WORKSTATION_HOME/logs/data_update_${host}.log &"
@@ -46,7 +56,7 @@ if [ $skip_check_age -lt 5 ]; then
     skip_check_age=15;# if low age set reasonable max age(15 min old)
 fi
 echo $hostlist_regex
-for file in `find $WORKSTATION_HOME/logs -mtime -${skip_check_age}m -iname "data_update_*.log" | grep -Ee "($hostlist_regex)"`; do 
+for file in `find $WORKSTATION_HOME/logs -${time_switch} -${skip_check_age}${time_suffix} -iname "data_update_*.log" | grep -Ee "($hostlist_regex)"`; do 
     echo "----- $file -----"; 
     cat $file;
 done

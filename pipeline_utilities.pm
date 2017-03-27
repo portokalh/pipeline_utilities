@@ -92,6 +92,7 @@ execute
 execute_heart
 execute_indep_forks
 executeV2
+vmstat
 start_pipe_script
 load_engine_deps
 load_deps
@@ -490,6 +491,16 @@ sub get_matlab_fifo {
     use Env qw(WORKSTATION_HOME WORKSTATION_HOSTNAME FIFO_NAME);
     my $fifo_registry=$WORKSTATION_HOME."/../matlab_fifos/";
     my $fifo_dir=$work_dir."";
+    my $cmd="mkfifo $fifo_dir/test";
+    my $fifo_check=execute(1,"fifo test",$cmd);
+    
+    `rm $fifo_dir/test`;
+    if( ! $fifo_check) {
+	print STDERR ("FIFO Not supported in work dir\n");
+	$fifo_dir="/tmp";
+	#$cmd="mk_fifo $fifo_dir/test";
+	#$fifo_check=execute(1,"fifo test",$cmd);	
+    }
     if ( $fifo_dir !~ m/^.*[\/]$/x ) {
 	#print STDERR ("FIFO Dir check added a slash\n");
 	$fifo_dir=$fifo_dir."/";
@@ -1165,7 +1176,7 @@ sub execute {
 	    #print("SLURM MODE DISABLED:$hostynamey\n");
 	}
 
-	    
+	
 	$ret = execute_heart($do_it, $annotation, $c);
 
 	if (0) { ################
@@ -1481,6 +1492,47 @@ if (0) {
   }
   return 1; # ok = 1
 }
+# -------------
+sub vmstat {
+# -------------
+# Get memory info using top
+    my $data=`top -l1 -n0`;
+    my @lines=split("\n",$data);
+    #my %mem;
+    my $meminfo={};
+    my %scale_lookup = (
+	G => 1024**3,
+	g => 1024**3,
+	M => 1024**2,
+	m => 1024**2,
+	K => 1024,
+	k => 1024,
+    );
+    #dump(\%scale_lookup);
+    #dump(\@lines);
+    for my $line (@lines){
+	if ($line =~ /PhysMem.*/){
+	    # mac example
+	    #PhysMem: 2435M wired, 14G active, 11G inactive, 27G used, 5258M free.
+	    my @membits=split(',',$line);
+	    #print($line."\n");
+	    foreach(@membits){
+		my ($num,$scale,$tag) = $_ =~ /[^0-9]*([0-9]+)([GgMmKk]?) ([\w]+)/;
+		#print("$tag -> $num * $scale_lookup{$scale}\n");
+		$meminfo->{$tag}=$num*$scale_lookup{$scale};
+	    }
+	} else {
+	    #print("Not $line\n");
+	}
+    }
+    if ( !exists($meminfo->{"total"})
+	 &&exists($meminfo->{"free"})
+	 &&exists($meminfo->{"used"}) ) {
+	$meminfo->{"total"}=$meminfo->{"free"}+$meminfo->{"used"};
+    }
+    #dump($meminfo);
+    return ($meminfo);
+}
 
 # -------------
 sub start_pipe_script {
@@ -1753,7 +1805,7 @@ sub my_ls {
   my ($unixy_dir) = @_;
   my @allfiles =  ("error");
   my $result = 0;
-  opendir THISDIR, $unixy_dir or error_out("open dir failure, $!");;
+  opendir THISDIR, $unixy_dir or error_out("$unixy_dir, $!");#open dir failure for 
   @allfiles = readdir THISDIR;
   closedir THISDIR;
   $result = 1;

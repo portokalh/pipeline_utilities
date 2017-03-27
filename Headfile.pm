@@ -284,7 +284,8 @@ sub write_headfile {
     #if (($self->{'__mode'} eq "new") || ($self->{'__mode'} eq "rw") || ($self->{'__mode'} eq "rc")) 
     if ($self->{'__writeable'}) { 
 	# check that file name ends in .headfile
-	return 0 unless private_check_headfile_name($self,$out_path); 
+	#return 0 unless private_check_headfile_name($self,$out_path); # THAT SEEMS AN UNNECESSARY LIMITATION
+	
 	# from delos: 
 	# note on below: running check creates the "new" file, so -e becomes true
 	# if (($self->{'__mode'} eq "new") && (-e $out_path)) {

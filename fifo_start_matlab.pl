@@ -42,6 +42,7 @@ my $work_dir;
 my $log_path;
 { # optcheck
   if (! getopts('md:', \%opt)) {
+      # m make dir if not currently available
 	usage_message("Problem with command line options.\n");
     }
     if ( defined $opt{d} ) { # -d debug mins
@@ -50,7 +51,7 @@ my $log_path;
 	$debug_val=5;
     }
     $work_dir  = shift(@ARGV) || usage_message("No data directory speciified");
-    $log_path    = shift(@ARGV) || "AUTO"; # should be input as just the name
+    $log_path  = shift(@ARGV) || "AUTO"; # should be input as just the name
 }
 
 if (! defined $log_path) { 
@@ -58,14 +59,14 @@ if (! defined $log_path) {
 #   } else {  
 #
 #    $log_path='> '."$work_dir/matlab_${function_m_name}";
-    $log_path='> '."$work_dir/matlab_generic";
+    $log_path='> '."$work_dir/matlab_generic_fifo.log";
 }
 
-
-if ( defined $opt{m} &&! -d $work_dir) {
-    mkpath($work_dir);
+printf("$work_dir\n");
+if ( exists $opt{'m'} && ! -d "$work_dir") {
+    mkpath("$work_dir");
 }
-
+#exit;
 my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$log_path);
 my $Hf=load_engine_deps($WORKSTATION_HOSTNAME);
 my $matlab_app  = $Hf->get_value('engine_app_matlab');

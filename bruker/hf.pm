@@ -19,7 +19,7 @@ use warnings;
 use Carp;
 use List::MoreUtils qw(uniq);
 use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa);
-use bruker qw( @knownmethods);
+use bruker qw( @knownmethods @radial_methods);
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 #use vars qw($debug_val $debug_locator);
 #use favorite_regex qw ($num_ex)
@@ -258,7 +258,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 
 	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."$prefered_matrix_key"));
 	if ( $#matrix == 0 ) { 
-	    
+	    #die ("ERROR getting matrix");
 	}
 #         if ( $#matrix > 0 ) { 
 # 	     @matrix=@{$hf->{"$prefered_matrix_key"}->[0]};
@@ -328,9 +328,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     my $paravision_string = $hf->get_value($data_prefix."META_TITLE");
     #my ($type,$swname,$ver)=
     $paravision_string =~ m/^([^,]+),\s+([^\s]+)(.*)$/x ;
+    #
+    my $paravision_version=0;
     if( defined $1 && defined $2 && defined $3 ) {
 	printd(50,"pvstring;$paravision_string -> \n\tjnk:$1|||name:$2|||ver:$3\n");
-	if ($3 =~ /6\.0/ && $extraction_mode_bool) {
+	$paravision_version=$3;
+	$hf->set_value("B_ParavisionVersion",$paravision_version);
+	#if ($paravision_version =~ /6\.0/ && $extraction_mode_bool) {
+	if ($paravision_version =~ /^\s*6/ && $extraction_mode_bool) {
 	    $bit_depth=16;
 	    $data_type="Unsigned";
 	print("PV6 found! It appears all PV6.0 images are 16-bit unsigned short ints!\n");
@@ -380,14 +385,22 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 # 	    $x=$x/2;
 # 	    printd(45, "halving x\n");
 # 	}
-    }   
+    }
+    my $isradial=0;
+    my $method_ex="<(.*".join(".*|.*",@radial_methods).".*)>";
+    my $method_ex_2="<(Bruker|User[:]".join("|Bruker|User[:]",@radial_methods).")>"; # PV6 adds Bruker: to each method.
+    if ( $method =~ m/^$method_ex$/x || $method =~ m/^$method_ex_2$/x ) {
+	printd(25,"We're a radial scan\n");
+	$isradial=1;
+
+    }
     printd(45,"order is $order\n");
-    if ( $#matrix ==1 ) {
+    if ( $#matrix ==1 && $isradial==0) {
         $vol_type="2D";
 	$slices=$b_slices;
 	printd(90,"Setting type 2D, slices are b_slices->slices\n");
 	#should find detail here, not sure how, could be time or could be space, if space want to set slices, if time want to set vols
-    } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
+    } elsif ( $#matrix == 2 && $isradial==0 )  {#2 becaues thats max index eg, there are three elements 0 1 2
         $vol_type="3D";
 	if ( defined $ss2 ) { 
 	    printd(90,"\tslices<-spatial_size2\n");
@@ -398,18 +411,24 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         if ( $slices ne $matrix[2] ) {
             croak "n slices in question, hard to determing correct number, either $slices or $matrix[2]\n";
         }
-    } elsif ($#matrix == 0 ) { 
+    } elsif ($#matrix == 0 || $isradial==1 ) {
 	$vol_type="radial";
-	$y=$matrix[0];
+	if ( $#matrix > 0 ) { 
+	    $y=$matrix[1]; 
+	} else {
+	    $y=$matrix[0];
+	}
 	if ( $hf->get_value($data_prefix."PVM_Isotropic") eq "Isotropic_Matrix") {
 	    $slices=$matrix[0];
 	} else { 
 	    printd(45, "\tNot isotropic with ".$hf->get_value($data_prefix."PVM_Isotropic") ."\n");
+	    #printd(15,"setting to matrix element\n");
+	    if ($#matrix >1 ) {
+		$slices=$matrix[2];
+	    }
 	}
     }
-
-
-
+    #die("$x,$y,$z _ $slices \n".join(",",@matrix)."\n");
 # ###### MDEFT LAME FIX
 # at some point i've managed to remove the need for this fudgery.
 #     if ( $method =~ m/MDEFT/x && $extraction_mode_bool ) {
@@ -426,7 +445,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 
 
 ###### set time_pts    
-    if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
+    if ( defined $movie_frames  && $movie_frames > 1) {  #&& ! defined $sp1 
         $time_pts=$movie_frames;
         $vol_type="4D";
         if ( defined $n_dwi_exp &&  $n_dwi_exp ne 'NO_KEY') { 
@@ -443,7 +462,10 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     }
     if ( $vol_type =~ /radial/x) {
 	#$time_pts=$hf->get_value(${data_prefix}."PVM_NRepetitions")*$hf->get_value(${data_prefix}."KeyHole")-($hf->get_value(${data_prefix}."KeyHole")-1);
-	$time_pts=$hf->get_value(${s_tag}."NRepetitions");
+	if ($hf->get_value(${s_tag}."NRepetitions") ne "NO_KEY" ){
+	    printd(15,"$time_pts are NReps\n");
+	    $time_pts=$hf->get_value(${s_tag}."NRepetitions");
+	}
 	if ( $hf->get_value(${data_prefix}."KeyHole") ne "NO_KEY" ){
 	    printd(15,"$time_pts*".$hf->get_value(${data_prefix}."KeyHole")."\n" );
 	    $time_pts=$time_pts*$hf->get_value(${data_prefix}."KeyHole") ;
@@ -555,6 +577,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	printd(90,"\tz<-slices\n");
 	$z=$slices;
     }
+
     if ( $hf->get_value($data_prefix."KeyHole") ne 'NO_KEY') {
 	$vol_detail=$vol_detail.'-keyhole';
     }
@@ -572,6 +595,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	
     }
     printd(90,"\tvol_num=vol_num*time_pts\n");
+    printd(90,"\t\t$vol_num * $time_pts\n");
     $vol_num=$vol_num*$time_pts;# not perfect
 
 
@@ -581,8 +605,8 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     printd(45,"Set X=$x, Y=$y, Z=$z, vols=$vol_num\n");
     printd(45,"vol_type:$vol_type, $vol_detail\n");
     $debug_val=$old_debug;
-    my $method_ex="<(".join("|",@knownmethods).")>";
-    my $method_ex_2="<(Bruker[:]".join("|Bruker[:]",@knownmethods).")>"; # PV6 adds Bruker: to each method.
+    $method_ex="<(".join("|",@knownmethods).")>";
+    $method_ex_2="<(Bruker|User[:]".join("|Bruker|User[:]",@knownmethods).")>"; # PV6 adds Bruker: to each method.
     if ( $method !~ m/^$method_ex$/x && $method !~ m/^$method_ex_2$/x ) {
         my $msg="NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n";
 	if ( $debug_val<50 ) { 
@@ -1218,10 +1242,9 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    printd(5,"radial acquisition, THESE ARE VERY EXPERIMENTAL\n");
 	    my $NPro=$hf->get_value("rays_per_volume");
 	    my $KeyHole=$hf->get_value("ray_blocks_per_volume");
-
 	    my $NRepetitions=$hf->get_value(${s_tag}."NRepetitions");
-	    $hf->set_value("rays_acquired_in_total",$NPro*$NRepetitions);
-	    if ($NPro eq "NO_KEY") { 
+	    if ($NPro eq "NO_KEY") {
+		$NPro=1;
 		printd(5,"Error finding NPro in hf using ${s_tag}NPro\n");
 	    }
 	    if ($KeyHole eq "NO_KEY") { 
@@ -1229,12 +1252,20 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 		$KeyHole=1;
 		$hf->set_value("ray_blocks_per_volume",$KeyHole);
 	    }
-	    if ($NRepetitions eq "NO_KEY") { 
+	    if ($NRepetitions eq "NO_KEY") {
+		$NRepetitions=1;
 		printd(5,"Error finding NRepetitions in hf using ${s_tag}NRepetitions\n");
 	    }
+	    $hf->set_value("rays_acquired_in_total",$NPro*$NRepetitions);
 	    # NOTE: in radial sequences the ray_length is 1/2 the expected image
-	    # dimension due to being a ray of kspace and NOT a line. 
-	    $hf->set_value("ray_length",$df/2);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing.
+	    # dimension due to being a ray of kspace and NOT a line.
+	    # if ( $hf->get_value("B_ParavisionVersion") !~ /^\s*6/ ) {
+	    { # back to always.
+		#$paravision_version =~ /6\.0/ 
+		
+		$hf->set_value("ray_length",$df/2);
+		# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing.
+	    }
 	    $hf->set_value("ray_blocks",$NRepetitions*$KeyHole);
 	    #NPro/KeyHole=acqs(ray_blocks).
 	    #NPro/ray_blocks=rays_per_block
