@@ -53,9 +53,10 @@ my $safety=0; # SAFETY variable, if set to 1 will not remove, will just build an
 
 ##### globals
 my $CLEANABLE_USERS='.*';#all uesrs are cleanable, used in testing or for targeting a specific user.
-my $EMAIL_BLACKLIST="edc15|mf177|lucy|root";#.* will disable any emails
+my $EMAIL_BLACKLIST="edc15|hw133|lx21|ksd15|mf177|rmd22|lucy|root";#.* will disable any emails
 my $SCAN_DIR=$ENV{'BIGGUS_DISKUS'}; # directory we're testing for old files.
-if( ! defined $SCAN_DIR && defined $ARGV[0] ){ 
+#if( ! defined $SCAN_DIR && defined $ARGV[0] ){ 
+if( defined $ARGV[0] && ! -z $ARGV[0] ){ 
     $SCAN_DIR=$ARGV[0];
 } elsif (! defined $SCAN_DIR && ! defined $ARGV[0] ){ 
     die "No scan location specified!\n";
@@ -105,22 +106,30 @@ my %disk_units=(
 # if we dont want that user to recieeve notifications, add them to the EMAIL_BLACKLIST variable above, pipe(|) separated
 my %user_definitions=( 
 #    "abadea" => [ qw(alex rhodos.duhs.duke.edu /Users/alex/) ], 
-    "abadea" => [ qw(alex localhost /nas4/abadea) ], 
-    "edc15" => [ qw(edc15 trinity.duhs.duke.edu /Users/edc15) ], 
-    "hw133" => [ qw(hj hj hj) ], 
-    "nw61" => [ qw(nw nw nw) ], 
+    "abadea" => [ qw(alex localhost /nas4/alex) ], 
+    "nw61" => [ qw(nw61 localhost /nas4/nw61) ], 
     "jjc29" => [ qw(james panorama.duhs.duke.edu /Users/BiGDATADUMP) ], 
-    "cl242" => [ qw(cl242 trinity.duhs.duke.edu /Volumes/trinityspace) ],
-#    "ksd15" => [ qw(kyle wheezy.duhs.duke.edu /Volumes/wheezyspace) ], 
-    "ksd15" => [ qw(ksd15 localhost /nas4/ksd15) ], 
-    "lucy" => [ qw(lucy wytyspy.duhs.duke.edu /Users/lucy) ], 
-    "lx21" => [ qw(lx21 andromeda.duhs.duke.edu /Volumes/andromedaspace) ], 
-    "mf177" => [ qw(mf177 milos.duhs.duke.edu /Volumes/milosspace) ], 
+#    "jjc29" => [ qw(james fat-disk.duhs.duke.edu /cluster_dump) ],  # soon this will be available
 #    "rja20" => [ qw(rja20 atlas3.dhe.duke.edu /atlas3/rja20) ], 
     "rja20" => [ qw(rja20 localhost /nas4/rja20) ], 
+    "lucy" => [ qw(lucy wytyspy.duhs.duke.edu /Users/lucy) ], 
+    
+    # OLD USERS, their data should just cycle out over time. some have special handling. eg evan,mark chris long
+    #"edc15" => [ qw(edc15 trinity.duhs.duke.edu /Users/edc15) ], 
+    "edc15" => [ qw(edc15 nohost.should.ever.respond.to.this /nodrive/should/be/found) ], 
+    #"hw133" => [ qw(hj hj hj) ], # need somplace to sfuff hongjiang's data...
+    #"cl242" => [ qw(cl242 trinity.duhs.duke.edu /Volumes/trinityspace) ],
+    "cl242" => [ qw(cl242 nohost.should.ever.respond.to.this /nodrive/should/be/found) ], 
+    #"ksd15" => [ qw(kyle wheezy.duhs.duke.edu /Volumes/wheezyspace) ],  # kyles computer, his old locaiton
+    "ksd15" => [ qw(ksd15 localhost /nas4/ksd15) ], # new location on nas4
+    #"lx21" => [ qw(lx21 andromeda.duhs.duke.edu /Volumes/andromedaspace) ],  # lukes computer, we sent it with him
+    "lx21" => [ qw(lx21 nohost.should.ever.respond.to.this /nodrive/should/be/found) ], # New locaiton for any luke files found(protip: ther is none.)
+    # "mf177" => [ qw(mf177 milos.duhs.duke.edu /Volumes/milosspace) ], # mark foster and his work on milos, 
+    "mf177" => [ qw(mf177 nohost.should.ever.respond.to.this /nodrive/should/be/found) ], # New locaiton for any mark files found(protip: ther is none.)
     #"rmd22" => [ qw(rmd22 atlasdb.duhs.duke.edu /atlas3/rmd22) ], 
-#    "rmd22" => [ qw(rmd22 jeeves.duhs.duke.edu /Volumes/glusterspace_relief/) ], 
+    #"rmd22" => [ qw(rmd22 jeeves.duhs.duke.edu /Volumes/glusterspace_relief/) ], 
     "rmd22" => [ qw(rmd22 localhost /nas4/rmd22) ], 
+
     "root" => [ qw(nobody nohost.should.ever.respond.to.this /nodrive/should/be/found) ],
     );
 if ( 0 ) {

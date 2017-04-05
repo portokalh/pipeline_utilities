@@ -1,4 +1,3 @@
-
 #pipeline_utilites.pm
 #
 # utilities for pipelines including matlab calls from perl 
@@ -14,8 +13,9 @@
 #               should add a standard headfile settings file for the required values in an engine_dependencie headfile 
 #               returns the three directories  in work result, outhf_path, and the engine_constants headfile.
 # 140717 added exporter line with list of functions
+# 141125 moved registration.pm to here, modified as necessary. Also added sbath capabilities for when running on cluster. BJA
 # be sure to change version:
-my $VERSION = "140917";
+my $VERSION = "141125";
 
 my $log_open = 0;
 my $pipeline_info_log_path = "UNSET";
@@ -25,11 +25,18 @@ my @outheadfile_comments = ();  # this added to by log_pipeline_info so define e
 #my $debug_val = 5;
 use File::Path;
 use POSIX;
-use strict;
+#use strict; #temporarily turned off for sub cluster_exec
 use warnings;
 use English;
 use Carp;
 #use seg_pipe;
+use Getopt::Long qw(GetOptionsFromString); # For use with antsRegistration_memory_estimator
+
+no warnings qw(uninitialized bareword);
+
+use vars qw($HfResult $BADEXIT $GOODEXIT $test_mode $debug_val $valid_formats_string);
+$valid_formats_string = 'hdr|img|nii';
+
 
 #scrapped from xml reader slicer_read_xml thingy... 
 #use lib ".";
@@ -42,11 +49,8 @@ use Carp;
 # xml rules moved to the xml functions in a require/import pair so when it doesnt exist, we dont fail here.
 #use XML::Rules;
 
-
-use vars qw($HfResult $BADEXIT $GOODEXIT $debug_val);
 if ( ! defined $debug_val){
     $debug_val=5;
-    
 }
 my $PM="pipeline_utilities";
 use civm_simple_util qw(load_file_to_array write_array_to_file is_empty);
@@ -60,7 +64,7 @@ if ((defined $ENV{'PIPELINE_QUEUE'}) && ($my_queue ne '') ) {
     $custom_q = 1;
 }
 
-
+ 
 BEGIN {
     use Exporter;
     our @ISA = qw(Exporter); # perl cricit wants this replaced with use base; not sure why yet.
@@ -95,6 +99,7 @@ executeV2
 vmstat
 start_pipe_script
 load_engine_deps
+make_process_dirs
 load_deps
 new_get_engine_dependencies
 make_list_of_files
@@ -111,7 +116,37 @@ depath
 defile
 fileparts
 funct_obsolete
-
+create_transform
+apply_affine_transform
+apply_tranform
+cluster_exec
+cluster_check
+execute_log
+cluster_wait_for_jobs
+cluster_check_for_jobs
+get_nii_from_inputs
+compare_headfiles
+symbolic_link_cleanup
+headfile_list_handler
+find_temp_headfile_pointer
+headfile_alt_keys
+data_double_check
+antsRegistration_memory_estimator
+format_transforms_for_command_line
+get_bounding_box_from_header
+read_refspace_txt
+write_refspace_txt
+compare_two_reference_spaces
+hash_summation
+memory_estimator
+make_identity_warp
+get_spacing_from_header
+get_bounding_box_and_spacing_from_header
+get_slurm_job_stats
+write_stats_for_pm
+convert_time_to_seconds
+get_git_commit
+make_R_stub
 ); 
 }
 
@@ -165,7 +200,10 @@ sub close_log {
 # -------------
 sub log_info {
 # -------------
-   my ($log_me) = @_;
+   my ($log_me,$verbose) = @_;
+   if (! defined $verbose) {
+       $verbose = 1;
+   }
 
    if ($log_open) {
      # also write this info to headfile later, so save it up
@@ -173,8 +211,9 @@ sub log_info {
      push @outheadfile_comments, "$to_headfile";  
 
      # show to user:
-     print( "#LOG: $log_me\n");
-
+     if ($verbose) {
+	 print( "#LOG: $log_me\n");
+     }
      # send to pipeline file:
      print( $PIPELINE_INFO "$log_me\n");
    }
@@ -189,11 +228,14 @@ sub log_info {
 # -------------
 sub close_log_on_error  {
 # -------------
-  my ($msg) = @_;
+  my ($msg,$verbose) = @_;
+
+  if (! defined $verbose) {$verbose = 1;}
+
   # possible you may call this before the log is open
   if ($log_open) {
       my $exit_time = scalar localtime;
-      log_info("Error cause: $msg");
+      log_info("Error cause: $msg",$verbose);
       log_info("Log close at $exit_time.");
 
       # emergency close log (w/o log dumping to headfile)
@@ -211,7 +253,10 @@ sub close_log_on_error  {
 sub error_out
 # -------------
 {
-  my ($msg) = @_;
+  my ($msg,$verbose) = @_;
+
+  if (! defined $verbose) {$verbose = 1;}
+
   print STDERR "\n<~Pipeline failed.\n";
   my @callstack=(caller(1));
   my $pm;
@@ -223,8 +268,11 @@ sub error_out
   print STDERR "  Failure cause: ".$pm.'|'.$sn." ".$msg."\n";
   print STDERR "  Please note the cause.\n";
   
+  if (! $verbose) {
+      print "Errors have been logged\n";
+  }
+  close_log_on_error($msg,$verbose);
 
-  close_log_on_error($msg);
   my $hf_path='';
   if (defined $HfResult && $HfResult ne "unset") {
       $hf_path = $HfResult->get_value('headfile_dest_path');
@@ -244,9 +292,10 @@ sub make_matlab_m_file {
 # -------------
 #simple utility to save an mfile with a contents of function_call at mfile_path
 # logs the information to the log file, and calls make_matlab_m_file_quiet to do work
-   my ($mfile_path, $function_call) = @_;
-   log_info("Matlab function call mfile created: $mfile_path");
-   log_info("  mfile contains: $function_call");
+   my ($mfile_path, $function_call,$verbose) = @_;
+   if (! defined $verbose) {$verbose = 1;}
+   log_info("Matlab function call mfile created: $mfile_path",$verbose);
+   log_info("  mfile contains: $function_call",$verbose);
    make_matlab_m_file_quiet($mfile_path,$function_call);
    return;
 }
@@ -280,10 +329,10 @@ sub make_matlab_m_file_quiet {
 sub make_matlab_command {
 # -------------
 # this calls the nohf version so we can control how matlab is launched at all times through just that function.
-   my ($function_m_name, $args, $short_unique_purpose, $Hf) = @_;
-# short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir) 
-   my $work_dir   = $Hf->get_value('dir_work');
-   if ( $work_dir eq "NO_KEY" ) { $work_dir=$Hf->get_value('dir-work'); }
+   my ($function_m_name, $args, $short_unique_purpose, $Hf,$verbose) = @_;
+# short_unique_purpose is to make the name of the mfile produced unique over the pipeline (they all go to same dir)
+   if (! defined $verbose) {$verbose =1;}
+   my ($work_dir)   = headfile_alt_keys($Hf,'dir_work','dir-work','work_dir');
    my $matlab_app  = $Hf->get_value('engine_app_matlab');
    my $matlab_opts = $Hf->get_value('engine_app_matlab_opts');
    if ($matlab_app  eq "NO_KEY" ) { $matlab_app  = $Hf->get_value('engine-app-matlab'); }
@@ -312,8 +361,9 @@ sub make_matlab_command {
 sub make_matlab_command_nohf {
 # -------------
 #  my $matlab_cmd=make_matlab_command_nohf($mfilename, $mat_args, $purpose, $local_dest_dir, $Engine_matlab_path);
-   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,$logpath,$matlab_opts) = @_;
+   my ($function_m_name, $args, $short_unique_purpose, $work_dir, $matlab_app,$logpath,$matlab_opts,$verbose) = @_;
    print("make_matlab_command:\n\tengine_matlab_path:${matlab_app}\n\twork_dir:$work_dir\n") if($debug_val>=25);
+   if (! defined $verbose) {$verbose =1;}  
    my $mfile_path = "$work_dir/${short_unique_purpose}${function_m_name}".".m";
    my $function_call = "$function_m_name ( $args )";
    if (! defined $matlab_opts) { 
@@ -325,7 +375,7 @@ sub make_matlab_command_nohf {
        $logpath='> '."$work_dir/matlab_${function_m_name}";
    }
 
-   make_matlab_m_file ($mfile_path, $function_call); # this seems superfluous.
+   make_matlab_m_file ($mfile_path, $function_call,$verbose); # this seems superfluous.
    #make_matlab_m_file_quiet ($mfile_path, $function_call); #### RECENTLY COMMENTED<-POSSIBLE UNNECESSARY EFFORT
    
 
@@ -340,7 +390,7 @@ sub make_matlab_command_nohf {
 
    #$PID
    ### temporaray cluster disable mode for now.
-   my $fifo_mode=`hostname -s`=~ "civmcluster1" ? 0 : 1;
+   my $fifo_mode=`hostname -s`=~ "civmcluster1" ? 0 : 1; # Debug--change back to civmcluster1
    if ( $fifo_mode ) { 
        my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$logpath);
        print STDERR ( "FIFO Log set to $fifo_log\n");
@@ -1153,19 +1203,16 @@ sub execute {
     my $rc;
     my $i = 0;
     my $ret;
-    #my $hostynamey=`hostname -s`;
-    #pchomp($hostynamey);
+
     foreach my $c (@commands) {
 	$i++;
-	if (`hostname -s` =~ /civmcluster1/ ) {
-	    #if ($hostynamey eq  "civmcluster1") { # fixme: this will need to be generalized for any given cluster name(BJA
-
+	if ( cluster_check() ) {
 	    # For running Matlab, run on Master Node for now until we figure out how to handle the license issue. Otherwise, run with SLURM
 	    if ($c =~ /matlab/) {
 		$c = $c;
 	    } else {
 		if ($custom_q == 1) {
-		    $c = "srun -s -p $my_queue ".$c;
+		    $c = "srun -s --memory 20480 -p $my_queue ".$c;
 		} else {
 		    $c = "srun -s ".$c;
 		}
@@ -1173,7 +1220,6 @@ sub execute {
 	    }
 	} else {
 	    $c = $c;
-	    #print("SLURM MODE DISABLED:$hostynamey\n");
 	}
 
 	
@@ -1224,20 +1270,7 @@ sub execute_heart {
     my $rc;
 
     # -- log the info and the specific command: on separate lines
-    my $msg;
-    #print "Logfile is: $pipeline_info_log_path\n";
-    my $skip = $do_it ? "" : "Skipped ";
-    my $info = $annotation eq '' ? ": " : " $annotation: ";
-    my $time = scalar localtime;
-    $msg = join '', $skip, "EXECUTING",$info, "--", $time , "--";
-    my $cmsg = "   $single_command";
-    log_info($msg);
-    log_info($cmsg);
-
-    if (0) {
-	my $simple_cmd = depath_annot($single_command);
-	log_info(" $simple_cmd");
-    }
+    execute_log($do_it,$annotation,$single_command);
 
     if ($do_it) {
 	#if ($do_it<=1){
@@ -1578,7 +1611,6 @@ sub load_deps {
 # ------------------
 # load local engine_deps, OR load an arbitrary one, return the engine constants headfile
     my ($device,$type) = @_;
-  
     my @errors;
     my @warnings;
     use Env qw(PIPELINE_HOSTNAME PIPELINE_HOME WKS_SETTINGS WORKSTATION_HOSTNAME);
@@ -1771,8 +1803,7 @@ sub new_get_engine_dependencies {
 sub make_list_of_files {
 # -------------
   my ($directory, $file_template) = @_;
-  # make a list of all files in directory fitting template
-  # don't use unix ls for checks, since it can't bring back list of 512
+  # make a list of all files in directory fitting template  # don't use unix ls for checks, since it can't bring back list of 512
   # this can handle 512, probably any
   # I hope pc "dir" can handle 512
 
@@ -2745,6 +2776,14 @@ sub fileparts {
     
     use File::Basename;
 #    ($name,$path,$suffix) = fileparse($fullname,@suffixlist);
+    # BJ's previous code update (before 05 April 2017)
+    # my $gz='';
+    # if ($fullname =~ s/\.gz$//) {
+    # 	$gz=".gz";
+    # }
+    # my ($name,$path,$suffix) = fileparse($fullname,qr/.[^.]*$/);
+    # return($name,$path,$suffix.$gz);
+
     my ($name,$path,$suffix) = fileparse($fullname,qr/\.([^.].*)+$/);#qr/\.[^.]*$/)
     if ( ! defined $fullname || $fullname eq "") { 
 	
@@ -2769,9 +2808,1455 @@ sub funct_obsolete {
 # ------------------
 # simple function to print that we've called an obsolete function
     my ($funct_name,$new_funct_name)=@_;
-    print("\n\nWARNING: obsolete function called, <${funct_name}>, should change call to <${new_funct_name}>\n\n\n");
+    my @callstack=(caller(2));
+    my $pm;
+    $pm=$callstack[1] || die "caller failure in error_out with message: $msg";
+    my $sn;
+    $sn=$callstack[3] || die "caller failure in error_out with message: $msg";
+    
+    my $msg = "\n\nWARNING: obsolete function called, <${funct_name}>, should change call to <${new_funct_name}>\n\n\n";
+    print STDERR "\t ".join("\n\t",@callstack).$msg."\n";
     sleep(1);
 }
 
+
+# ------------------
+sub create_affine_transform {
+# ------------------
+  my ($go, $xform_code, $A_path, $B_path, $result_transform_path_base, $ants_app_dir,$mod,$q,$r) = @_;
+
+  my ($q_string,$r_string) = ('','');
+  if ((defined $q) && ($q ne '')) {
+      $q_string = "-q $q";
+  }
+  if ((defined $r) && ($r ne '')) {
+      $r_string = "-r $r";
+  }
+  
+  my $affine_iter="3000x3000x0x0";
+  print " Test mode : ${test_mode}\n";
+  if (defined $test_mode) {
+      if ($test_mode==1) {
+	  $affine_iter="1x0x0x0";
+      }
+  }
+  my $cmd;
+  if ($xform_code eq 'rigid1') {
+      my $opts1 = "-i 0 --use-Histogram-Matching --rigid-affine true --MI-option 32x8000 -r Gauss[3,0.5]";
+      my $opts2 = "--number-of-affine-iterations $affine_iter --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4 -v";  
+      
+      $cmd = "${ants_app_dir}antsRegistration -d 3 --verbose 1 -r [$A_path,$B_path,1] ". 
+	  "-m Mattes[$A_path,$B_path,1,32,random,0.3] -t rigid[0.1] -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 ".
+	  " ${q_string} ${r_string} ".
+	  " -u 1 -z 1 -o $result_transform_path_base --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4";
+     
+  } elsif ( $xform_code eq 'nonrigid_MSQ' ) {
+
+      my $opts1 = "-i 0 ";
+      my $opts2 = "--number-of-affine-iterations $affine_iter --affine-metric-type MSQ";  
+     $cmd = "${ants_app_dir}antsRegistration -d 3 --verbose 1 -r [$A_path,$B_path,1] ".
+	 " -m MeanSquares[$A_path,$B_path,1,32,random,0.3] -t translation[0.1] -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
+	 " -m MeanSquares[$A_path,$B_path,1,32,random,0.3] -t rigid[0.1]       -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
+	 " -m MeanSquares[$A_path,$B_path,1,32,random,0.3] -t affine[0.1]      -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
+	 " ${q_string} ${r_string} ".
+	 "  -u 1 -z 1 -o $result_transform_path_base --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4";
+  } elsif ($xform_code eq 'full_affine') {
+
+     $cmd = "${ants_app_dir}antsRegistration -d 3 --verbose 1 -r [$A_path,$B_path,1] ".
+	 " -m Mattes[$A_path,$B_path,1,32,random,0.3] -t affine[0.1]      -c [$affine_iter,1.e-8,20] -s 4x2x1x0.5vox -f 6x4x2x1 -l 1 ".
+	 " ${q_string} ${r_string} ".
+	 "  -u 1 -z 1 -o $result_transform_path_base --affine-gradient-descent-option 0.05x0.5x1.e-4x1.e-4";
+
+  }
+  else {
+      error_out("$mod create_transform: don't understand xform_code: $xform_code\n");
+  }
+
+  my @list = split '/', $A_path;
+  my $A_file = pop @list;
+  my $jid = 0;
+  if ((cluster_check) && ($mod =~ /.*vbm\.pm$/ )) {
+      my ($home_path,$dummy1,$dummy2) = fileparts($result_transform_path_base,2);
+      my ($dummy3,$home_base,$dummy4) = fileparts($B_path,2);
+      my @home_base = split(/[_-]+/,$home_base);
+      my $Id_base = $home_base[0];
+      my $Id= "${Id_base}_create_affine_registration";
+      my $verbose = 2; # Will print log only for work done.
+      $jid = cluster_exec($go, "create $xform_code transform for $A_file", $cmd,$home_path,$Id,$verbose);     
+      if (! $jid) {
+	  error_out("$mod create_transform: could not make transform: $cmd\n");
+      }
+  } else {
+      if (! execute($go, "create $xform_code transform for $A_file", $cmd) ) {
+	  error_out("$mod create_transform: could not make transform: $cmd\n");
+      }
+  }
+ # my $transform_path = "${result_transform_path_base}Affine.txt"; # From previous version of Ants, perhaps?
+
+  my $transform_path="${result_transform_path_base}0GenericAffine.mat";
+
+  if (!-e $transform_path && $go && ($jid == 0)) {
+    error_out("$mod create_transform: did not find result xform: $transform_path");
+    print "** $mod create_transform $xform_code created $transform_path\n";
+  }
+  return($transform_path,$jid);
+}
+
+# ------------------
+sub apply_affine_transform {
+# ------------------
+
+  my ($go, $to_deform_path, $result_path, $do_inverse_bool, $transform_path, $warp_domain_path, $ants_app_dir, $interp, $mod,$native_reference_space) =@_; 
+  my $i_opt = $do_inverse_bool ? '-i' : ''; 
+  if ($go) {
+      print "i_opt: $i_opt\n";
+  }
+
+  if ((! defined $mod) || ($mod eq '')) {
+      $mod = "registration_pm_living_in_pipeline_utilties.pm";
+  }
+  if ((! defined $native_reference_space) || ($native_reference_space eq '')) {
+      $native_reference_space = 0; # Not sure if we want atlas space to be our default reference space.
+  }
+
+  my $reference='';
+  my $i_opt1;
+
+  if ($i_opt=~ m/i/) {
+    $i_opt1=1;
+    $reference=$warp_domain_path;
+  } else {
+    $i_opt1=0;
+    $reference=$to_deform_path;
+  } 
+  
+  if ($mod =~ /.*vbm\.pm$/ ) {
+      if ($native_reference_space) {
+       $reference=$to_deform_path;
+      } else {
+       $reference=$warp_domain_path;
+      }
+  }
+
+  if ($go) {
+      print "interp: $interp\n\n";
+  }
+
+  if ((! defined $interp) || ($interp eq '')) {
+      $interp="LanczosWindowedSinc";
+      $interp="Linear";
+  } else {
+      $interp="NearestNeighbor";
+  }
+
+  if ($go) {
+      print "i_opt number: $i_opt1\n";
+      print "interpolation: $interp\n";
+      print "reference: $reference\n";
+  }
+  my $cmd="${ants_app_dir}antsApplyTransforms --float -d 3 -i $to_deform_path -o $result_path -t [$transform_path, $i_opt1] -r $reference -n $interp";
+
+  if ($go) {
+      print " \n";
+      print "****applying affine registration:\n $cmd\n";
+  }
+  my @list = split '/', $transform_path;
+  my $transform_file = pop @list;
+  
+  my $jid = 0;
+  if  ((cluster_check) && ($mod =~ /.*vbm\.pm$/ )) {
+      my ($home_path,$dumm1,$dummy2) = fileparts($transform_path,2);
+      my ($dummy3,$home_base,$dummy4) = fileparts($to_deform_path,2);
+      my @home_base = split(/[_-]+/,$home_base);
+      my $Id_base = $home_base[0];
+      my $Id= "${Id_base}_apply_affine_registration";
+      my $verbose = 2; # Will print log only for work done.
+      $jid = cluster_exec($go, "$mod: apply transform $transform_file", $cmd ,$home_path,$Id,$verbose);     
+      if (! $jid) {
+	  error_out("$mod apply_affine_transform: could not apply transform to $to_deform_path: $cmd\n");
+      }
+  } else {
+      if (! execute($go, "$mod: apply_affine_transform $transform_file", $cmd) ) {
+	  error_out("$mod apply_affine_transform: could not apply transform to $to_deform_path: $cmd\n");
+      }
+  }
+
+  if (!-e $result_path  && $go && ($jid == 0)) {
+    error_out("$mod apply_affine_transform: missing transformed result $result_path");
+  }
+  if ($go) {
+      print "** $mod apply_affine_transform created $result_path\n";
+  }
+  
+  return($jid);
+
+}
+
+# ------------------
+sub apply_transform {
+# ------------------
+    funct_obsolete("apply_transform", "apply_affine_transform");
+
+    apply_affine_transform(@_);
+}
+
+
+# ------------------
+sub cluster_exec {
+# ------------------
+    my ($do_it,$annotation,$cmd,$work_dir,$Id,$verbose,$memory,$test,$node) = @_;
+   # my $memory=25600;
+    my @sbatch_commands;
+    my $node_command=''; # Was a one-off ---> now turned on for handling diffeo identity warps.
+ 
+    my $queue_command='';
+    my $memory_command='';
+    my $time_command = '';
+    my $default_memory = 24870;#int(154000);# 40960; # This is arbitrarily set at 40 Gb at first, now 150 Gb for Premont study.
+    if (! defined $verbose) {$verbose = 1;}
+
+    if ($test) {
+	#$queue_command = "-p overload";#"-p matlab";#Not sure why switched from overload to matlab...have now switched back.
+	#$time_command = "-t 15"; # -t 180
+	#push(@sbatch_commands,$time_command); 
+	$queue_command = "-p high_priority";    
+    } elsif ($custom_q == 1) {
+	$queue_command = "-p $my_queue";
+    }
+    push(@sbatch_commands,$queue_command);
+
+   # push(@sbatch_commands,"-m cyclic");    
+
+    if (defined $node) {
+	if ($node =~ /,/) {
+	    ($node,$local_reservation) = split(',',$node);
+	    $node_command = "-w $node";
+	    push(@sbatch_commands,$node_command);
+	    $reservation_command = "--reservation=${local_reservation}";
+	    push(@sbatch_commands,$reservation_command);
+	} else {
+	    if ($node =~ /^(civm)/) {
+		$local_reservation = 0;
+		$node_command = "-w $node";
+		push(@sbatch_commands,$node_command);
+	    } else {
+		$local_reservation = $node;
+		$reservation_command = "--reservation=${local_reservation}";
+		push(@sbatch_commands,$reservation_command);
+	    }
+	}
+    }
+
+
+    if ((! defined $memory) ||($memory eq ''))  { #12 December 2016: Added memory eq '' so we can more easily trigger the default.
+	$memory_command = " --mem ${default_memory} ";
+    } else {
+        $memory_command = " --mem $memory ";
+    }
+    push(@sbatch_commands,$memory_command);
+
+
+    #my $verbose_command = " -v 1"; # Oops! Inserted during the week of 24-28 Oct 2016 
+    my $verbose_command = " -v"; # However, this fixes an issue with antsRegistration calls, NOT sbatch calls!
+    push(@sbatch_commands,$verbose_command);  # It would have been fine without the "1", dammit
+
+    my $sharing_is_caring =  ' -s ';  # Not sure if this is still needed.
+    push(@sbatch_commands,$sharing_is_caring);
+
+    my ($batch_path,$batch_file,$b_file_name);
+    my $msg = '';
+    my $jid=1;
+    if ((! $test) && ($verbose != 3))  {
+	execute_log($do_it,$annotation,$cmd,$verbose);
+    }
+    if ($do_it) {
+	$batch_path = "${work_dir}/sbatch/";
+	$b_file_name = $Id.'.bash';
+	$batch_file = $batch_path.$b_file_name;
+	if (! -e $batch_path) {
+	    mkdir($batch_path,0777);
+	} 
+	my $slurm_out_command = " --output=${batch_path}".'/slurm-%j.out ';
+	push(@sbatch_commands,$slurm_out_command);
+
+#	my $open_jobs_path = "${batch_path}/open_jobs.txt";
+
+	open($Id,'>',$batch_file);
+	print($Id "#!/bin/bash\n");
+        print($Id 'echo \#'."\n");
+	foreach my $sbatch_option (@sbatch_commands) {
+	    print($Id "#SBATCH ${sbatch_option}\n");
+	}
+
+	print($Id "$cmd \n");
+	close($Id);
+
+	my $test_size = -s $batch_file;
+	my $no_escape = 1;
+	my $num_checks = 0;
+	my $flag = 0;
+	while (($test_size < 30) && $no_escape) {
+	    $num_checks++;
+	    sleep(0.1);
+	    $test_size = -s $batch_file;
+	    if ($num_checks > 20) {
+		$no_escape=0;
+		$flag =1;
+	    }
+	}
+
+	if ($flag) {
+	    log_info("batch file: ${batch_file} does not appear to have been created. Expect sbatch failure.")
+	}
+	
+	# this works, but alternate call might be nicer.
+	$bash_call_with_visible_options = "sbatch ${slurm_out_command} ${sharing_is_caring} ${verbose_command} ${node_command} ${reservation_command} ${queue_command} ${memory_command} ${time_command} ${batch_file}";
+	my $bash_call = "sbatch ${batch_file}";
+	if ($verbose != 3) {
+	    print "sbatch command is: ${bash_call_with_visible_options}\n";
+	}
+	($msg,$jid)=`$bash_call` =~  /([^0-9]+)([0-9]+)/x;
+	if ( $msg !~  /.*(Submitted batch job).*/) {
+	    $jid = 0;
+	    error_out("Bad batch submit to slurm with output: $msg\n");
+	    exit;
+	}
+    }
+
+    if ($jid == 0) {
+	print STDERR "  Problem:  system() returned: $msg\n";
+	print STDERR "  * Command was: $cmd\n";
+	print STDERR "  * Execution of command failed.\n";
+	return 0;
+    }
+    if ($jid > 1) {
+	if ($verbose != 3) {
+	    print STDOUT " Job Id = $jid.\n";
+	} else {
+	    print STDOUT "$jid";
+	}
+	if ($batch_file ne '') {
+	    my $new_name = $batch_path.'/'.$jid."_".$b_file_name;
+	    if ($verbose != 3) {	   
+		print "batch_file = ${batch_file}\nnew_name = ${new_name};\n\n";
+	    }
+	    rename($batch_file, $new_name); 		
+        }
+    }
+    return($jid);
+}
+
+
+# ------------------
+sub cluster_check {
+# ------------------
+   if (`hostname -s` =~ /civmcluster1/) {
+       return(1);
+   } else {
+       return(0);
+   }
+}
+
+
+# ------------------
+sub execute_log {
+# ------------------
+    ($do_it,$annotation,$command,$verbose)=@_;
+    if (! defined $verbose) {$verbose = 1;}
+    my $skip = $do_it ? "" : "Skipped ";
+    my $info = $annotation eq '' ? ": " : " $annotation: "; 
+    my $time = scalar localtime;
+    my $msg = join '', $skip, "EXECUTING",$info, "--", $time , "--";
+    my $cmsg = "   $command";
+    if (($verbose == 2)) {
+	if (! $do_it) {
+	    $verbose = 0;
+	} else {
+	    $verbose = 1;
+	}
+    }
+	    log_info($msg,$verbose);
+	    log_info($cmsg,$verbose);
+}
+
+# ------------------
+sub cluster_wait_for_jobs {
+# ------------------
+    my ($interval,$verbose,$sbatch_location,@job_ids)=@_;
+    my $check_for_slurm_out = 1;
+    if (! -d $sbatch_location) {
+	unshift(@job_ids,$sbatch_location);
+	$check_for_slurm_out = 0;
+    }
+    my $jobs;
+   if ($job_ids[1] ne ''){    
+	$jobs = join(',',@job_ids);
+   } elsif ($job_ids[0] ne '') {
+       $jobs = $job_ids[0];
+   }
+
+    my $number_of_jobs = 0;
+    if ($job_ids[0] ne '') {
+	$number_of_jobs = scalar(@job_ids);
+    }
+    print " Number of jobs = ${number_of_jobs}\n";
+
+    sleep(1);
+    my $completed = 0;
+    my $in_jobs=$jobs;
+    if ($jobs ne '') {
+	#print STDOUT "SLURM: Waiting for multiple jobs to complete";
+	print STDOUT "SLURM: Waiting for jobs $jobs to complete";	
+	while ($completed == 0) {
+
+	    my $test_1 = `sacct -j $jobs -o JobName%50,State | grep -v '.batch' | grep -cE 'FAIL|CANCEL|COMPLETED|DEADLINE|PREEMPTED|TIMEOUT'`;
+	    # 11 November 2016: Changed test condition for whether or not we continue...now we look for the number of jobs that have the "no more work will be done" conditions.
+	    if ($test_1 < $number_of_jobs) {
+	    #if (`squeue --noheader -j $jobs -o "%i %t"` =~ /(CG|PD|R|S[^T])/) { #`sacct -n -j $jobs -o State` =~ /(COMPLETING|PENDING|RUNNING|SUSPENDED)/) { # 16 Sept 2016: added SUSPENDED
+		if ($verbose) {print STDOUT ".";}
+		my $throw_error=0;
+		if ($check_for_slurm_out) {
+		    my @bad_jobs;
+		    my $missing_files;
+		    my @job_list=split(',',$jobs);
+		    foreach my $job (@job_list) {
+			#print "Job = $job\t"; ##
+			if (`sacct -n -j $job -o State` =~ /RUNNING/){   
+			    my $slurm_out_file = "${sbatch_location}/slurm-${job}.out";
+			    if (! -e $slurm_out_file) {
+				sleep(10);
+				if (! -e $slurm_out_file) {
+				    $throw_error = 1;
+				    push(@bad_jobs,$job);
+				    $missing_files=$missing_files."${slurm_out_file}\n";
+				}
+			    }
+			}
+		    }
+		    
+		    if ($throw_error) {
+			my $bad_jobs=join(' ',@bad_jobs);
+			my $bad_jobs_string = join('_',@bad_jobs);
+			
+			use civm_simple_util qw(whowasi whoami);	
+			my $process = whowasi();
+			my @split = split('::',$process);
+			$process = pop(@split);
+			log_info("sbatch existence error generated by process: $process\n");
+			my $error_message ="UNRESOLVED ERROR! No slurm-out file created for job(s): ${bad_jobs}. Job will run but will not save output!\n".
+			    "It is suspected that this is due to unhealthy nodes or a morbidly obese glusterspace.\n".
+			    "Expected file:\n${missing_files} does not exist.\nCancelling bad jobs ${bad_jobs}.\n\n\n";
+			my $time = time;			
+			my $email_file="${sbatch_location}/Error_email_for_${time}.txt";
+			
+			my $time_stamp = "Failure time stamp = ${time} seconds since January 1, 1970 (or some equally asinine date).\n";
+			my $subject_line = "Subject: cluster slurm out error.\n";
+
+			
+			my $email_content = $subject_line.$error_message.$time_stamp;
+			`echo "${email_content}" > ${email_file}`;
+			`sendmail -f $process.civmcluster1\@dhe.duke.edu rja20\@duke.edu < ${email_file}`;
+			`scancel ${bad_jobs}`; #29 Nov 2016: commented out because of delayed slurm-out files causing unwarrented cancellations #9 Dec 2016, trying to mitigate witha 10 second wait, and the cancelling if still no slurm out file
+			log_info($error_message);
+		    }
+		}
+		sleep($interval);
+	    } else { 
+		$completed = 1;
+		print STDOUT "\n";
+	    }
+	}
+    } else {
+	$completed = 1;
+    }
+   # my $msg = `sacct -j $in_jobs -o JobName%50,State`;
+   # print "$msg\n";
+    sleep(1);
+    return($completed);
+}
+
+sub cluster_check_for_jobs {
+# ------------------
+    my (@job_ids)=@_;
+    my $jobs = join(',',@job_ids);
+    my $completed = 0;
+    if ($jobs ne '') {
+	if (`squeue -j $jobs -o "%i %t"` =~ /(CG|PD|R)/) {
+	    return(0);	
+	} else {
+	    return(1);
+	}
+    } else {
+	return(1);
+    }
+    
+}
+
+# ------------------
+sub get_nii_from_inputs {
+# ------------------
+# Update to only return hdr/img/nii/nii.gz formats.
+# Case insensitivity added.
+# Order of selection (using contrast = 'T2' and 'nii' as an example):
+#        1)  ..._contrast.nii     S12345_T2.nii         but not...   S12345_T2star.nii 
+#        2)  ..._contrast_*.nii   S12345_T2_masked.nii  but not...   S12345_T2star.nii or S12345_T2star.nii
+#        3)  ..._contrast*.nii    S12345_T2star.nii  or S12345_T2star_masked.nii, etc
+#        4)  Returns error if nothing matches any of those formats
+
+    my ($inputs_dir,$runno,$contrast) = @_;
+    my $error_msg='';
+    my $test_contrast;
+    if ((defined $contrast) && ($contrast ne '')) {
+	$test_contrast = "_${contrast}";
+    } else {
+	$test_contrast = "";
+    }
+
+
+    if (-d $inputs_dir) {
+	opendir(DIR, $inputs_dir);
+	my @input_files_1= grep(/^($runno).*(${test_contrast})\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR)); #27 Dec 2016, added "^" because new phantom naming method of prepending (NOT substituting) "P" "Q" etc to beginning of runno results in ambiguous selection of files. Runno "S64944" might return "PS64944" "QS64944" or "S64944".
+
+	my $input_file = $input_files_1[0];
+	if (($input_file eq '') || (! defined $input_file)) {
+	opendir(DIR, $inputs_dir);
+	my @input_files_2= grep(/^($runno).*(${test_contrast})_.*\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR)); #28 Dec 2016, added "^" like above.
+	    $input_file = $input_files_2[0];
+	    if (($input_file eq '') || (! defined $input_file)) {
+		opendir(DIR, $inputs_dir);
+		my @input_files_3= grep(/^($runno).*(${test_contrast}).*\.(${valid_formats_string}){1}(\.gz)?$/i ,readdir(DIR));  #28 Dec 2016, added "^" like above.
+		$input_file = $input_files_3[0];
+	    }
+	}
+
+	if ($input_file ne '') {
+	    my $path= $inputs_dir.'/'.$input_file;
+	    return($path);
+	} else {
+	    $error_msg="pipeline_utilities function get_nii_from_inputs: Unable to locate file using the input criteria:\n\t\$inputs_dir: ${inputs_dir}\n\t\$runno: $runno\n\t\$contrast: $contrast.\n";
+	    return($error_msg);
+	}
+    } else {
+	$error_msg="pipeline_utilities function get_nii_from_inputs: The input directory $inputs_dir does not exist.\n";
+	return($error_msg);
+    }
+}
+
+# ------------------
+sub compare_headfiles {
+# ------------------
+    my ($Hf_A, $Hf_B, $include_or_exclude, @keys_of_note) = @_;
+    my @errors=();
+    my $error_msg = '';
+    my $include = $include_or_exclude;
+ 
+
+
+    foreach my $testHf ($Hf_A,$Hf_B) {	
+	if (! $testHf->check()) { # It seems that it should be assumed that the headfile is coming checked already. If not, that aint on us!
+	   # push(@errors, "Unable to open headfile referenced by ${testHf}\n");
+	}
+	if ( 0 ) {  # this causes errors for a reason which is un clear. Both headfiles have already been checked and read external to this call.
+	    if (! $testHf->read_headfile) {
+		push(@errors, "Unable to read contents from headfile referenced by ${testHf}\n");
+	    }
+	}
+	if ($errors[0] ne '') {
+	    $error_msg = join('\n',@errors);
+	    return($error_msg);
+      	}
+    }
+	
+    my @key_array = ();
+    if ($include) {
+	@key_array = @keys_of_note;
+    } else {
+	my @A_keys = $Hf_A->get_keys;
+	my @B_keys = $Hf_B->get_keys;;
+	my @all_keys = keys %{{map {($_ => undef)} (@A_keys,@B_keys)}}; # This trick is from http://www.perlmonks.org/?node_id=383950.
+	foreach my $this_key (@all_keys) {
+	    my $pattern = '('.join('|',@keys_of_note).')';
+	    if ($this_key !~ m/$pattern/) {
+		push(@key_array,$this_key) unless (($this_key eq 'hfpmcnt') || ($this_key eq 'version_pm_Headfile'));
+	    }
+	}
+    }
+
+    if ($key_array[0] ne '') {
+	foreach my $Key (@key_array) {
+	    my $A_val = $Hf_A->get_value($Key);
+	    my $B_val = $Hf_B->get_value($Key);
+	    my $robust_A_val = $A_val; # 15 January 2016: added functionality such that gzipped/ungzipped difference doesn't throw a flag.
+	    my $robust_B_val = $B_val;
+
+	    if ($robust_A_val =~ s/\.gz//) {}
+	    if ($robust_B_val =~ s/\.gz//) {}
+
+	    if ($robust_A_val ne $robust_B_val) {
+		my $msg = "Non-matching values for key \"$Key\":\n\tValue 1 = ${A_val}\n\tValue 2 = ${B_val}\n";
+		push (@errors,$msg);
+	    }
+	}
+    }
+  
+    if ($errors[0] ne '') {
+	$error_msg = join("\n",@errors);
+	$error_msg = "Headfile comparison complete, headfiles are not considered identical in this context.\n".$error_msg."\n";
+    }
+    
+    return($error_msg); # Returns '' if the headfiles are found to be "equal", otherwise returns message with unequal values.
+}
+
+# ------------------
+sub symbolic_link_cleanup {
+# ------------------
+   # my ($folder,$log) = @_;
+   # if (! defined $log) {$log=0;}
+    my ($folder,$PM) = @_;
+    if (! defined $PM) {$PM = 'Unknown_module';}
+
+    if ($folder !~ /\/$/) {
+	$folder=$folder.'/';
+    }
+
+    my $link_path;
+    my $temp_path = "$folder/temp_file";
+    if (! -d $folder) {
+	print " Folder $folder does not exist.  No work was done to cleanup symbolic links in non-existent folder.\n";
+	return;
+    }
+    opendir(DIR,$folder);
+    my @files = grep(/.*/,readdir(DIR));
+    my $log_msg_prefix = "${PM}: Attempting symbolic link cleanup...\n";
+    my $log_msg = '';    
+   
+    foreach my $file (@files) {
+	$file_path = "$folder/$file";
+	if (-l $file_path) {
+	    $link_path = readlink($file_path);
+	    my ($link_folder,$dummy1,$dummy2)=fileparts($link_path,2);
+	    my $action;
+	    if ($link_folder ne $folder) {
+		$action = "cp";
+		# print "\$link_folder ${link_folder}  ne \$folder ${folder}\n";
+	    } else {
+		# print "\$link_folder ${link_folder}  eq \$folder ${folder}\n";
+		$action = "mv";
+	    }
+	    my $command = "rm ${file_path}; ${action} ${link_path} ${file_path};";
+	    my $echo = `$command`;
+	    $log_msg = $log_msg."Bash command: ${command}\n";
+	    if ($echo ne '') {
+		$log_msg = $log_msg."\tBash echo: $echo\n";
+	    }
+	    #my $echo = `rm ${file_path}; ${action} ${link_path} ${file_path};`;
+	    # if ($log) {
+	    # 	my $annotation = "Cleaning up symbolic links.";
+	    # 	my $command =  "${action} ${link_path} ${file_path}";
+	    # 	$command = $command.$echo;
+	    # 	execute(1,$annotation,$command,$verbose);
+	    #}
+	}
+    }
+    if ($log_msg ne '') {
+	log_info($log_msg_prefix.$log_msg);
+    }
+}
+
+
+# ------------------
+sub headfile_list_handler {
+# ------------------
+    my ($current_Hf,$key,$new_value,$invert,$replace) = @_; # 17 November 2016: Added replace to support iterative capabilities, where we only want to track the latest diffeo warp.
+    if (! defined $invert) { $invert = 0;}
+    if (! defined $replace) { $replace = 0;}
+
+    my $list_string = $current_Hf->get_value($key);
+    if ($list_string eq 'NO_KEY') {
+	$list_string = '';
+    }
+
+    my @list_array = split(',',$list_string);
+    my $trash;
+
+    if ($invert) {
+	if ($replace) {
+	    $trash = pop(@list_array);
+	}
+	push(@list_array,$new_value);
+	#$list_string=$list_string.",".$new_value;
+    } else {
+	if ($replace) {
+	    $trash = shift(@list_array);
+	}
+	unshift(@list_array,$new_value);
+	#$list_string=$new_value.",".$list_string;
+    }
+
+    $list_string = join(',',@list_array);
+    $current_Hf->set_value($key,$list_string);
+}
+# ------------------
+sub find_temp_headfile_pointer {
+# ------------------
+    my ($location) = @_;
+    if (! -e  $location) {
+	return(0);
+    } else {
+	opendir(DIR,$location);
+	my @headfile_list = grep(/.*\.headfile$/ ,readdir(DIR));
+	if ($#headfile_list > 0) {
+	    error_out(" $PM: more than one temporary headfile found in folder: ${current_path}.  Unsure of which one accurately reflects previous work done.\n"); 
+	}
+	if ($#headfile_list < 0) {
+	    print " $PM: No temporary headfile found in folder ${current_path}.  Any existing data will be removed and regenerated.\n";
+	    return(0);
+	} else {
+	    my $tempHf = new Headfile ('rw', "${location}/${headfile_list[0]}");
+	    if (! $tempHf->check()) {
+		print " Unable to open temporary headfile ${headfile_list[0]}. Any existing data in ${current_path} will be removed and regenerated.\n";
+		return(0);
+	    }
+	    if (! $tempHf->read_headfile) {
+		print " Unable to read temporary headfile ${headfile_list[0]}. Any existing data in ${current_path} will be removed and regenerated.\n";
+		return(0);
+	    }
+    
+	    return($tempHf); 
+	}
+    }
+}
+
+# ------------------
+sub headfile_alt_keys { # Takes a list of headfile keys to try and returns the first value found.
+# ------------------
+    my ($local_Hf,@keys)=@_;
+    my $value="NO_KEY";
+    my $counter = 0;
+    for (my $key = shift(@keys); ($value eq  "NO_KEY") ; $key = shift(@keys)) {
+	$counter++;
+	if ($#keys == -1) {
+	    return("NO_KEY",0);
+	}
+	$value  =  $local_Hf->get_value($key);
+    }
+    return($value,$counter);
+}
+
+sub data_double_check { # Checks a list of files; if a file is a link, double checks to make sure that it eventually lands on a real file.
+# ------------------    # Subroutine returns number of files which point to null data; "0" is a successful test.
+    my (@file_list)=@_;
+    my $number_of_bad_files = 0;
+ 
+    for (my $file_to_check = shift(@file_list); ($file_to_check ne '') ; $file_to_check = shift(@file_list)) {
+	my ($path,$name,$ext) = fileparts($file_to_check,2);
+#  The following is based on: http://snipplr.com/view/67842/perl-recursive-loop-symbolic-link-final-destination-using-unix-readlink-command/
+	if ($file_to_check =~/[\n]+/) {
+	    $number_of_bad_files++;
+	} else {
+	    #print " File to check 1: ${file_to_check}\n";
+	    while (-l $file_to_check) {
+		($path,$file,$ext) = fileparts($file_to_check,2);
+		#print " File to check 2: ${file_to_check}\n";
+		$file_to_check = readlink($file_to_check);
+		if ($file_to_check !~ /^\//) {
+		    $file_to_check = $path.$file_to_check;
+		}
+	    }
+	    
+	    if (! -e $file_to_check) {
+		#my $msg = `ls -l $file_to_check`;
+		#print "$msg\n";
+		$number_of_bad_files++;
+	    }
+	}
+    }
+ 
+    return($number_of_bad_files);
+}
+
+sub antsRegistration_memory_estimator { # Takes in an antsRegistration command, converts to test mode, sbatchs, and returns the MaxRSS used by the job.
+# ------------------    
+    my ($ants_command,$test_downsample)=@_;
+    if (! defined $test_downsample) {$test_downsample=8;}
+    my $mod = 'tester';
+    my $memory;
+
+    my $total_free = `free -m | grep Mem`;
+    my @total_free = split(" ",$total_free);
+    $total_free = $total_free[2];    
+    $memory = int($total_free * 0.8);
+#    print "Memory = $memory\n";
+
+#    print "\n\nOld ants command = ${ants_command}\n";
+#    $test_downsample = 1;
+    $ants_command =~ s/(?<=-f\s)(.*?)(?=[\s]+-[A-Za-z-])/${test_downsample}/;
+    my $boblob = $1;
+    my @boblob = split('x',$boblob);
+    print "Boblob = $boblob\n";
+    my $lowest_downsample = pop(@boblob);
+    my $ratio = ($test_downsample/$lowest_downsample);
+    my $memory_ratio = ($ratio*$ratio*$ratio);
+#    print "Memory ratio = ${memory_ratio}\nTest downsample = ${test_downsample}\n";
+
+    $ants_command =~ s/(?<=-s\s)(.*x)([0-9]+.*?)(?=[\s]+-[A-Za-z-])/$2/;
+    
+    $ants_command =~ s/(?<=\[) ([\sx0-9]*) (?=,) /2000/x;
+   #    my $blah = $1;   
+
+
+   # $blah =~ s/[0]*[1-9]+[0-9]*/1/g;
+   # $blah =~ s/[0]+/0/g;
+   # $ants_command =~ s/marytylermoore/$blah/;
+
+    $ants_command =~ s/(?<=-o)([\s]+)(\/|~\/|)(([^\/\s]*\/)+)([^\s]*)(?=\s)/ $2$3pilot_/xg;
+    my $temp_path = "$2/$3";
+    $ants_command =~ s/;[.\n]*//;
+
+    print "\nNew ants command = ${ants_command}\n";
+    
+    if (cluster_check()) {
+	my $cmd = $ants_command.";\n".
+	    "rm ${temp_path}/pilot*;\n";
+	my $go_message = "Estimating memory needs for $mod. Running antsRegistration in test mode.";
+	my $stop_message = "Unable to estimate memory needs for $mod. antsRegistration has failed in test mode."; 
+	my $home_path = $temp_path;
+	my $Id= "${mod}_antsRegistration_pilot_run";
+	my $verbose = 2; # Will print log only for work done.
+	my $test = 1;
+	print " temp_path = $temp_path\n";
+	$jid = cluster_exec(1,$go_message , $cmd ,$home_path,$Id,$verbose,$memory,$test);     
+
+	print "Job ID = $jid\n";
+	if (! $jid) {
+	    error_out($stop_message);
+	}
+	my $interval = 1;
+	#my $verbose = 0;
+	my $done_waiting = cluster_wait_for_jobs($interval,0,$jid);
+
+	if ($done_waiting) {
+	   sleep(1);
+	   my $kilos =`sacct -j $jid -o MaxRSS | grep K | sed 's/K//g'`;
+	   my $megas = int($kilos / 1024);
+	   my $predicted_memory = $megas*$memory_ratio;
+#	   print "kilos = $kilos\n";
+#	   print "megas = $megas\n";
+#	   print "predicted_memory = ${predicted_memory}\n";
+
+	   return($megas);	
+	}
+
+    
+    #' -p overload ';
+    } else {
+
+	`rm ${temp_path}/pilot*`;
+    }
+}
+
+# ------------------
+sub format_transforms_for_command_line {
+# ------------------    
+    my ($comma_string,$option_letter,$start,$stop) = @_;
+    my $command_line_string='';
+    my @transforms = split(',',$comma_string);
+    my $total = $#transforms + 1;
+
+    if (defined $option_letter) {
+	$command_line_string = "-${option_letter} ";
+    }
+
+    if (! defined $start) {
+	$start = 1;
+	#$stop = $total;
+    }
+
+    if (! defined $stop) {
+	$stop = $total;
+    }
+
+    my $count = 0;
+#for(count=start;cont<stop&&count<maxn;count++)
+#trans=transforms[count]
+    foreach my $transform (@transforms) {
+	$count++;
+	if (($count >= $start) && ($count <= $stop)) {
+	    if (($transform =~ /\.nii$/) || ($transform =~ /\.nii\.gz$/)) { # We assume diffeos are in the format of .nii or .nii.gz
+		$command_line_string = $command_line_string." $transform ";	
+	    } elsif (($transform =~ /\.mat$/) || ($transform =~ /\.txt$/)) { # We assume affines are in .mat or .txt formats
+		if ($transform =~ m/-i[\s]+(.+)/) {
+		    $command_line_string = $command_line_string." [$1,1] "; 
+		} else {
+		    $command_line_string = $command_line_string." [$transform,0] ";
+		}
+	    }
+	}
+    }
+    return($command_line_string);
+}
+
+#---------------------
+sub get_bounding_box_from_header {  ## This may still hang out in older VBM_pipeline code, so we support it be invoking get_bounding_box_and_spacing_from_header
+#---------------------
+    my ($in_file) = @_;
+
+    my $bounding_box;
+    my $bb_and_spacing = get_bounding_box_and_spacing_from_header($in_file);
+    my @array = split(' ',$bb_and_spacing);
+    my $sp = pop(@array);
+    $bounding_box = join(' ',@array);
+
+    return($bounding_box);
+}
+
+#---------------------
+sub read_refspace_txt {
+#---------------------
+    my ($refspace_folder,$split_string,$custom_filename)=@_;
+    my $refspace_file;
+    my ($existing_refspace,$existing_refname);
+
+    if (defined $custom_filename) {
+	$refspace_file = "${refspace_folder}/${custom_filename}";
+    } else { 
+	$refspace_file = "${refspace_folder}/refspace.txt";
+    }
+   # print "$refspace_file\n\n";
+    if (! data_double_check($refspace_file)) {
+	my @existing_refspace_and_name =();
+	my $array_ref = load_file_to_array($refspace_file, \@existing_refspace_and_name);
+
+	($existing_refspace,$existing_refname) = split("$split_string",$existing_refspace_and_name[0]); 
+    } else {
+	$existing_refspace=0;
+	$existing_refname=0;
+    }
+    return($existing_refspace,$existing_refname);
+}
+
+#---------------------
+sub write_refspace_txt {
+#---------------------
+    my ($refspace,$refname,$refspace_folder,$split_string,$custom_filename)=@_;
+    my $refspace_file;
+    my $contents;
+
+    my $array = join("$split_string",($refspace,$refname));
+
+    
+    if (defined $custom_filename) {
+	$refspace_file = "${refspace_folder}/${custom_filename}";
+    } else { 
+	$refspace_file = "${refspace_folder}/refspace.txt";
+    }
+    #my @array = ($array);
+    $contents = [$array];
+    write_array_to_file($refspace_file,$contents);
+    return(0);
+}
+
+
+#---------------------
+sub compare_two_reference_spaces {
+#---------------------
+    my ($file_1,$file_2) = @_; #Refspace may be entered instead of file path and name.
+    my ($bb_and_sp_1,$bb_and_sp_2);
+ #   my ($sp_1,$sp_2);
+    
+    if ($file_1 =~ s/(\.gz)$//) {}
+    
+    if (! data_double_check($file_1)){
+	$bb_and_sp_1 = get_bounding_box_and_spacing_from_header($file_1);  # Attempted to make this impervious to the presence or absence of .gz 14 October 2016
+    } elsif (! data_double_check($file_1.'.gz')) {
+	$bb_and_sp_1 = get_bounding_box_and_spacing_from_header($file_1.'.gz');
+    }  else {
+	$bb_and_sp_1 = $file_1;
+    }
+	
+   if ($file_2 =~ s/(\.gz)$//) {}
+   if (! data_double_check($file_2)){
+       $bb_and_sp_2 = get_bounding_box_and_spacing_from_header($file_2);
+   } elsif (! data_double_check($file_2.'.gz')) {
+       $bb_and_sp_2 = get_bounding_box_and_spacing_from_header($file_2.'.gz');
+   } else {
+       $bb_and_sp_2 = $file_2;
+   }
+
+    my $result=0;
+
+    if ($bb_and_sp_1 eq $bb_and_sp_2) {
+	$result = 1;
+    }
+
+    return($result);
+}
+
+
+#---------------------
+sub recenter_nii_function {
+#---------------------
+    my ($file,$out_path,$skip,$temp_Hf,$verbose)= @_;
+    if (! defined $skip) {$skip = 0 ;}
+    if (! defined $verbose) {$verbose=1;}
+
+    my ($in_path,$name,$ext) = fileparts($file,2);	
+    my $nifti_args = "\'${in_path}\', \'$name\', \'nii\', \'${out_path}/$name$ext\', 0, 0, ".
+   # my $nifti_args = "\'${in_path}\', \'$name\', \'${ext}\', \'${out_path}/$name$ext\', 0, 0, ".
+	" 0, 0, 0,0,0, ${flip_x}, ${flip_z},0,0";
+    if (! $skip) {
+	my $nifti_command = make_matlab_command('civm_to_nii',$nifti_args,"${name}_",$temp_Hf,0); # 'center_nii'
+	execute(1, "Recentering nifti images from tensor inputs", $nifti_command);	         
+    }
+}
+
+#---------------------
+sub hash_summation {
+#---------------------
+
+    my ($hash_pointer)=@_;
+    my %hashish = %$hash_pointer;
+    my $sum = 0;
+    my $errors = 0;
+    foreach my $k (keys %hashish) {
+	if (ref($hashish{$k}) eq "HASH") {
+	    foreach my $j (keys %{$hashish{$k}}) {
+		my $string = $hashish{$k}{$j};
+		if ($string =~ /^[0-9]*$/) {
+		    $sum = $sum + $string;
+		} else {
+		    $errors++;
+		}
+	    }
+	} else {
+	    my $string = $hashish{$k};
+	    if ($string =~ /^[0-9]*$/) {
+		$sum = $sum + $string;
+	    } else {
+		$errors++;
+	    }
+	}
+    }
+    return($sum,$errors);
+}
+#---------------------
+sub memory_estimator {
+#---------------------
+
+    my ($jobs,$nodes) = @_;
+    if ((! defined $nodes) || ($nodes eq '') || ($nodes == 0)) { $nodes = 1;}
+
+    my $node_mem = 244000;
+    my $memory;
+    my $max_jobs_per_node;
+
+    if ($jobs && $nodes) {
+	$max_jobs_per_node=int($jobs/$nodes + 0.99999);
+
+	$memory =int($node_mem/$max_jobs_per_node);
+
+
+	my $limit = 0.9*$node_mem;
+	if ($memory > $limit) {
+	    $memory = $limit;
+	} 
+
+	    print "Memory requested per job: $memory MB\n";
+	
+    } else {
+	$memory = 2440; # This number is not expected to be used so it can be arbitrary.
+
+    }
+    return($memory);
+}
+
+#---------------------
+sub memory_estimator_2 {
+#---------------------
+
+    my ($jobs,$nodes) = @_;
+    if ((! defined $nodes) || ($nodes eq '') || ($nodes == 0)) { $nodes = 1;}
+
+    my $node_mem = 244000;
+    my $memory_1;
+    my $memory_2;
+    my $jobs_requesting_memory_1;
+    my $holes;
+    my $max_jobs_per_node;
+    if ($jobs && $nodes) {
+	$max_jobs_per_node=int($jobs/$nodes + 0.99999);
+	$holes = $nodes*$max_jobs_per_node-$jobs;
+
+	$jobs_requesting_memory_1 = ($nodes-$holes)*$max_jobs_per_node;
+
+	$memory_1 =int($node_mem/$max_jobs_per_node);
+	if ($max_jobs_per_node > 1) {
+	    $memory_2 =int($node_mem/($max_jobs_per_node-1));
+	} else {
+	    $memory_2 = $memory_1;
+	}
+	my $limit = 0.9*$node_mem;
+	if ($memory_1 > $limit) {
+	    $memory_1 = $limit;
+	} 
+
+	if ($memory_2 > $limit) {
+	    $memory_2 = $limit;
+	} 
+	if ($holes) {
+	    print "[Variable] Memory requested per job: ${memory_1} MB or ${memory_2} MB\n";
+	} else {
+	    print "Memory requested per job: $memory_1 MB\n";
+	}
+    } else {
+	$memory_1 = 2440; # This number is not expected to be used so it can be arbitrary.
+	$memory_2 = 2440;
+    }
+    return($memory_1,$memory_2,$jobs_requesting_memory_1);
+}
+
+
+#---------------------
+sub make_identity_warp {
+#---------------------
+
+    my ($source_image,$Hf,$optional_dir,$optional_name) = @_;
+    my $output_name='';
+
+    if (defined $optional_name) {
+	$output_name = $optional_dir.'/'.$optional_name;
+    } elsif (defined $optional_dir) {
+	$output_name = $optional_dir.'/';
+    }
+
+
+    my $nifti_args;
+    if ($output_name ne '') {
+	$nifti_args="\'${source_image}\', \'${output_name}\'";
+    } else {
+	$nifti_args="\'${source_image}\'";
+    }
+
+    my $nifti_command = make_matlab_command('create_identity_warp',$nifti_args,"",$Hf,0);
+    execute(1, "Creating identity warp from  ${source_image}", $nifti_command);
+
+    return(0);
+}
+
+
+
+#---------------------
+sub get_spacing_from_header { ## Easier to just call bb_and_spacing code and then take what we need.
+#---------------------
+    my ($in_file) = @_;
+    my $spacing;
+    my $bb_and_spacing = get_bounding_box_and_spacing_from_header($in_file);
+    my @array = split(' ',$bb_and_spacing);
+    $spacing = pop(@array);
+   
+    return($spacing);
+}
+
+#---------------------
+sub get_bounding_box_and_spacing_from_header {
+#---------------------
+
+    my ($file,$ants_not_fsl) = @_;
+    my $bb_and_spacing;
+    my ($spacing,$bb_0,$bb_1);
+    my $success = 0;
+    my $header_output;
+
+    if (! defined $ants_not_fsl) {
+	$ants_not_fsl = 0;
+    }
+    #$ants_not_fsl = 1;
+    if (! $ants_not_fsl) {
+	my $fsl_cmd = "fslhd $file";
+       
+	$header_output = `${fsl_cmd}`;#`fslhd $file`;
+
+	my $dim = 3;
+	my @spacings;
+	my @bb_0;
+	my @bb_1;
+
+	if ($header_output =~ /^dim0[^0-9]([0-9]{1})/) {
+	    $dim = $1;
+
+	}
+	for (my $i = 1;$i<=$dim;$i++) {
+	    my $spacing_i;
+	    my $bb_0_i;
+	    my $array_size_i;
+	    if ($header_output =~ /pixdim${i}[\s]*([0-9\.\-]+)/) {
+		$spacing_i = $1;
+		$spacing_i =~ s/([0]+)$//;
+		$spacing_i =~ s/(\.)$/\.0/;
+		$spacings[($i-1)]=$spacing_i;
+	    }
+	   
+	    if ($header_output =~ /sto_xyz\:${i}([\s]*[0-9\.\-]+)+/) {
+		$bb_0_i = $1;
+		$bb_0_i =~ s/([0]+)$//;
+		$bb_0_i =~ s/(\.)$/\.0/;
+		$bb_0_i =~ s/^(\s)+//;
+		$bb_0[($i-1)]=$bb_0_i;
+	    }
+	    if ($header_output =~ /dim${i}[\s]*([0-9]+)/) {
+		$array_size_i = $1;
+		$array_size[($i-1)] = $array_size_i;
+	    }
+	    $bb_1_i= $bb_0[($i-1)]+$array_size[($i-1)]*$spacings[($i-1)];
+	    $bb_1_i =~ s/([0]+)$//;
+	    $bb_1_i =~ s/(\.)$/\.0/;
+	    $bb_1_i =~ s/^(\s)+//;
+	    $bb_1[($i-1)]= $bb_1_i;
+	}
+
+	$bb_0 = join(' ',@bb_0);
+	$bb_1 = join(' ',@bb_1);
+	$spacing = join('x',@spacings);
+	
+	$bb_and_spacing = "\{\[${bb_0}\], \[${bb_1}\]\} $spacing"; 
+
+	if ($spacing eq '') {
+	    $success = 0;
+	} else {
+	    $success = 1;
+	}
+    }
+
+    if ($ants_not_fsl || (! $success)) {
+	#Use ANTs (slow version)
+	my $bounding_box;
+	$header_output = `PrintHeader $file`;
+	if ($header_output =~ /(\{[^}]*\})/) {	    $bounding_box = $1;
+	    chomp($bounding_box);
+	    $success = 1;
+	} else {
+	    $bounding_box = 0;
+	}
+	$spacing = `PrintHeader $file 1`;
+	chomp($spacing);
+
+	$bb_and_spacing = join(' ',($bounding_box,$spacing));
+    }
+    return($bb_and_spacing);
+}
+
+
+#---------------------
+sub get_slurm_job_stats {
+#---------------------
+    my ($PM_code,@jobs) = @_;
+  
+    my $stats_string='';
+    my $requested_stats = 'Node%25,TotalCPU%25,CPUTimeRaw%25,MaxRSS%25';
+    foreach my $job (@jobs) {
+	my $out_string='';
+	my $current_stat_string = `sacct -Pan  -j $job.batch -o ${requested_stats}`;
+	#print "Current_stat_string = ${current_stat_string}\n\n";
+	my @raw_stats = split('\|',$current_stat_string);
+	my $Node_string = $raw_stats[0];
+	my $TotalCPU_string = $raw_stats[1];
+	my $CPURaw_string = $raw_stats[2];
+	my $MaxRSS_string = $raw_stats[3];
+
+	my $node;
+	if ($Node_string =~ /civmcluster1-0([1-6]{1})G?/) {
+	    $node = $1;
+	} else {
+	    $node = 0;
+	}
+	
+	my $total_cpu_raw = convert_time_to_seconds($TotalCPU_string);
+	my $memory_in_kb = 0;
+	chomp($MaxRSS_string);
+	if ($MaxRSS_string =~ s/K$//) {
+	    $memory_in_kb = $MaxRSS_string; 
+	} 
+	
+	$out_string = "${PM_code},${job},${node},${total_cpu_raw},${CPURaw_string},${memory_in_kb}\n";
+	$stats_string=$stats_string.$out_string;
+    }
+    #print "Stats string:\n${stats_string}\n";
+    return($stats_string);
+}
+
+#---------------------
+sub write_stats_for_pm {
+#---------------------
+    my ($PM,$Hf,$start_time,@jobs) = @_;
+    my $PM_code;
+    if (! defined $PM) { 
+	$PM = 0;
+    } elsif ($PM =~ s/\.pm$//) {
+	$PM = $PM;
+    }
+
+    use Switch;
+    switch ($PM) {
+	case ('load_study_data_vbm') {$PM_code = 11;} 
+	case ('convert_all_to_nifti_vbm') {$PM_code = 12;} 
+	case ('create_rd_from_e2_and_e3_vbm') {$PM_code = 13;} 
+	case ('mask_images_vbm') {$PM_code = 14;}
+	case ('set_reference_space_vbm') {$PM_code = 15;}
+
+	case ('create_rigid_reg_to_atlas_vbm'){$PM_code = 21;} 
+
+	case ('create_affine_reg_to_atlas_vbm'){$PM_code = 39;} ## Intend to use a pairwise registration based module for the affine reg, analoguous to the MDT creation. 
+
+	case ('pairwise_reg_vbm') {$PM_code = 41;}
+	case ('calculate_mdt_warps_vbm') {$PM_code = 42;} 
+	case ('apply_mdt_warps_vbm') {$PM_code = 43;}
+	case ('mdt_apply_mdt_warps_vbm') {$PM_code = 43;}
+	case ('calculate_mdt_images_vbm') {$PM_code = 44;} 
+	case ('mask_for_mdt_vbm') {$PM_code = 45;}
+	case ('calculate_jacobians_vbm') {$PM_code = 46;}
+	case ('calculate_jacobians_mdtGroup_vbm') {$PM_code = 47;}
+
+
+	case ('compare_reg_to_mdt_vbm') {$PM_code = 51;}
+	case ('reg_apply_mdt_warps_vbm') {$PM_code = 52;}
+	case ('calculate_jacobians_regGroup_vbm') {$PM_code = 53;}
+
+	case ('mdt_create_affine_reg_to_atlas_vbm') {$PM_code = 61;}
+	case ('mdt_reg_to_atlas_vbm') {$PM_code = 62;}
+	case ('warp_atlas_labels_vbm') {$PM_code = 63;}
+	case ('label_images_apply_mdt_warps_vbm') {$PM_code = 64;}
+	case ('label_statistics_vbm') {$PM_code = 65;}
+
+	case ('smooth_images_vbm') {$PM_code = 71;}
+	case ('vbm_analysis_vbm') {$PM_code = 72;}
+
+	case(/[0-9]{2}/) {$PM_code = $PM;}
+
+#	case ('') {$PM_code = 19;}
+#	case ('') {$PM_code = 19;}
+
+	else  {$PM_code = 0;}
+    }
+
+    my $end_time = time;
+    my $real_time = ($end_time - $start_time);
+    my $pm_string = "${PM_code},0,0,${start_time},${real_time},0";
+    my $stats_file = $Hf->get_value('stats_file');
+    if ($stats_file ne 'NO_KEY') {
+	`echo "${pm_string}" >> ${stats_file}`;
+    }
+
+    if  ($#jobs != -1) {
+	my $stats =  get_slurm_job_stats($PM_code,@jobs);
+	chomp($stats);
+	if ($stats_file ne 'NO_KEY') {
+	    `echo "$stats" >> ${stats_file}`;
+	}
+    }
+
+    return($real_time);
+
+}
+
+#---------------------
+sub convert_time_to_seconds {
+#---------------------
+    my ($time_and_date_string) = @_;
+    my ($days,$hours,$minutes,$seconds);
+    my $time_in_seconds = 0;
+    
+    
+    my @colon_split = split(':',$time_and_date_string);
+    my $categories = $#colon_split; 
+ 
+    $seconds = $colon_split[$categories];
+    $seconds = int($seconds + 0.9999999);
+    $time_in_seconds = $time_in_seconds + $seconds;
+    
+    if ($categories > 0) {
+	$minutes = $colon_split[($categories-1)];
+	$time_in_seconds = $time_in_seconds + ($minutes*60);
+    }
+    
+    if ($categories > 1) {
+	my $hours_and_days = $colon_split[($categories-2)];
+	if ($hours_and_days =~ /-/) {
+	    ($days,$hours) = split('-',$hours_and_days);
+	   
+	} else {
+	    $days = 0;
+	    $hours = $hours_and_days;
+	}
+	
+	$time_in_seconds = $time_in_seconds + ($hours*60*60);
+	$time_in_seconds = $time_in_seconds + ($days*24*60*60);
+	
+    }
+	
+   # print "For ${time_and_date_string}, time in seconds is ${time_in_seconds}\n";
+
+    return($time_in_seconds);
+
+}
+
+#---------------------
+sub get_git_commit {
+#---------------------
+    my ($base_directory_or_file) = @_;
+    my ($in_path,$name,$ext) = fileparts($base_directory_or_file,2);
+    my $commit_line =  `cd ${in_path}; git log -1`;
+    my @commit_array = split("\n",$commit_line);
+    $commit_line = $commit_array[0];
+    if ($commit_line =~ s/^(commit\s)[a-f0-9](.*)//) {
+	return ($commit_line);
+    } else {
+	return(0);
+    }
+}
+
+
+#---------------------
+sub make_R_stub {
+#---------------------
+    my ($R_function_name,$R_function_args,$Id,$work_dir,$source) = @_;
+    
+    my ($in_path,$R_function,$ext) = fileparts($R_function_name,2);
+    if ($R_function eq '') {
+	$R_function = $R_function_name;
+    }
+
+
+  #  print "R_function = ${R_function}\nin_path-${in_path}\next=$ext\n";
+  #  die;
+
+    if (! defined $source) {
+	if (-d $in_path) {
+	    $source_directory = $in_path;
+	} else {
+	    my $default_Rscript_directory = "/home/rja20/cluster_code/workstation_code/analysis/vbm_pipe/"; # This is very BJ-centric, will need to evolve.
+	    $source_directory = $default_Rscript_directory;
+	}
+
+	$source = $source_directory.'/'.$R_function.'.R';
+    }
+
+    my $batch_path = "${work_dir}/sbatch/";
+    my $stub_name = $Id.'.R';
+    my $stub_path = $batch_path.$stub_name;
+    if (! -e $batch_path) {
+	    mkdir($batch_path,0777);
+	}
+    my $cmd = "${R_function}(${R_function_args})";
+    my $current_commit = get_git_commit($source);
+
+    open($Id,'>',$stub_path);
+    print($Id "\#Current git commit: ${current_commit}\n");
+    print($Id "source(\"${source}\")\n");
+    print($Id "$cmd \n");
+    close($Id);
+
+    return($stub_path,$R_function,$R_args,$source); # I know it seems redundant to spit out inputs, but it is the outputs can be used as next fx inputs and ensure consistency.
+
+}
 
 1;
