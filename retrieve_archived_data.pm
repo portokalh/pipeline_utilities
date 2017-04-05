@@ -68,7 +68,7 @@ sub locate_data_util {
     error_out("$PM->locate_data: Unreconized channel type: $ch_id, sorry i dont support that yet.\n\tOnly support T1,T2W,T2star,adc,dwi,e1,e2,e3,fa.");
   }
   if($useunderscore==0) {
-      $Hf->set_value("$ch_id\-path", $ret_set_dir);
+    $Hf->set_value("$ch_id\-path", $ret_set_dir);
     $Hf->set_value("$ch_id\-image-basename"     , $image_name);
     $Hf->set_value("$ch_id\-image-suffix"       , $suffix);
   }elsif($useunderscore==1){
@@ -116,17 +116,20 @@ sub retrieve_archive_dir_util {
   push (@cmds,$cmd);
   $cmd="puller_simple -f dir -o atlasdb $subproject/$runno $final_dir";
   push (@cmds,$cmd);
-  #print ("DO_PULL = $do_pull\n");
-  my $ok =0;
+  my $ok = 0;
   if ( ! -d "$final_dir" ) { 
       $ok = execute($do_pull, "archive retrieve", @cmds);
+      # this forces an error here when we do_pull is off. but we dont necessarily want that. We want the next thing we do to fail if the content doesnt exist. 
+      #if ( is_empty( $final_dir) ) {
+	  #$ok=0;
+	  #rmdir $final_dir or error_out("Problem with rmdir $final_dir");
+      #}
   } else { 
       print STDERR "Found $final_dir, assuming complete, and not pulling. \n\tErrors will occur if nifti-creation is attempted with incomplete copies.\n";
       $ok=1;
-      
   }
   if (! $ok) {
-    error_out("Could not retrieve archived images for $runno: $cmd\n");
+    error_out("Retrieve archived images not ok for $runno: $cmd\n");
   }
   return ($final_dir);
 }

@@ -19,7 +19,7 @@ use warnings;
 use Carp;
 use List::MoreUtils qw(uniq);
 use hoaoa qw(aoaref_to_printline aoaref_to_singleline aoaref_get_subarray aoaref_get_single printline_to_aoa);
-use bruker qw( @knownmethods);
+use bruker qw( @knownmethods @radial_methods);
 use civm_simple_util qw(printd whoami whowasi debugloc sleep_with_countdown $debug_val $debug_locator);
 #use vars qw($debug_val $debug_locator);
 #use favorite_regex qw ($num_ex)
@@ -174,8 +174,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	printd(45,"List_sizeB:$list_sizeB\n"); 
     }
     my @lists=qw(ACQ_O2_list_size ACQ_O3_list_size ACQ_vd_list_size ACQ_vp_list_size);
-    for my $list_s (@lists) { 
-	if ($hf->get_value($data_prefix.$list_s) != 1 ) { confess("never saw $list_s value other than 1 Unsure how to continue"); }
+    for my $list_s (@lists) {
+	my $list_value=$hf->get_value($data_prefix.$list_s);
+	my $msg="$list_s is $list_value. never saw value other than 1! Unsure how to continue";
+	if ($hf->get_value($data_prefix.$list_s) != 1 && $debug_val<50 ) {
+	    confess($msg); 
+	} elsif ($hf->get_value($data_prefix.$list_s) != 1 && $debug_val<50 ) {
+	    carp($msg." But we're trying to debug so lets continue!\n" ); 
+	} 
     }
 
     my @slice_offsets;
@@ -196,17 +202,45 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
             croak "Required field missing from bruker header:\"PVM_NSPacks\" ";
         }
     }
-    $slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
-    if ($slice_pack_size ne 'NO_KEY' ) {
-       $slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
+    #$slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
+    if ($hf->get_value($data_prefix."PVM_SPackArrNSlices") ne 'NO_KEY' ) {
+	$slice_pack_size=$hf->get_value($data_prefix."PVM_SPackArrNSlices");
+	#printd(45,"spack_size:$slice_pack_size\n");
+	#check for multi-pack with same size.
+	if ( $slice_pack_size !~ /^$num_ex$/x) {# if not number assume we're a multi
+	    printd(45,"MULTIPART SPACK_SIZE, CHECKING REDUNDANT\n");
+	    #my @multi_slice_pack_sizes;
+	    #my $arf;
+	    #$arf=printline_to_aoa("$slice_pack_size");
+	    #my @multi_slice_pack_sizes=@{$arf};
+	    my @multi_slice_pack_sizes=printline_to_aoa("$slice_pack_size");
+	    if ( defined $multi_slice_pack_sizes[0] ) { 
+		my $diff_sizes=0;# bool to control if we can fix spack size and continue.
+		my $lv=-1;
+		for (my $snum=0;$snum<$#multi_slice_pack_sizes;$snum++) {
+		    my @subarray=aoaref_get_subarray($snum,\@multi_slice_pack_sizes);
+		    #carp('Cannot get subarray');
+		    for (my $sbnum=0;$sbnum<$#subarray;$sbnum++) {
+			if($subarray[$sbnum] != $lv && $lv != -1) {
+			    $diff_sizes=1;
+			}
+			$lv=$subarray[$sbnum];
+		    }
+		}
+		if ( ! $diff_sizes) {
+		    $slice_pack_size=$multi_slice_pack_sizes[0];
+		    $hf->set_value($data_prefix."PVM_SPackArrNSlices",$slice_pack_size);
+		}
+	    }
+	}
     } else { 
     # $list_size == $slice_pack_size
 	$slice_pack_size=$hf->get_value($data_prefix."NI");
 	carp("No ${data_prefix}PVM_SPackArrNSlices, using NI instead, could be wrong value ") ;
 	sleep_with_countdown(4);
     }
-    printd(45,"n_spacks:$n_slice_packs\n");        
-    printd(45,"spack_size:$slice_pack_size\n");
+    printd(35,"n_spacks:$n_slice_packs\n");        
+    printd(35,"spack_size:$slice_pack_size\n");
 ### get the dimensions 
 # matrix 2 or 3 element vector containing the dimensions, shows wether we're 2d or 3d 
 # ACQ_size=2,400 200 pvm_matrix not defined for acquisition only so we'll go with acq size if pvm_matrix undefined. 
@@ -224,7 +258,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 
 	( @matrix ) =printline_to_aoa($hf->get_value($data_prefix."$prefered_matrix_key"));
 	if ( $#matrix == 0 ) { 
-	    
+	    #die ("ERROR getting matrix");
 	}
 #         if ( $#matrix > 0 ) { 
 # 	     @matrix=@{$hf->{"$prefered_matrix_key"}->[0]};
@@ -291,6 +325,22 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     } else { 
 	warn("cannot find bit depth at RECO_wordtype");
     }
+    my $paravision_string = $hf->get_value($data_prefix."META_TITLE");
+    #my ($type,$swname,$ver)=
+    $paravision_string =~ m/^([^,]+),\s+([^\s]+)(.*)$/x ;
+    #
+    my $paravision_version=0;
+    if( defined $1 && defined $2 && defined $3 ) {
+	printd(50,"pvstring;$paravision_string -> \n\tjnk:$1|||name:$2|||ver:$3\n");
+	$paravision_version=$3;
+	$hf->set_value("B_ParavisionVersion",$paravision_version);
+	#if ($paravision_version =~ /6\.0/ && $extraction_mode_bool) {
+	if ($paravision_version =~ /^\s*6/ && $extraction_mode_bool) {
+	    $bit_depth=16;
+	    $data_type="Unsigned";
+	print("PV6 found! It appears all PV6.0 images are 16-bit unsigned short ints!\n");
+	}
+    }
     if ( $extraction_mode_bool ) { 
 	$hf->set_value("B_image_bit_depth",$bit_depth);
 	$hf->set_value("B_image_data_type",$data_type);
@@ -309,7 +359,8 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     }
 
 ###### determine dimensions and volumes
-    if ( $order =~  m/^H_F|A_P$/x && $extraction_mode_bool ) { #   $method !~ m/RARE/x  
+    printd(65,"BRUKER Dimension ordering is: $order\n");
+    if ( $order =~  m/^H_F|A_P$/x && $extraction_mode_bool ) { #&& $debug_val<50 ) { #   $method !~ m/RARE/x  
 #         if ( ! $extraction_mode_bool ) {
 # 	    $order ='xy'; # because we're unswapping in recon mode, we dont want to report ourselves backwards
 # 	} else {
@@ -323,6 +374,10 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 # 	    printd(45, "halving y\n");
 # 	}
     } else { 
+#	if ( $debug_val>50) {
+#	    printd(49,"NOT SWAPPING xy DIMENSIONS IN DEBUG MODE! JOHN'S SEQUENCES DO NOT SWAP XY\n");
+#	    sleep_with_countdown(4);
+#	}
         $order='xy';
         $x=$matrix[0];
         $y=$matrix[1];
@@ -330,14 +385,22 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 # 	    $x=$x/2;
 # 	    printd(45, "halving x\n");
 # 	}
-    }   
+    }
+    my $isradial=0;
+    my $method_ex="<(.*".join(".*|.*",@radial_methods).".*)>";
+    my $method_ex_2="<(Bruker|User[:]".join("|Bruker|User[:]",@radial_methods).")>"; # PV6 adds Bruker: to each method.
+    if ( $method =~ m/^$method_ex$/x || $method =~ m/^$method_ex_2$/x ) {
+	printd(25,"We're a radial scan\n");
+	$isradial=1;
+
+    }
     printd(45,"order is $order\n");
-    if ( $#matrix ==1 ) {
+    if ( $#matrix ==1 && $isradial==0) {
         $vol_type="2D";
 	$slices=$b_slices;
 	printd(90,"Setting type 2D, slices are b_slices->slices\n");
 	#should find detail here, not sure how, could be time or could be space, if space want to set slices, if time want to set vols
-    } elsif ( $#matrix == 2 )  {#2 becaues thats max index eg, there are three elements 0 1 2 
+    } elsif ( $#matrix == 2 && $isradial==0 )  {#2 becaues thats max index eg, there are three elements 0 1 2
         $vol_type="3D";
 	if ( defined $ss2 ) { 
 	    printd(90,"\tslices<-spatial_size2\n");
@@ -348,18 +411,24 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
         if ( $slices ne $matrix[2] ) {
             croak "n slices in question, hard to determing correct number, either $slices or $matrix[2]\n";
         }
-    } elsif ($#matrix == 0 ) { 
+    } elsif ($#matrix == 0 || $isradial==1 ) {
 	$vol_type="radial";
-	$y=$matrix[0];
+	if ( $#matrix > 0 ) { 
+	    $y=$matrix[1]; 
+	} else {
+	    $y=$matrix[0];
+	}
 	if ( $hf->get_value($data_prefix."PVM_Isotropic") eq "Isotropic_Matrix") {
 	    $slices=$matrix[0];
 	} else { 
 	    printd(45, "\tNot isotropic with ".$hf->get_value($data_prefix."PVM_Isotropic") ."\n");
+	    #printd(15,"setting to matrix element\n");
+	    if ($#matrix >1 ) {
+		$slices=$matrix[2];
+	    }
 	}
     }
-
-
-
+    #die("$x,$y,$z _ $slices \n".join(",",@matrix)."\n");
 # ###### MDEFT LAME FIX
 # at some point i've managed to remove the need for this fudgery.
 #     if ( $method =~ m/MDEFT/x && $extraction_mode_bool ) {
@@ -376,14 +445,16 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 
 
 ###### set time_pts    
-    if ( defined $movie_frames && $movie_frames > 1) {  #&& ! defined $sp1 
+    if ( defined $movie_frames  && $movie_frames > 1) {  #&& ! defined $sp1 
         $time_pts=$movie_frames;
         $vol_type="4D";
-        if ( defined $n_dwi_exp ) { 
+        if ( defined $n_dwi_exp &&  $n_dwi_exp ne 'NO_KEY') { 
             printd(45,"diffusion exp with $n_dwi_exp frames\n");
-            if ( $movie_frames!=$n_dwi_exp) { 
-                croak "ACQ_n_movie_frames not equal to PVM_DwNDiffExp we have never seen that before.\nIf this is a new method its fesable that ACQ_spatial_phase1 would be defined.";
-            }
+            #if (  $n_dwi_exp != 'NO_KEY' ) { # just making sure its defined.
+	    if ( $movie_frames!=$n_dwi_exp ) { 
+		croak "ACQ_n_movie_frames($movie_frames) not equal to PVM_DwNDiffExp($n_dwi_exp) we have never seen that before.\nIf this is a new method its fesable that ACQ_spatial_phase1 would be defined.";
+	    }
+	    #}
             $vol_detail="DTI";
         } else { 
             $vol_detail="MOV";
@@ -391,7 +462,10 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     }
     if ( $vol_type =~ /radial/x) {
 	#$time_pts=$hf->get_value(${data_prefix}."PVM_NRepetitions")*$hf->get_value(${data_prefix}."KeyHole")-($hf->get_value(${data_prefix}."KeyHole")-1);
-	$time_pts=$hf->get_value(${s_tag}."NRepetitions");
+	if ($hf->get_value(${s_tag}."NRepetitions") ne "NO_KEY" ){
+	    printd(15,"$time_pts are NReps\n");
+	    $time_pts=$hf->get_value(${s_tag}."NRepetitions");
+	}
 	if ( $hf->get_value(${data_prefix}."KeyHole") ne "NO_KEY" ){
 	    printd(15,"$time_pts*".$hf->get_value(${data_prefix}."KeyHole")."\n" );
 	    $time_pts=$time_pts*$hf->get_value(${data_prefix}."KeyHole") ;
@@ -415,7 +489,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		croak "PVM_NSPacks should equal NSLICES"; 
 	    }
 	    if ("$slice_pack_size" ne "1" ) {
-		confess "Slab data never saw PVM_SPackArrNSlcies array with values other than 1";
+		confess "Slab data never saw PVM_SPackArrNSlices array with values other than 1";
 	    }
 	    if ("$n_slice_packs" ne "$list_size" ){
 		confess "PVM_NSPacks should equal ACQ_O1_list_size with slab data";
@@ -439,7 +513,14 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 		$current_offset=sprintf("%.9f",$current_offset);
 #		printd(85,"num1 (".($slice_offsets[$offset_num]).")  num-1(".($slice_offsets[($offset_num-1)]).")\n");
 		printd(85,"num_a:$num_a, num_b:$num_b\n");
-		
+
+		# Due to very minimal discrepancy in calculation error, we have seen a bad decimal of precision when testing for contiguous slices. 
+		# these sprintf's should help prevent that error from foring us into multi-volume when we only want one..
+#                                        0.235548400
+#                                        0.235548401
+		$first_offset=sprintf("%0.8f",$first_offset);
+		$current_offset=sprintf("%0.8f",$current_offset);
+
 		if("$first_offset" ne "$current_offset") { # for some reason numeric comparison fails for this set, i dont understnad why.
 		    printd(85,"diff bad  num:$offset_num  out of cur, <$current_offset> first, <$first_offset>\n");
 		    $first_offset=-1000; #force bad for rest
@@ -496,6 +577,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	printd(90,"\tz<-slices\n");
 	$z=$slices;
     }
+
     if ( $hf->get_value($data_prefix."KeyHole") ne 'NO_KEY') {
 	$vol_detail=$vol_detail.'-keyhole';
     }
@@ -513,6 +595,7 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
 	
     }
     printd(90,"\tvol_num=vol_num*time_pts\n");
+    printd(90,"\t\t$vol_num * $time_pts\n");
     $vol_num=$vol_num*$time_pts;# not perfect
 
 
@@ -522,9 +605,17 @@ sub set_volume_type { # ( bruker_headfile[,$debug_val] )
     printd(45,"Set X=$x, Y=$y, Z=$z, vols=$vol_num\n");
     printd(45,"vol_type:$vol_type, $vol_detail\n");
     $debug_val=$old_debug;
-    my $method_ex="<(".join("|",@knownmethods).")>";
-    if ( $method !~ m/^$method_ex$/x ) { 
-        croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
+    $method_ex="<(".join("|",@knownmethods).")>";
+    $method_ex_2="<(Bruker|User[:]".join("|Bruker|User[:]",@knownmethods).")>"; # PV6 adds Bruker: to each method.
+    if ( $method !~ m/^$method_ex$/x && $method !~ m/^$method_ex_2$/x ) {
+        my $msg="NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n";
+	if ( $debug_val<50 ) { 
+	    croak($msg);
+	} else {
+	    carp($msg."\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES, THEIR DIMENSIONS, ESPECIALLY Z\n");
+	}	
+	
+#n	croak("NEW METHOD USED: $method\nNot known type in (@knownmethods), did not match $method_ex\n TELL JAMES\n"); 
 #\\nMAKE SURE TO CHECK OUTPUTS THROUGHLY ESPECIALLY THE NUMBER OF VOLUMES THEIR DIMENSIONS, ESPECIALLY Z\n");
     }
     return "${vol_type}:${vol_detail}:${vol_num}:${x}:${y}:${z}:${bit_depth}:${data_type}:${order}";
@@ -601,7 +692,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			   ],
 			   "B_max_bval"=>[
 			       1,
-			       'PVM_DwMaxBval',           # max reported bvalue PVM_DwEffBval might also be relevent, it is the effective bvalue for each scan.
+			       #'PVM_DwMaxBval',           # max reported bvalue PVM_DwEffBval might also be relevent, it is the effective bvalue for each scan.
+			                                  # NEW INFORMATION FROM JOHN, This looks to be the maximum possible bvalue, not themaximum used. 
+                                                          # We think the tensorpipeline is looking for the maximum used. 
+			       'PVM_DwBvalEach',          # Per john, he thinks this is his max used bvalue. 
 			   ],
 			   "navgs"=>[
 			       1,
@@ -623,7 +717,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 			   ],
 			   "${s_tag}NRepetitions"=>[
 			       1,
-			       'NR',                      # repetitions, from ACQ
+#			       'NR',                      # repetitions, from ACQ
 			       'PVM_NRepetitions',        # repetitions, from method, not always the same thing as acq, notably for dti sets. # might be number of tr's in multi tr set...
 			   ],
  			   "rays_per_volume"=>[    # number of rays acquried in a scan. NOT the length of fid
@@ -839,26 +933,38 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     my $enc2=$hf->get_value($data_prefix.'PVM_EncOrder2');
     my $objo=$hf->get_value($data_prefix.'PVM_ObjOrderList');
     my $objs=$hf->get_value($data_prefix.'PVM_ObjOrderScheme');
-    if ($enc1 ne 'LINEAR_ENC' &&  $enc1 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
+    my $encs1=$hf->get_value($data_prefix.'PVM_EncSteps1');
+    my $encs2=$hf->get_value($data_prefix.'PVM_EncSteps2');
+
+    #$enc1 ne 'LINEAR_ENC' && 
+    if ( $enc1 !~ m/NO_KEY|UNDEFINED|BLANK/x &&  $encs1 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
 	printd(35,"dim_Y encoding from PVM_EncSteps1($enc1)\n");
+	if ( $enc1 ne 'LINEAR_ENC' ) {
+	    printd(15,"WARNING: PVM_EncOrder1 was LINEAR_ENC but going to use it anyway as bandaid for unexpected LINEAR_ENC meaning.\n");
+	    if ( $debug_val< 55) {
+		sleep_with_countdown(4);
+	    }
+	}
 	$hf->set_value('dim_Y_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps1'));
     } else { 
-	printd(35,"dim_Y encding not specified with $enc1\n");
+	printd(35,"dim_Y encoding not specified with $enc1\n");
     }
-    
-    if ( $enc2 ne 'LINEAR_ENC' && ! $enc2 =~ m/NO_KEY|UNDEFINED|BLANK/x){ 
+
+    # $hf->get_value($data_prefix.'PVM_EncSteps2') ne 'NO_KEY'
+    # 
+    if (  $enc2 ne 'LINEAR_ENC' && $enc2 !~ m/NO_KEY|UNDEFINED|BLANK/x &&  $encs2 !~ m/NO_KEY|UNDEFINED|BLANK/x){ 
 	printd(35,"dim_Z encoding from PVM_EncSteps2($enc2)\n");
 	$hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps2'));
     } elsif( $objs ne 'Sequential' ) { 
-	printd(45,"EncOrder2 is $enc2");
+	printd(45,"EncOrder2 is $enc2\n");
 	#my $method = $hf->get_value($data_prefix."ACQ_method");
-	if ( $hf->get_value($data_prefix."ACQ_method") =~ m/RARE/x ) {
+	if ( $hf->get_value($data_prefix."ACQ_method") =~ m/RARE/x && $encs2 !~ m/NO_KEY|UNDEFINED|BLANK/x ) {
 	    printd(15,"RARE acq hack! setting dim_Z_encoding_order to PVM_EncSteps2\n");
-	    $hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_EncSteps2'));
+	    $hf->set_value('dim_Z_encoding_order',$encs2);
 	} else {
-	    if ( $objo ne '0') { 
+	    if ( $objo ne '0' && $objo ne 'NO_KEY' ) { 
 		printd(35,"dim_Z encoding from PVM_ObjOrderList($objs)\n");
-		$hf->set_value('dim_Z_encoding_order',$hf->get_value($data_prefix.'PVM_ObjOrderList'));
+		$hf->set_value('dim_Z_encoding_order',$objo);
 	    } else { 
 		my $string="PVM_ObjOrderScheme was not Sequential, however ".
 		    " ObjOrderList=<$objo>,\n".
@@ -1032,8 +1138,10 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     ($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
     ($fov_f,$fov_p,$fov_z) = printline_to_aoa($hf->get_value($data_prefix."ACQ_fov")); 
     $fov_f=$fov_f*10;
-    $fov_p=$fov_p*10;
-    $fov_z=$fov_z*10;
+    if(defined $fov_p) {
+	$fov_p=$fov_p*10; }
+    if ( defined $fov_z ) {
+	$fov_z=$fov_z*10;}
     if ( $hf->get_value($data_prefix."PVM_SpatResol") ne 'NO_KEY') {
 #	($thick_f,$thick_p,$thick_z) = printline_to_aoa($hf->get_value($data_prefix."PVM_SpatResol") );
 	if ( $fov_f!=$df*$thick_f )
@@ -1093,7 +1201,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
  	    printd(45,"\t".$data_prefix."SPackArrNSlices $spackns\n");
  	    my $nspacks=$hf->get_value($data_prefix."PVM_NSPacks\n");
  	    printd(45,"\t".$data_prefix."NSPacks $nspacks\n");
-	    if ( $hf->get_value($data_prefix."PVM_SPackArrNSlices") > 1 && $hf->get_value($data_prefix."PVM_NSPacks")== 1){ 
+	    if ( $hf->get_value($data_prefix."PVM_SPackArrNSlices") ne 1 && $hf->get_value($data_prefix."PVM_NSPacks")== 1){ 
 		printd(45,"\t".$data_prefix."fov_z set using dz*thick_z\n");
 		$fov_z=$dz*$thick_z; 
 #		$fov_z=$thick_z; 
@@ -1117,11 +1225,13 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
     printd(25,"fov_x:$fov_x, fov_y:$fov_y, fov_z:$fov_z\n");
     if (  ! $extraction_mode_bool ) { 
 	$hf->set_value("ray_length",$df);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing. 
+	# john has proveded me with infomation on how line_padding is determined, i should incorporate that there
 	my $ntr=1; # number of tr values, just 1 for now, should cause errors on data load for recon if it should have been anything but one
 	if ( $vol_type eq '2D') { 
 	    # if interleave we have to load lots of data at a time or fall over to ray by ray loading. 
 	    my $ntr=1; # number of tr's 
-	    $hf->set_value("rays_per_block",$dp*$dz*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	    $hf->set_value("rays_per_block",$dp*$dz*$hf->get_value('ne')*$ntr);
+	    # removed channels now here too. *$hf->get_value("${s_tag}channels")
 	    $hf->set_value("ray_blocks",1);
 	} elsif($vol_type eq '3D')  {
 #	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
@@ -1132,10 +1242,9 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    printd(5,"radial acquisition, THESE ARE VERY EXPERIMENTAL\n");
 	    my $NPro=$hf->get_value("rays_per_volume");
 	    my $KeyHole=$hf->get_value("ray_blocks_per_volume");
-
 	    my $NRepetitions=$hf->get_value(${s_tag}."NRepetitions");
-	    $hf->set_value("rays_acquired_in_total",$NPro*$NRepetitions);
-	    if ($NPro eq "NO_KEY") { 
+	    if ($NPro eq "NO_KEY") {
+		$NPro=1;
 		printd(5,"Error finding NPro in hf using ${s_tag}NPro\n");
 	    }
 	    if ($KeyHole eq "NO_KEY") { 
@@ -1143,12 +1252,20 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 		$KeyHole=1;
 		$hf->set_value("ray_blocks_per_volume",$KeyHole);
 	    }
-	    if ($NRepetitions eq "NO_KEY") { 
+	    if ($NRepetitions eq "NO_KEY") {
+		$NRepetitions=1;
 		printd(5,"Error finding NRepetitions in hf using ${s_tag}NRepetitions\n");
 	    }
+	    $hf->set_value("rays_acquired_in_total",$NPro*$NRepetitions);
 	    # NOTE: in radial sequences the ray_length is 1/2 the expected image
-	    # dimension due to being a ray of kspace and NOT a line. 
-	    $hf->set_value("ray_length",$df/2);# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing.
+	    # dimension due to being a ray of kspace and NOT a line.
+	    # if ( $hf->get_value("B_ParavisionVersion") !~ /^\s*6/ ) {
+	    { # back to always.
+		#$paravision_version =~ /6\.0/ 
+		
+		$hf->set_value("ray_length",$df/2);
+		# originally had a *2 multiplier becauase we acquire complex points as two values of input bit depth, however, that makes a number of things more confusing.
+	    }
 	    $hf->set_value("ray_blocks",$NRepetitions*$KeyHole);
 	    #NPro/KeyHole=acqs(ray_blocks).
 	    #NPro/ray_blocks=rays_per_block
@@ -1158,6 +1275,14 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    
 	    printd(25,"rays_acquired_in_total:".$hf->get_value("rays_acquired_in_total").
 		", ray_blocks_per_volume:".$hf->get_value('ray_blocks_per_volume').", ");
+	} elsif($vol_type eq "4D" && $vol_detail  =~ m/DTI/x) {
+	    # copied straight from 3D for now, updated ray_blocks to include volumes. probably have to better than that eventually.
+#	    $hf->set_value("rays_per_block",$dp*$hf->get_value("${s_tag}channels")*$hf->get_value('ne')*$ntr);
+	    $hf->set_value("rays_per_block",$dp*$hf->get_value('ne')*$ntr);#*$hf->get_value("${s_tag}channels") 
+# removed channels, as i'm pretty sure i've handled that else where
+	    $hf->set_value("ray_blocks",$dz*$hf->get_value("${s_tag}diffusion_scans"));
+	} else {
+	    printd(5,"ERROR: I DONT UNDERSTAND THIS SCAN");
 	}
 	printd(25,"ray_length:".$hf->get_value('ray_length').
 	       ", rays_per_block:".$hf->get_value('rays_per_block').
@@ -1183,7 +1308,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 #"B_input_bit_depth"
 #"B_input_data_type"
 #       'RECO_wordtype',           # bit depth and type
-#       'PVM_DwBMat',              # DtiEpi key, 7 subarrays of 3x3 
+#       'PVM_DwBMat',              # DtiEpi key, 7 subarrays of 3x3 NOT ALWAYS 7 YOU DOLT!
 #       'PVM_DwBvalEach',          # DtiEpi key, bvalue per item, the set number? but not the actuall?(guesssing due to the dwmaxbvalkey
 #       'PVM_DwMaxBval',           # DtiEpi key, bvalue maximum? unsure...
 #       'PVM_DwDir',               # DtiEpi key, 7 subarrays of 3 each
@@ -1219,7 +1344,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    );
 	foreach (@orientation_bruker) {#error check orientation code
 	    if ($_ ne $orientation_bruker[0]){
-		error_out("multile orientations, totally confused, explodenow\n");
+		confess("multile orientations, totally confused, explodenow\n");
 	    }
 	}
 	if ($orientation_alias{$orientation_bruker[0]} ne $specified_orient ) {
@@ -1239,7 +1364,35 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	if ( defined  $bruker_header_ref->{$key} ) {
 #	    ##$PVM_DwBMat=( 7, 3, 3 )
 	    my $diffusion_scans;
-	    $diffusion_scans=aoaref_get_single($bruker_header_ref->{"DE"}); # $diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    if ( defined $bruker_header_ref->{"PVM_DwNDiffExp"}) {  # PVM_DwNDiffExp  looks to have the right value
+		$diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    } else {
+		# WHAT THE HELL IS DE! IT DOESNT MATCH THE PROPER DIFFUSION SCAN NUMBER AND APPEARS TO ALWAYS BE 6!
+		$diffusion_scans=aoaref_get_single($bruker_header_ref->{"DE"}); # $diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    }
+
+	    printd(75,"adding hf keys for $diffusion_scans diffusion scans\n");
+	    for my $bval (1..$diffusion_scans) {
+		my @subarray=aoaref_get_subarray($bval,$bruker_header_ref->{$key});
+		my $text=$subarray[0].','.join(' ',@subarray[1..$#subarray]);
+		my $bnum=$bval-1;
+		my $hfilevar="${s_tag}${key}_${bnum}";
+		printd(20,"  INFO: For Diffusion scan $bval key $hfilevar bmat is $text \n") ; 
+		$hf->set_value("$hfilevar",$text); 
+	    }
+	} 
+    } elsif($vol_type eq "4D" && $vol_detail eq "MOV") {
+	##### FINISH SUPPORT FOR CHAINED ACQUISITIONS
+	my $key="PVM_DwBMat";
+	if ( defined  $bruker_header_ref->{$key} ) {
+#	    ##$PVM_DwBMat=( 7, 3, 3 )
+	    my $diffusion_scans;
+	    if ( defined $bruker_header_ref->{"PVM_DwNDiffExp"}) {  # PVM_DwNDiffExp  looks to have the right value
+		$diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    } else {
+		# WHAT THE HELL IS DE! IT DOESNT MATCH THE PROPER DIFFUSION SCAN NUMBER AND APPEARS TO ALWAYS BE 6!
+		$diffusion_scans=aoaref_get_single($bruker_header_ref->{"DE"}); # $diffusion_scans=aoaref_get_single($bruker_header_ref->{"PVM_DwNDiffExp"});
+	    }
 	    printd(75,"adding hf keys for $diffusion_scans diffusion scans\n");
 	    for my $bval (1..$diffusion_scans) {
 		my @subarray=aoaref_get_subarray($bval,$bruker_header_ref->{$key});
@@ -1294,12 +1447,14 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 ## channel params
 # PVM_EncNReceivers   nchannels used 
 
-## parameter dimesino
+## parameter dimesion
 # PVM_NEchoImages     number of changes to the parameter if its TE, otherwise 1
 # EchoAcqMode         positiveReadOutEchos|? not sure what this is about
 # FirstEchoTime       time to first echo.(second echo is FirstEchoTime+1*EchoSpacing.)
 # EchoSpacing         distance between echos
 # EffectiveTE         sequence of TE's used
+# DIFFUSION WHEN RAD_MAT IS USED
+#    if (  ! $extraction_mode_bool ) { 
 
 ## data parametrs
 # PVM_EncZfRead       1 for zero fill data to nearest power of 2 or multiple of 192,, 0 for off (so luke tells me)
@@ -1314,7 +1469,6 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	} else {
 	    $dim_order='ycpzxt';
 	} 
-
     } else {
 # RARE dimorder 1 test gives xcyz, p and t unknown
 	if ( $report_order eq 'xy' ){	
@@ -1326,8 +1480,12 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	printd(45,"Using dimension_order $dim_order\n");
     $hf->set_value("${s_tag}dimension_order",$dim_order);
 #    $hf->set_value("${s_tag}channels",'');
-
-    if ( $hf->get_value('ne') ne 'NO_KEY' ) {
+    # if echos defined
+    if($vol_type eq "4D" && $vol_detail  =~ m/DTI/x ) { 
+	# we'll use dti for now. Kinda feel like bval or bmatrix are appropriate values also
+	# and by consequcne we wont support multi-te in DTI
+	$hf->set_value("${s_tag}varying_parameter",'dti');
+    } elsif ( $hf->get_value('ne') ne 'NO_KEY' ) {
 	if ( $hf->get_value('ne')>1) {
 	    $hf->set_value("${s_tag}varying_parameter",'echos');
 	} elsif ($hf->get_value('ne')>1) {
@@ -1336,7 +1494,7 @@ sub copy_relevent_keys  { # ($bruker_header_ref, $hf)
 	    #printd(35, "Doing default set of echos with $vols/".$hf->get_value('ne')."\n");
 	    #$hf->set_value("${s_tag}echos",$vols/$hf->get_value('ne'));
 	}
-    }
+    } 
 #    $hf->set_value('ne,); PVM_NEchoImages
 #    $hf->set_value("${s_tag}",'');
 

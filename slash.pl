@@ -8,7 +8,7 @@ use strict;
 use Env qw(PIPELINE_SCRIPT_DIR);
 use lib "$PIPELINE_SCRIPT_DIR/pipeline_utilities";
 my $GOODEXIT = 0;
-my $BADEXIT  = 1;
+my $ERROR_EXIT  = 1;
 
 
 # ---- main ------------

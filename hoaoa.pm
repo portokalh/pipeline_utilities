@@ -12,7 +12,7 @@ package hoaoa;
 use strict;
 use warnings;
 use Carp;
-use List::MoreUtils qw(uniq);
+#use List::MoreUtils qw(uniq);
 
 use Env qw(RADISH_PERL_LIB);
 if (! defined($RADISH_PERL_LIB)) {
@@ -45,6 +45,7 @@ single_find_by_value
 printline_to_aoa
 );
 } 
+#display_complex_data_structure1 old version, current version moved to pipeline_utilities
 
 ###
 sub printline_to_aoa {  # ( $string )    
@@ -69,7 +70,7 @@ internal function doing the work of printline_to_aoa
 	#printd(25,"Printline <$printline> did not split properly.\n");
 	if ( ! defined $values ) { $values="$printline"; $dims=1;}
 	if ( ! defined $dims ) { $dims="1"; }
-	carp("WARN: Printline <$printline> did not split as expected.\n\tDims will be $dims\n\tValues will be $printline");
+	carp("WARN: Printline <$printline> was not in printed aoa format.\n\tnDims will be $dims\n\tValues will be $printline");
     }
 
     @dim_array=  ( $dims =~ m/([0-9]+[:+]?[ ]?)+/gx  );#(:?:([0-9]+)?)*
@@ -77,7 +78,7 @@ internal function doing the work of printline_to_aoa
 
 #    my $nsubarrays=shift@dim_array;
     my $subarraysize;
-    if ($#dim_array==0 ) { 
+    if ($#dim_array==0 ) { # if only one entry.
 	$subarraysize=$dim_array[0];
     } elsif( $#dim_array == 1 ) { 
 	if ( $dim_array[0] == 1 ) { 
@@ -261,8 +262,11 @@ sub aoaref_get_subarray { # ( $ref_to_AoA )
     my @subarrays;
 #defined  $bruker_header_ref->{$key} 
 #    if ( $#{$dataarray_ref} >=1 ){
-    if ( $dataarray_ref ne "" && $reftype eq 'ARRAY' ) {
-	if ( defined @{$dataarray_ref->[($n-1)]} )
+    if ( $dataarray_ref ne "" && $reftype eq 'ARRAY' ) { # if we're not an empty string and and we're an array ref, 
+	#if ( defined @{$dataarray_ref->[($n-1)]} ) #depreciated warning, perhaps just omit defined keyword?
+	#if ( defined ${$dataarray_ref->[($n-1)]}[0] ) #depreciated warning attempt at fixing by just adding a [0]
+	#if ( defined ${$dataarray_ref->[($n-1)]} ) #no array on array ref, attempt at fixing by just removing a [0]
+	if ( ref($dataarray_ref->[($n-1)] ) eq 'ARRAY' )
 	{
 	    @data=@{$dataarray_ref->[($n-1)]};
 	} else {
@@ -274,7 +278,7 @@ sub aoaref_get_subarray { # ( $ref_to_AoA )
 # 	my ($elements) = $subarrays[($n-1)] =~ m/[(](.*)[)]/x;
 # 	@data=split(',',$elements);
 #	print("getsubarray:@data\n");
-    } elsif ( $reftype ne 'ARRAY' ) { 
+    } elsif ( $reftype ne 'ARRAY' ) {
         $err_cause="ref type $reftype wrong";
         confess "ref type $reftype wrong";
     } else {
@@ -284,7 +288,7 @@ sub aoaref_get_subarray { # ( $ref_to_AoA )
 #    } else {
 #	$data[0]="ERROR";
 #    }
-    return @data;    
+    return @data;
 }
 
 
@@ -470,7 +474,7 @@ sub display_header { # ( $agilenthash_ref,$indent,$format,$pathtowrite )
     printd(75,"Agilent_Header_Ref:<$agilent_header_ref>\n");
     printd(55,"keys @hash_keys\n");
     my $text_fid;#=-1;
-    my $FH='OUT';
+    #my $FH='OUT';
     if ( defined $file ){ 
         open $text_fid, ">", "$file" or croak "could not open $file" ;
     } else {
@@ -503,6 +507,130 @@ sub display_header { # ( $agilenthash_ref,$indent,$format,$pathtowrite )
     }
     return;
 }
+
+
+=item display_complex_data_structure1
+
+displays the whole agilent header all pretty froma agilent_header_ref
+print keys
+headfile or pretty
+
+=cut
+###
+sub display_complex_data_structure1 { # ( $agilenthash_ref,$indent,$format,$pathtowrite ) 
+###
+    use Scalar::Util qw(looks_like_number);
+    my ($data_struct_ref,$indent,$format,$file)=@_;
+    debugloc();
+    my @hash_keys=qw/a b/;
+    @hash_keys=keys(%{$data_struct_ref});
+    my $value="test";
+    printd(75,"Data_Struct_Ref:<$data_struct_ref>\n");
+    printd(55,"keys @hash_keys\n");
+    my $text_fid;#=-1;
+    #my $FH='OUT';
+    if ( defined $file ){ 
+	if ( ! looks_like_number($file) ) { 
+	    open $text_fid, ">", "$file" or croak "could not open $file" ;
+	} else {
+	    $text_fid=$file;
+	    print("PREVIOUSLY OPEN FILE\n");
+	}
+    } else {
+	$text_fid=-1;
+    }
+    if ( $#hash_keys == -1 ) { 
+        print ("No keys found in hash\n");
+    } else {
+	#print( join(' ',sort keys %{$data_struct_ref})."\n"); if($text_fid>-1) { print($text_fid  join(' ',sort keys %{$data_struct_ref})."\n"); }
+        foreach my $key (sort keys %{$data_struct_ref} ) {
+	    my $reftype=ref($data_struct_ref->{$key}); 
+	    if ( ! $reftype ) {
+		$reftype='NOTREF';
+	    }
+	    print( "$indent$key:$reftype = "); if($text_fid>-1) { print($text_fid  "$indent$key:$reftype = "); }
+	    if( $reftype eq "HASH" ) {
+		#print( "$indent$key:$reftype\n");n if($text_fid>-1) { print($text_fid  "$indent$key:$reftype\n");n }
+		if ( keys %{$data_struct_ref->{$key}}> 0 ) {
+		    print( "{\n"); if($text_fid>-1) { print($text_fid  "{\n"); }
+		    if ($text_fid>-1) {display_complex_data_structure1($data_struct_ref->{$key},$indent.$indent,'pretty',$text_fid);
+		    } else { display_complex_data_structure1($data_struct_ref->{$key},$indent.$indent,'pretty');}
+		    print( "$indent}\n"); if($text_fid>-1) { print($text_fid  "$indent}\n"); }
+		} else {
+		    print( "$indent${indent}EMPTY}\n"); if($text_fid>-1) { print($text_fid  "$indent${indent}EMPTY}\n"); }
+		}
+	    } elsif( $reftype eq "ARRAY" ) {
+		my @A_TYPE=@{$data_struct_ref->{$key}};
+		print( "\n"); if($text_fid>-1) { print($text_fid  "\n"); }
+		if ( $#A_TYPE>=0){
+		    print( "$indent${indent}elements:"); if($text_fid>-1) { print($text_fid  "$indent${indent}elements:"); }
+		    for (my $el_i=0;$el_i<$#A_TYPE;$el_i++) {
+			if ( defined $A_TYPE[$el_i] ){
+			    print( " '",$A_TYPE[$el_i],"'"); if($text_fid>-1) { print($text_fid  " '",$A_TYPE[$el_i],"'"); }
+			} else{ 
+			    print( " UNDEFINED"); if($text_fid>-1) { print($text_fid  " UNDEFINED"); }
+			}
+		    }
+		    print( "\n"); if($text_fid>-1) { print($text_fid  "\n"); }
+		} else { 
+		    print( "$indent${indent}EMPTY\n"); if($text_fid>-1) { print($text_fid  "$indent${indent}EMPTY\n"); }
+		}
+		#my $ref=$data_struct_ref->{$key};
+		#print( $indent.join(' ',@A_TYPE)."\n"); if($text_fid>-1) { print($text_fid  $indent.join(' ',@A_TYPE)."\n"); }
+	    } elsif( $reftype eq "SCALAR"|| $reftype eq 'NOTREF' ) {
+		#print( "SCALAR\n"); if($text_fid>-1) { print($text_fid  "SCALAR\n"); }
+		my $value=$data_struct_ref->{$key};
+		if ( $reftype eq 'SCALAR') {
+		    $value=${$data_struct_ref->{$key}};
+		} else {
+		}
+		
+		#print( $indent.${$data_struct_ref->{$key}}."\n"); if($text_fid>-1) { print($text_fid  $indent.${$data_struct_ref->{$key}}."\n"); }
+		print( "$value.\n"); if($text_fid>-1) { print($text_fid  "$value.\n"); }
+	    } elsif( $reftype eq "CODE" ) {
+		print( $indent.$reftype."\n"); if($text_fid>-1) { print($text_fid  $indent.$reftype."\n"); }
+	    } else {
+		print( "REFTYPEUNKNOWN\n"); if($text_fid>-1) { print($text_fid  "REFTYPEUNKNOWN\n"); }
+		#print ("$indent New type->$key:$reftype\n");
+	    }
+	    
+#             if ( $format eq "headfile" ) {
+#                  $value=aoaref_to_printline($data_struct_ref->{$key});
+#                  my $string="$key=$value\n";
+#                  if (  $text_fid > -1 ) {
+#                      print( $text_fid "$string"); if($text_fid>-1) { print($text_fid  $text_fid "$string"); }
+#                  }
+#                  print "$string";
+#             } elsif ( $format eq "pretty") {
+#                 if (  $text_fid > -1 ) {
+#                     print( $text_fid "${indent}$key =\n"); if($text_fid>-1) { print($text_fid  $text_fid "${indent}$key =\n"); }
+#                 }
+#                 print "${indent}$key =\n";
+#                 $value=aoaref_to_singleline($data_struct_ref->{$key});
+#                 display_header_entry("$value","${indent}\t",$text_fid);
+#             }
+            
+        }
+    }
+    if ( $text_fid > -1 && -f $file  ){
+        close $text_fid;
+    }
+    return;
+
+#     my ($dataarray_ref) = @_;
+#     my $reftype=ref($dataarray_ref); 
+#     my $data;
+#     if ( $dataarray_ref ne "" && $reftype eq 'ARRAY' ) {
+#         $data=aoa_to_printline(@$dataarray_ref);
+#     } elsif ( $reftype ne 'ARRAY' ) { 
+#         confess "ref type $reftype wrong, at aoaref to singleline";
+#     } else {
+#         printd(35, "wierd problem with array ref in aoaref_to_singleline\n");
+#         $data="ERROR";
+#     }
+#     return $data;
+}
+
 
 ###
 sub array_find_by_length { # ( $agilenthash_ref,$arraylength)

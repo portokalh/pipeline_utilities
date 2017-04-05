@@ -44,7 +44,7 @@ sub apply_coil_bias {
   # 
   my ($status,$out_nii,$out_field)=apply_coil_bias_nohf($go, $ants_app_dir,$in_nii);
   my $suffix="bias";
-  my ($name,$path,$extension)=fileparts($out_nii);
+  my ($path,$name,$extension)=fileparts($out_nii,3);
   print("Status:$status,out_nii:$out_nii,out_field:$out_field\n");
   if ( $status ) {
       error_out("What a strangly impossible error condidtion you've found");
@@ -92,7 +92,7 @@ sub apply_coil_bias_nohf {
 #   }
 
   my $iterations="1000x1000";
-  my $shrink="4x2";
+  my $shrink="2"; # was 4x2 for older versions of ants
 
   if ( defined($test_mode)) {
       if ($test_mode==1) {
@@ -101,7 +101,7 @@ sub apply_coil_bias_nohf {
 	  print STDERR "  TESTMODE enabled, will do very fast (incomplete) coil bias calc! (-t)\n" if ($debug_val>=5);
       }
   }  
-  my ($name,$path,$extension)=fileparts($in_nii);
+  my ($path,$name,$extension)=fileparts($in_nii,3);
   print("File parts returned path:$path  $name  $extension\n") if( $debug_val>=35);
   my $suffix="bias"; 
   my $out_nii = $path . $name . "_${suffix}${extension}";
@@ -110,13 +110,14 @@ sub apply_coil_bias_nohf {
 ## need to set ${hf_nii_id}-nii-file and ${hf_nii_id}-nii-path
 #./N4BiasFieldCorrection 3 -i /Volumes/xtrinity/orig.nii -s 2 -c [ 1000x1000x1000,0.0002] -o [ /Volumes/xtrinity/orig_bias.nii,/Volumes/xtrinity/orig_field.nii]
 #tighter convergence added 0, added two level its
-  my $params = "-d $dimensions -i $in_nii -o [ $out_nii,$out_field ] -s ${shrink} -c [ ${iterations},0.00002] ";
+  my $params = " -v 1 -d $dimensions -i $in_nii -o [ $out_nii,$out_field ] -s ${shrink} -c [ ${iterations},0.00002] ";
   my $cmd = "$coil_bias_program_path " . "$params";
 #./ImageMath ImageDimension  OutputImage.ext   Operator   Image1.ext   Image2.extOrFloat
   log_info("Useing coil bias comand: $cmd\n");
-  if(!execute($ggo,"$name Coil Bias correction", $cmd)) {
+  if(!execute($ggo&&(! -e $out_field),"$name Coil Bias correction", $cmd)) {
       error_out("  $name Coil Bias failed.");
-  } else {  # only set values on sucess, not sure i like this syntax.
+  }
+  #else {  # only set values on sucess, not sure i like this syntax.
       if (! -f $out_nii ) { 
 	  my $prog="$ants_app_dir/ImageMath ";
 	  my $dimensions = 3;
@@ -129,7 +130,7 @@ sub apply_coil_bias_nohf {
 	  if (! $ok) {
 	      error_out("coil bias apply failed -> $out_nii\n");
 	  }
-      }
+      #}
 #       print( "Setting HF Keys\n") if ( $debug_val>=10);
 #       $Hf_out->set_value("${hf_nii_id}-coil-bias-input-nii-path",$in_nii);
 #       $Hf_out->set_value("${hf_nii_id}-coil-bias-applied","true");
