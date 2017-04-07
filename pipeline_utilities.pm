@@ -13,7 +13,7 @@
 #               should add a standard headfile settings file for the required values in an engine_dependencie headfile 
 #               returns the three directories  in work result, outhf_path, and the engine_constants headfile.
 # 140717 added exporter line with list of functions
-# 141125 moved registration.pm to here, modified as necessary. Also added sbath capabilities for when running on cluster. BJA
+# 141125 moved registration.pm to here, modified as necessary. Also added sbatch capabilities for when running on cluster. BJA
 # be sure to change version:
 my $VERSION = "141125";
 
@@ -3663,7 +3663,7 @@ sub format_transforms_for_command_line {
     my @transforms = split(',',$comma_string);
     my $total = $#transforms + 1;
 
-    if (defined $option_letter) {
+    if ((defined $option_letter) && ($option_letter ne '')) {
 	$command_line_string = "-${option_letter} ";
     }
 
