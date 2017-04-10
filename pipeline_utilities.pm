@@ -1603,6 +1603,15 @@ return 1;
 sub load_engine_deps {
 # ------------------
     my ($engine) = @_;
+    if (! defined $engine ){
+	print("no host specified, using local...");
+	use Sys::Hostname;
+	$engine = hostname;
+	#print(" $engine \n");
+	my @p=split('\.',"$engine");
+	$engine=$p[0];
+	print(" $engine \n");
+    }
     return load_deps($engine,"engine");
 }
 
@@ -1681,7 +1690,8 @@ sub load_deps {
     if (scalar(@errors)>0) {
 	print(join(", ",@errors)."\n");
     }
-    return $device_constants;
+    return $device_constants if defined $device_constants;
+    error_out("Failure to load device file $device_constants_path\n");
 }
 
 # ------------------
