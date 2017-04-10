@@ -13,7 +13,7 @@
 #               should add a standard headfile settings file for the required values in an engine_dependencie headfile 
 #               returns the three directories  in work result, outhf_path, and the engine_constants headfile.
 # 140717 added exporter line with list of functions
-# 141125 moved registration.pm to here, modified as necessary. Also added sbath capabilities for when running on cluster. BJA
+# 141125 moved registration.pm to here, modified as necessary. Also added sbatch capabilities for when running on cluster. BJA
 # be sure to change version:
 my $VERSION = "141125";
 
@@ -147,6 +147,7 @@ write_stats_for_pm
 convert_time_to_seconds
 get_git_commit
 make_R_stub
+create_explicit_inverse_of_ants_affine_transform
 ); 
 }
 
@@ -3663,7 +3664,7 @@ sub format_transforms_for_command_line {
     my @transforms = split(',',$comma_string);
     my $total = $#transforms + 1;
 
-    if (defined $option_letter) {
+    if ((defined $option_letter) && ($option_letter ne '')) {
 	$command_line_string = "-${option_letter} ";
     }
 
@@ -4259,4 +4260,27 @@ sub make_R_stub {
 
 }
 
+#---------------------
+sub create_explicit_inverse_of_ants_affine_transform {
+#---------------------
+    my $return_msg;
+    my ($transform_to_invert,$outfile) = @_;
+    if (! defined $outfile) {
+	my ($p,$n,$e) = fileparts($transform_to_invert,3);
+	$outfile = "${p}/${n}_inverse${e}";
+    }
+
+    if ($transform_to_invert =~ /\.(txt|mat)$/ ) {
+	my $dim = 3;
+	my $invert_cmd = "ComposeMultiTransform ${dim} ${outfile} -i ${transform_to_invert};";
+	my $convert_cmd = "ConvertTransformFile ${dim} ${outfile} ${outfile} --convertToAffineType;";
+	$return_msg =`${invert_cmd} ${convert_cmd}`;     
+    } else {
+	my $error_msg = "File does not appear to be a valid ants affine matrix, and therefore cannot be properly inverted here.\nOffending file: ${transform_to_invert}\n";
+	error_out($error_msg);
+    }  
+
+    return($return_msg); 
+
+}
 1;
