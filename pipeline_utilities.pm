@@ -2919,6 +2919,13 @@ sub apply_affine_transform {
   if ((! defined $native_reference_space) || ($native_reference_space eq '')) {
       $native_reference_space = 0; # Not sure if we want atlas space to be our default reference space.
   }
+  
+  my $float_string = '';
+
+ # if (check_nifti_for_float_datatype($to_deform_path)) {
+      $float_string = ' --float ';
+ # }
+
 
   my $reference='';
   my $i_opt1;
@@ -2955,7 +2962,7 @@ sub apply_affine_transform {
       print "interpolation: $interp\n";
       print "reference: $reference\n";
   }
-  my $cmd="${ants_app_dir}antsApplyTransforms --float -d 3 -i $to_deform_path -o $result_path -t [$transform_path, $i_opt1] -r $reference -n $interp";
+  my $cmd="${ants_app_dir}antsApplyTransforms ${float_string} -d 3 -i $to_deform_path -o $result_path -t [$transform_path, $i_opt1] -r $reference -n $interp";
 
   if ($go) {
       print " \n";
