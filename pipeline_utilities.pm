@@ -3385,8 +3385,23 @@ sub compare_headfiles {
 
     if ($key_array[0] ne '') {
 	foreach my $Key (@key_array) {
-	    my $A_val = $Hf_A->get_value($Key);
-	    my $B_val = $Hf_B->get_value($Key);
+	    # 10 April 2017, BJA: trying to add wildcard support. Wildcards are only allowed at the beginning and/or end of $Key.
+	    my $use_get_value_like = 0;
+	    if ($Key =~ s/^\*//) {
+		$use_get_value_like = 1;
+	    }
+
+	    if ($Key =~ s/\*$//) {
+		$use_get_value_like = 1;
+	    }
+	    my ($A_val,$B_val);
+	    if ( $use_get_value_like ) {
+		$A_val = $Hf_A->get_value_like($Key);
+		$B_val = $Hf_B->get_value_like($Key);
+	    } else {
+		$A_val = $Hf_A->get_value($Key);
+		$B_val = $Hf_B->get_value($Key);
+	    }
 	    my $robust_A_val = $A_val; # 15 January 2016: added functionality such that gzipped/ungzipped difference doesn't throw a flag.
 	    my $robust_B_val = $B_val;
 
