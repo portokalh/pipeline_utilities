@@ -336,6 +336,7 @@ for my $runno (@runnos) {
 
 	my @parts=split('\.',$first_imgs[0]);
 	my $start=$parts[1];
+	print("Renaming with $start indexing\n");
 	my @cmd_list;
 	foreach my $img  ( @imgs ) {
 	    my @parts=split('\.',$img);
@@ -343,10 +344,10 @@ for my $runno (@runnos) {
 	    
 	    my $newname=$runno.$o_code."imx";
 	    if ( $opts{'z'} > 0 )  {
-		if ( ($num -$opts{'z'}) < 0 ) {
-		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} + $dim_z +$start );
+		if ( ($num -$opts{'z'} + $start) < $start ) {
+		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} + $dim_z +$start);
 		} else {
-		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} +$start);
+		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} + $start);
 		}
 		print("length:".length($num)."\n");
 	    }
