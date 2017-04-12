@@ -3685,7 +3685,7 @@ sub format_transforms_for_command_line {
     my $command_line_string='';
     my @transforms = split(',',$comma_string);
     my $total = $#transforms + 1;
-
+  
     if ((defined $option_letter) && ($option_letter ne '')) {
 	$command_line_string = "-${option_letter} ";
     }
