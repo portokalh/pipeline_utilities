@@ -28,7 +28,7 @@ use POSIX;
 #use strict; #temporarily turned off for sub cluster_exec
 use warnings;
 use English;
-use Carp;
+use Carp qw(carp croak cluck confess);
 #use seg_pipe;
 use Getopt::Long qw(GetOptionsFromString); # For use with antsRegistration_memory_estimator
 
@@ -53,6 +53,7 @@ if ( ! defined $debug_val){
     $debug_val=5;
 }
 my $PM="pipeline_utilities";
+#package pipeline_utilities; # THIS SHOULD BE USED, HOWEVER IF WE DO THIS WE HAVE TO FIX HOW CODE LOADS PIPELINE UTILITIES.
 use civm_simple_util qw(load_file_to_array write_array_to_file is_empty);
 our $PIPELINE_INFO; #=0; # needstobe undef.#pipeline log fid. All kinds of possible trouble? should only be one log open at a time, but who knows how this'll work out.
 my $custom_q = 0; # Default is to assume that the cluster queue is not specified.
@@ -64,7 +65,7 @@ if ((defined $ENV{'PIPELINE_QUEUE'}) && ($my_queue ne '') ) {
     $custom_q = 1;
 }
 
- 
+
 BEGIN {
     use Exporter;
     our @ISA = qw(Exporter); # perl cricit wants this replaced with use base; not sure why yet.
@@ -151,7 +152,6 @@ create_explicit_inverse_of_ants_affine_transform
 ); 
 }
 
-
 # -------------
 sub open_log {
 # -------------
@@ -219,9 +219,9 @@ sub log_info {
      print( $PIPELINE_INFO "$log_me\n");
    }
    else {
-    print(STDERR "LOG NOT OPEN!\n");
-    print(STDERR  "  You tried to send this info to the log file, but the log file is not available:\n");
-    print(STDERR  "  attempted log msg: $log_me\n");
+       warn ("LOG NOT OPEN!\n".
+	     "  You tried to send this info to the log file, but the log file is not available:\n".
+	     "  attempted log msg: $log_me\n");
    }
 }
 
@@ -242,10 +242,10 @@ sub close_log_on_error  {
       # emergency close log (w/o log dumping to headfile)
       close($PIPELINE_INFO);
       $log_open = 0;
-      print(STDERR "  Log is: $pipeline_info_log_path\n");
+      warn("  Log is: $pipeline_info_log_path\n");
       return (1);
   } else {
-      print(STDERR "NOTE: log file was not open at time of error.\n");
+      warn( "NOTE: log file was not open at time of error.\n");
       return (0);     
   }
 }
@@ -258,7 +258,7 @@ sub error_out
 
   if (! defined $verbose) {$verbose = 1;}
 
-  print STDERR "\n<~Pipeline failed.\n";
+  warn("\n<~Pipeline failed.\n");
   my @callstack=(caller(1));
   my $pm;
 #  $pm=$callstack[1] || $pm="UNDEFINED"; #||die "caller failure in error_out for message $msg";
@@ -266,8 +266,8 @@ sub error_out
   my $sn;
 #  $sn=$callstack[3] || $sn="UNDEFINED";#||die "caller failure in error_out for message $msg";
   $sn=$callstack[3] || die "caller failure in error_out with message: $msg";
-  print STDERR "  Failure cause: ".$pm.'|'.$sn." ".$msg."\n";
-  print STDERR "  Please note the cause.\n";
+  warn("  Failure cause: ".$pm.'|'.$sn." ".$msg."\n".
+       "  Please note the cause.\n");
   
   if (! $verbose) {
       print "Errors have been logged\n";
@@ -394,11 +394,11 @@ sub make_matlab_command_nohf {
    my $fifo_mode=`hostname -s`=~ "civmcluster1" ? 0 : 1; # Debug--change back to civmcluster1
    if ( $fifo_mode ) { 
        my ($fifo_path,$fifo_log) = get_matlab_fifo($work_dir,$logpath);
-       print STDERR ( "FIFO Log set to $fifo_log\n");
+       warn ( "FIFO Log set to $fifo_log\n");
        my $fifo_start = start_fifo_program($matlab_app,$matlab_opts,$fifo_path,$fifo_log);
        $logpath=$fifo_log;
        my $n_closed = matlab_fifo_cleanup();
-       print STDERR ( "FIFO cleanup closed $n_closed.\n");
+       warn( "FIFO cleanup closed $n_closed.\n");
        my $shell_file = "$work_dir/${short_unique_purpose}${function_m_name}"."_fifo_bash_wrapper.bash";
        #sed -e '1,/TERMINATE/d' # make a start line
        my @fifo_cmd_wrapper=();
@@ -525,7 +525,7 @@ sub make_matlab_command_nohf {
        $cmd_to_execute="bash -c $shell_file"
 #       exit(0);
    } else {
-       print STDERR ("FIFO Not enabled\n");
+       warn("FIFO Not enabled\n");
    }
    return ($cmd_to_execute);
 }
@@ -547,7 +547,7 @@ sub get_matlab_fifo {
     
     `rm $fifo_dir/test`;
     if( ! $fifo_check) {
-	print STDERR ("FIFO Not supported in work dir\n");
+	warn("FIFO Not supported in work dir\n");
 	$fifo_dir="/tmp";
 	#$cmd="mk_fifo $fifo_dir/test";
 	#$fifo_check=execute(1,"fifo test",$cmd);	
@@ -571,7 +571,7 @@ sub get_matlab_fifo {
 		if ( $temp ne '' ) {
 		    $name=$temp;
 		} else {
-		    print STDERR ("FIFO_NAME: Skipped assigning <$temp> to name\n");
+		    warn("FIFO_NAME: Skipped assigning <$temp> to name\n");
 		}
 		#print STDERR ("name:$name\n");
 	    } while( ($name !~ m/^.*\work/x ) && $#w_p>0);
@@ -602,17 +602,17 @@ sub get_matlab_fifo {
 #	print STDERR (":$suffix\n");
 	if ($FIFO_NAME ne '' ) {
 	    $FIFO_NAME=$FIFO_NAME."_fifo";
-	    print STDERR ("FIFO_NAME: undefined. NOW defined using work_dir singular default <$FIFO_NAME>\n");
+	    warn("FIFO_NAME: undefined. NOW defined using work_dir singular default <$FIFO_NAME>\n");
 	} else { 
-	    print STDERR ("FIFO_NAME: undefined, and <$work_dir> failed to generate a new one\n");
+	    warn("FIFO_NAME: undefined, and <$work_dir> failed to generate a new one\n");
 	}
 
     } else { 
-	print STDERR ("FIFO_NAME: Found! $FIFO_NAME\n");
+	warn("FIFO_NAME: Found! $FIFO_NAME\n");
 	#$fifo_dir=$WORKSTATION_HOME."/../matlab_fifos/";
     }
     if ( $FIFO_NAME eq "") {
-	print STDERR ("Adding stuff to fifo name\n");
+	warn("Adding stuff to fifo name\n");
 	$FIFO_NAME="matlab".$WORKSTATION_HOSTNAME."_fifo";
 	$fifo_dir=$WORKSTATION_HOME."/../matlab_fifos/";
     }
@@ -632,7 +632,7 @@ sub get_matlab_fifo {
 	chomp(@fifo_reg_path);
     } elsif ( -p $fifo_registry.$FIFO_NAME ) {
 	# should check for a running matlab and pass it an exit, and then unlink.
-	print STDERR "Warning: FIFO in registry, but registry is a fifo. Unlinked before proceding.\n";
+	warn("Warning: FIFO in registry, but registry is a fifo. Unlinked before proceding.\n");
 	unlink $fifo_registry.$FIFO_NAME;
     }
     if ( $lines ) { 
@@ -657,7 +657,7 @@ sub start_fifo_program {
     my ($app,$opts,$stdin_fifo,$logpath) = @_;
     my $retval=0;
     if ( ! -p $stdin_fifo ) {
-	print STDERR ("FIFO not found at $stdin_fifo, creating. \n");
+	warn("FIFO not found at $stdin_fifo, creating. \n");
 	my $cmd="mkfifo $stdin_fifo";
 	execute(1,'FIFO_create',$cmd);
     } else {
@@ -672,14 +672,14 @@ sub start_fifo_program {
 	execute(1,'FIFO_Log_create',$cmd);
     }
     if ( ( -e $stdin_fifo && -e $logpath  ) && $retval==0  ) {
-	print STDERR ("FIFO starting attached to $stdin_fifo\n");
+	warn("FIFO starting attached to $stdin_fifo\n");
         #my $cmd="( $app $opts -logfile $logpath <> $stdin_fifo 2>&1 >> $logpath ) 2>&1 > /dev/null & ";
 	# should not double into logpath here because -logfile does nearly the same thing as >> $logpath
 	my $cmd="( $app $opts -logfile $logpath <> $stdin_fifo 2>&1 > /dev/null ) 2>&1 > /dev/null & ";
 	#system(1,"$cmd");
 	#my $PID_CHECK;
 	if (! defined( my $PID_CHECK=fork) ) { #fork fail
-	    print STDERR ("ERROR: could not start fifo progrm $cmd\n");
+	    warn("ERROR: could not start fifo progrm $cmd\n");
 	} elsif ( $PID_CHECK == 0 ) { # child process
 	    close STDIN;
 	    close STDERR;
@@ -700,11 +700,11 @@ sub start_fifo_program {
 		exit;
 	    }
 	} else { #parent process
-	    print STDERR ("FIFO forked off as background daemon with $cmd\n");
+	    warn("FIFO forked off as background daemon with $cmd\n");
 	}
 	#my $retval=execute(1,'',$cmd);
     } else {
-	print STDERR ("FIFO program running\n");
+	warn("FIFO program running\n");
     }
     return $retval;
 }
@@ -722,7 +722,7 @@ sub stop_fifo_program {
 #    # alt call
 #    # kill `ps -ax | grep -i matlab | grep fifo | cut -d ' ' -f1`
 #    rm /Volumes/workstation_home/matlab_fifos/*fifo*
-    print STDERR ("FIFO_Stop: $stdin_fifo -> $logpath ...\n");
+    warn ("FIFO_Stop: $stdin_fifo -> $logpath ...\n");
     my $oldway=0;
     my $file_path;
     my $stopped=-1;
@@ -739,12 +739,12 @@ sub stop_fifo_program {
 	my @out=split("\n",$o_string);
 	chomp(@out);
 	@out=split(':',$out[0]);
-	#print STDERR ("\tfuser_out = ".join(',', @out)."\n");
+	#warn ("\tfuser_out = ".join(',', @out)."\n");
 	
 	$file_path=shift(@out);
 	@out = split(' ',$out[0]);
 
-	print STDERR ("\twatched_file = $file_path\n");
+	warn("\twatched_file = $file_path\n");
 	# <= BUG ?
 	for (my $on=0;$on<$#out;$on++){ 
 	    if ($out[$on]!~ m/[0-9]+/x ) {
@@ -753,13 +753,13 @@ sub stop_fifo_program {
 	    }
 	}
 	if ($#out>=0 && $file_path eq "$logpath") {
-	    print STDERR ("PID's to kill.\n\t".join("\n\t",@out)."\n");
+	    warn ("PID's to kill.\n\t".join("\n\t",@out)."\n");
 	    if ( $#out>0 ) {
-		print STDERR ( "WARNING: More than one process attached to the watched file!\n NOTIFY JAMES \n");
+		warn ( "WARNING: More than one process attached to the watched file!\n NOTIFY JAMES \n");
 	    }
 	    $stopped=kill 'KILL',@out;
 	} else {
-	    print STDERR ("No process open for $logpath or fuser fail.\n");
+	    warn ("No process open for $logpath or fuser fail.\n");
 	    $stopped=0;
 	}
     }else{
@@ -767,7 +767,7 @@ sub stop_fifo_program {
 	my $o_string = `$cmd `;
 	chomp($o_string);
 	# o_string should now be the pid.
-	print STDERR ("PID's to kill.\n\t".join("\n\t",$o_string)."\n");
+	warn ("PID's to kill.\n\t".join("\n\t",$o_string)."\n");
 	$stopped=kill 'KILL',$o_string;
 
     }
@@ -801,10 +801,10 @@ sub isopen_fifo_program {
     } else { 
 	my @app_p = split(' ', $app) ;
 	$app=$app_p[0];
-	#print STDERR ( "$app\n");
+	#warn ( "$app\n");
 	@app_p = split('/',$app);
 	$app=$app_p[$#app_p];
-	#print STDERR ( "$app\n");
+	#warn ( "$app\n");
 
 	my $cmd="ps -ax ";
 	#$cmd = $opts eq "" ? $cmd : "$cmd | grep \'$opts\' ";
@@ -812,13 +812,13 @@ sub isopen_fifo_program {
 	#$cmd = $logpath  eq "" ? $cmd : "$cmd | grep \'$logpath\' ";
 	my $cmd2 = "$cmd | grep -i \'$app\' ";
 	$cmd = "$cmd | grep -ci \'$app\' ";
-	#print STDERR ("$cmd\n");
+	#warn ("$cmd\n");
 	my $out=`$cmd`;
 	#`$cmd`;
 	if ( $out>=2 ) { 
 	    $is_running=1; } 
 	#my $check_text=`$cmd2`;
-	#print STDERR (" fifo check grep_ret:$! output:$out check_status:$is_running\ncheck_output:$check_text\n");
+	#warn (" fifo check grep_ret:$! output:$out check_status:$is_running\ncheck_output:$check_text\n");
 	
     }
     
@@ -837,11 +837,11 @@ sub get_image_suffix {
     my @first_files=grep (/^$runno_headfile_dir\/$runno.*[sim|imx][.][0]+[1]?[.].*$/x, @files ) ;
     #print("\n\n".join(' ',@first_files)."\n\n\n");
     if( $#first_files>0 ) {
-	print STDERR "found files \n-> ".join ("\n-> ",@files)."\n";
-	print STDERR "WARNING: \n";
-	print STDERR "\tToo many first files found in archiveme\n";
-	print STDERR "\tdid you forget to remove your rolled or resampled images?\n";
-	print STDERR "Continuing anyway WHeeeeeeEEEEeeee!\n";
+	warn("found files \n-> ".join ("\n-> ",@files)."\n".
+	     "WARNING: \n".
+	     "\tToo many first files found in archiveme\n".
+	     "\tdid you forget to remove your rolled or resampled images?\n".
+	     "Continuing anyway WHeeeeeeEEEEeeee!\n");
     } elsif ($#first_files < 0) {
 	@first_files = glob("$runno_headfile_dir.*[sim|imx]\.[0]+1\..*");
 	if( $#first_files!=0 ) {
@@ -878,10 +878,10 @@ sub matlab_fifo_cleanup {
     my $fifo_registry=$WORKSTATION_HOME."/../matlab_fifos/";
     my $n_removed=0;
     if ( ! -d $fifo_registry ) { 
-	print STDERR ("SETUP NOT COMPLETE FOR FIFO MODE\n NOTIFY JAMES!\n");
+	warn ("SETUP NOT COMPLETE FOR FIFO MODE\n NOTIFY JAMES!\n");
 	exit();
     } else { 
-	print STDERR "FIFO Cleanup Running on dir, $fifo_registry\n";
+	warn("FIFO Cleanup Running on dir, $fifo_registry\n");
 	my @fifo_registry_contents = <$fifo_registry/*>; # GLOB SUBSTITUE?
 	# <= BUG ?
 	for (my $fnum=0;$fnum<$#fifo_registry_contents;$fnum++) {
@@ -895,30 +895,30 @@ sub matlab_fifo_cleanup {
 		    chomp(@fifo_reg_path);
 		} elsif ( -p $FIFO_regfile ) {
 		    # should check for a running matlab and pass it an exit, and then unlink.
-		    print STDERR "Warning: FIFO in registry, but registry is a fifo. Unlinked before proceding.\n";
+		    warn("Warning: FIFO in registry, but registry is a fifo. Unlinked before proceding.\n");
 		    unlink $FIFO_regfile;
 		}
 
 		if ( $lines ) { 
-		    #print STDERR "Get_matlab_fifo fifo load location true\n";
+		    #warn("Get_matlab_fifo fifo load location true\n");
 		    $stdin_fifo=$fifo_reg_path[0]; # get first line of the reg file and put return that instead of the calculated file.
 		} else { 
-		    print STDERR "Get_matlab_fifo fifo load location false\n";
+		    warn("Get_matlab_fifo fifo load location false\n");
 		    #push(@fifo_reg_path,$stdin_fifo."\n");
 		    #write_array_to_file($FIFO_regfile,\@fifo_reg_path);
 		}
 		
 		if ( defined( $stdin_fifo) && ! -e $stdin_fifo ){ 
 		    # this will occur when a new fifo is checked before its created.
-		    print STDERR ("FIFO registered in $FIFO_regfile -> $stdin_fifo but the fifo doens't exit\n");
+		    warn ("FIFO registered in $FIFO_regfile -> $stdin_fifo but the fifo doens't exit\n");
 		    my $FIFO_reg_ttl=(($FIFO_TTL / 2 ) * 60 );
 		    if ( file_over_ttl($FIFO_regfile, $FIFO_reg_ttl) ) {
-			print STDERR ("\tUnlinking old reg file $FIFO_regfile\n");
+			warn ("\tUnlinking old reg file $FIFO_regfile\n");
 			unlink $FIFO_regfile;
 		    }
 		    
 		} elsif ( ! defined ($stdin_fifo) ){ 
-		    print STDERR ("");
+		    warn ("");
 		} elsif( -e $stdin_fifo ) { 
 		    ### peel off for function
 		    #if( file_over_ttl($file,$ttl) )
@@ -926,21 +926,21 @@ sub matlab_fifo_cleanup {
 #     my $file_timestamp=0;
 #     $file_timestamp = (stat($stdin_fifo))[9];
 #     if ( "<$file_timestamp>" eq "<>" ) { 
-# 	#print STDERR ( $stdin_fifo." FAILED TO GET TIMESTAMP< using method 1, trying method2\n");
+# 	#warn ( $stdin_fifo." FAILED TO GET TIMESTAMP< using method 1, trying method2\n");
 # 	$file_timestamp= stat($stdin_fifo)->mtime;
 # 		    }
 #     #my $difference     = $^T - $file_timestamp;
 #     my $difference     = time - $file_timestamp;
 #     if ( "<$file_timestamp>" eq "<>" ) {
 # 	$difference = 0 ;
-# 	print STDERR ( $stdin_fifo." FAILED TO GET TIMESTAMP< ALLOWING TO STAY ALIVE\n");
+# 	warn ( $stdin_fifo." FAILED TO GET TIMESTAMP< ALLOWING TO STAY ALIVE\n");
 #     }
 #     my @n_p=split('/',$stdin_fifo);
 #     my $n=$n_p[-1] unless $#n_p<0;
-#     print STDERR ("\t$n, Epoc timestamp(s):$file_timestamp Current age(s):$difference, ");
+#     warn ("\t$n, Epoc timestamp(s):$file_timestamp Current age(s):$difference, ");
 
 		    if ( file_over_ttl($stdin_fifo,$FIFO_TTL * 60 ) ) { 
-			print STDERR ( " >= ". $FIFO_TTL * 60 ." (max age) cleaning...\n");
+			warn ( " >= ". $FIFO_TTL * 60 ." (max age) cleaning...\n");
 			my $fifo_log=$stdin_fifo.".log";    
 			my $stop_status=-1;
 			if ( -e $fifo_log ){
@@ -954,10 +954,10 @@ sub matlab_fifo_cleanup {
 			    unlink $FIFO_regfile;  #the registry of the fifo to remove
 			    $n_removed++;
 			} else { 
-			    print STDERR ( "WARNING: Stop failed for fifo $stdin_fifo at reg $FIFO_regfile\n");
+			    warn ( "WARNING: Stop failed for fifo $stdin_fifo at reg $FIFO_regfile\n");
 			}
 		    } else {
-			print STDERR ( " < ". $FIFO_TTL * 60 ." (max age).\n");
+			warn ( " < ". $FIFO_TTL * 60 ." (max age).\n");
 		    }
 		}
 	    }
@@ -986,18 +986,18 @@ sub file_over_ttl { # ( $path,$ttl )
     $file_timestamp = (stat($path))[9];
     if (  !defined $file_timestamp ) {
     #if ( "$file_timestamp" eq "" ) { 
-	#print STDERR ( $path." FAILED TO GET TIMESTAMP< using method 1, trying method2\n");
+	#warn ( $path." FAILED TO GET TIMESTAMP< using method 1, trying method2\n");
 	$file_timestamp= stat($path)->mtime;
     }
     #my $difference     = $^T - $file_timestamp;
     my $difference     = time - $file_timestamp;
     if ( "<$file_timestamp>" eq "<>" ) {
 	$difference = 0 ;
-	print STDERR ( $path." FAILED TO GET TIMESTAMP.\n");
+	warn ( $path." FAILED TO GET TIMESTAMP.\n");
     }
     my @n_p=split('/',$path);
     my $n=$n_p[-1] unless $#n_p<0;
-    print STDERR ("\t$n, Epoc timestamp(s):$file_timestamp Current age(s):$difference, ");
+    warn ("\t$n, Epoc timestamp(s):$file_timestamp Current age(s):$difference, ");
     if ( $difference >= ( $ttl ) ) { 
 	$isold=1;
     }
@@ -1098,7 +1098,7 @@ sub file_checksum {
     #my $md5 = $md_calc->b64digest;
     #my $md5 = $md_calc->digest;
     my $md5 = $md_calc->hexdigest;
-    close $data_fid or warn "error on file close $file";
+    close $data_fid or warn("error on file close $file");
     #print("md5:$md5\n");
     return $md5;
 }
@@ -1251,9 +1251,9 @@ sub execute {
 	    # print "------ system returned: $rc -------\n";
 	    # note: ANTS returns 0 even when it says: "Exception thrown: ANTS";
 	    if ($rc != 0) {
-		print STDERR "  Problem:   system() returned $rc\n";
-		print STDERR "  * Command was: $c\n";
-		print STDERR "  * Execution of command failed.\n";
+		warn( "  Problem:   system() returned $rc\n".
+		      "  * Command was: $c\n".
+		      "  * Execution of command failed.\n");
 		return 0;
 	    }
 	} #######################
@@ -1288,9 +1288,9 @@ sub execute_heart {
     #print "------ system returned: $rc -------\n";
     # note: ANTS returns 0 even when it says: "Exception thrown: ANTS";
     if ($rc != 0) {
-	print STDERR "  Problem:  system() returned: $rc\n";
-	print STDERR "  * Command was: $single_command\n";
-	print STDERR "  * Execution of command failed.\n";
+	warn("  Problem:  system() returned: $rc\n".
+	     "  * Command was: $single_command\n".
+	     "  * Execution of command failed.\n");
 	return 0;
     }
     return 1;
@@ -1399,7 +1399,7 @@ sub execute_indep_forks {
 	  exit 0;
 ####
       }else {
-	  warn "couldn\'t fork: $!\n";
+	  warn("couldn\'t fork: $!\n");
 	  push (@commands,$c);
 	  #### change this to a warn condition, and push command back on stack?
 	  $SIG{CHLD} = sub {#reap any available children? or reap all open children?
@@ -1431,7 +1431,7 @@ sub execute_indep_forks {
   #wait 1 second at a time for any remaining children to finish.
   while ( $nforked> 0 ) {
       sleep(1);
-      #print STDERR ("."); # just too keep us interested. bad idea, some of our commands have valid output to look at.
+      #warn ("."); # just too keep us interested. bad idea, some of our commands have valid output to look at.
   }
   print "Execute: waited for all $total_forks command forks to finish; fork queue remainder $nforked. \n";
   
@@ -1503,10 +1503,10 @@ if (0) {
 
         $rc = $?;
         if ($something_on_stderr) {
-          print STDERR "  Problem:\n";
-          #print STDERR "  * Command was: $c\n";
-          print STDERR "  * Execution of command failed.\n";
-          print STDERR "  * Reason: command output included message(s) on STDERR, (although) return status=$rc (0==ok))"; 
+          warn("  Problem:\n".
+	      #"  * Command was: $c\n".
+	      "  * Execution of command failed.\n".
+	      "  * Reason: command output included message(s) on STDERR, (although) return status=$rc (0==ok))");
           return 0;  # not ok
         }
       }
@@ -1518,9 +1518,9 @@ if (0) {
 
     if ($rc != 0) {  
       # --- status denotes a problem
-      print STDERR "  Problem:\n";
-      #print STDERR "  * Command was: $c\n";
-      print STDERR "  * Execution of command failed; status = $rc.\n";
+      warn("  Problem:\n".
+	   #"  * Command was: $c\n".
+	   "  * Execution of command failed; status = $rc.\n");
       return 0;  # 0 not ok;
     }
   }
@@ -1577,16 +1577,16 @@ sub start_pipe_script {
 
 # use Env qw(RADISH_RECON_DIR);
 # if (! defined($RADISH_RECON_DIR)) {
-#   print STDERR "Environment variable RADISH_RECON_DIR must be set. Are you user omega?\n";
-#   print STDERR "   CIVM HINT setenv RADISH_RECON_DIR /recon_home/script/dir_radish\n";
-#   print STDERR "Bye.\n";
+#   warn("Environment variable RADISH_RECON_DIR must be set. Are you user omega?\n".
+#   "   CIVM HINT setenv RADISH_RECON_DIR /recon_home/script/dir_radish\n".
+#   "Bye.\n");
 #   exit $BADEXIT;
 # }
 
 #use lib "$RADISH_RECON_DIR/modules/script";
 use Env qw(RADISH_PERL_LIB);
 if (! defined($RADISH_PERL_LIB)) {
-    print STDERR "Cannot find good perl directories, quiting\n";
+    warn("Cannot find good perl directories, quiting\n");
 #    exit $ERROR_EXITA;
 }
 use lib split(':',$RADISH_PERL_LIB);
@@ -1604,6 +1604,15 @@ return 1;
 sub load_engine_deps {
 # ------------------
     my ($engine) = @_;
+    if (! defined $engine ){
+	print("no host specified, using local...");
+	use Sys::Hostname;
+	$engine = hostname;
+	#print(" $engine \n");
+	my @p=split('\.',"$engine");
+	$engine=$p[0];
+	print(" $engine \n");
+    }
     return load_deps($engine,"engine");
 }
 
@@ -1682,7 +1691,8 @@ sub load_deps {
     if (scalar(@errors)>0) {
 	print(join(", ",@errors)."\n");
     }
-    return $device_constants;
+    return $device_constants if defined $device_constants;
+    error_out("Failure to load device file $device_constants_path\n");
 }
 
 # ------------------
@@ -1855,10 +1865,10 @@ sub writeTextFile {
         print SESAME $line;
       }
       close SESAME;
-      print STDERR "  Wrote or re-wrote $filepath.\n";
+      warn("  Wrote or re-wrote $filepath.\n");
     }
     else {
-      print STDERR  "ERROR: Cannot open file $filepath, can\'t writeTextFile\n";
+      warn("ERROR: Cannot open file $filepath, can\'t writeTextFile\n");
       return 0;
     }
   if (! -e $filepath) { return 0; }
@@ -2250,7 +2260,7 @@ sub mrml_to_file { # ( $hash_ref,$indentext,$indent_level,$format,$pathtowrite )
 	    open $FH, ">","$file" or die ;
 	    $FH_close_bool=1;
 	} else {
-	    warn "Filename reported glob! this is not ok!\n";
+	    warn("Filename reported glob! this is not ok!\n");
 	    return;
 	    #die "Filename reported glob! this is not ok!\n";
 	}
@@ -2649,7 +2659,7 @@ sub display_complex_data_structure { # ( $hash_ref,$indentext,$indent_level,$for
     #my $FH='OUT';
     if ( defined $file ){ 
 	if ( ! looks_like_number($file) ) { 
-	    open $text_fid, ">", "$file" or croak "could not open $file" ;
+	    open $text_fid, ">", "$file" || croak ("could not open $file") ;
 	} else {
 	    $text_fid=$file;
 	    print("PREVIOUSLY OPEN FILE\n");
@@ -2809,17 +2819,10 @@ sub funct_obsolete {
 # ------------------
 # simple function to print that we've called an obsolete function
     my ($funct_name,$new_funct_name)=@_;
-    my @callstack=(caller(2));
-    my $pm;
-    $pm=$callstack[1] || die "caller failure in error_out with message: $msg";
-    my $sn;
-    $sn=$callstack[3] || die "caller failure in error_out with message: $msg";
-    
     my $msg = "\n\nWARNING: obsolete function called, <${funct_name}>, should change call to <${new_funct_name}>\n\n\n";
-    print STDERR "\t ".join("\n\t",@callstack).$msg."\n";
+    cluck ("\n\t".$msg."\n");
     sleep(1);
 }
-
 
 # ------------------
 sub create_affine_transform {
@@ -3132,9 +3135,9 @@ sub cluster_exec {
     }
 
     if ($jid == 0) {
-	print STDERR "  Problem:  system() returned: $msg\n";
-	print STDERR "  * Command was: $cmd\n";
-	print STDERR "  * Execution of command failed.\n";
+	warn("  Problem:  system() returned: $msg\n".
+	     "  * Command was: $cmd\n".
+	     "  * Execution of command failed.\n");
 	return 0;
     }
     if ($jid > 1) {

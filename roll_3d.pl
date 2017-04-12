@@ -197,15 +197,17 @@ for my $runno (@runnos) {
     #find headfile.
     my $r_base_path = $WORK_FOLDER_PATH.'/'.$runno;
     my ($hfpath,$stat)=`find $r_base_path -iname \"$runno.headfile\" | grep -vE '(last|orig)'`;
+    #printd(25,"found path $hfpath, with status $stat\n");
     chomp $hfpath;
     my $HF= new Headfile ( 'rw',$hfpath);
-    if (! $HF->check()) { error_out(join("open",@error_m).' '.$hfpath."\n"); } 
-    if (! $HF->read_headfile) { error_out(join("read",@error_m).' '.$hfpath."\n"); }
+    if (! $HF->check()) { error_out(join("open",@error_m).' '.$hfpath."\n"); } else { printd(45,"Check good for $hfpath\n");}
+    if (! $HF->read_headfile) { error_out(join("read",@error_m).' '.$hfpath."\n"); } else {printd(45,"\tread success.\n"); }
     $civm_id=$HF->get_value("U_civmid");
     $HF->set_value("roll_corner_X",$opts{'x'});
     $HF->set_value("roll_corner_Y",$opts{'y'});
     $HF->set_value("roll_first_Z",$opts{'z'});
-    my ($name,$hfdir,$suffix)=fileparts($hfpath);    
+    #my ($name,$hfdir,$suffix)=fileparts($hfpath);
+    my ($hfdir,$name,$suffix)=fileparts($hfpath,2);
     open_log($hfdir);
     my $tc=$HF->get_value("scanner_tesla_image_code");
     my $ic=$HF->get_value("output_image_code");
@@ -219,8 +221,11 @@ for my $runno (@runnos) {
 	my $tag_file=`$cmd`;
 	chomp $tag_file;
 	if ( defined $tag_file ) { 
-	    my ($n,$p,$ext)=fileparts($tag_file);
-	    $n=$ext;
+	    #my ($n,$p,$ext)=fileparts($tag_file);
+	    my ($p,$n,$ext)=fileparts($tag_file,2);
+	    if ( $n =~ /^$/ ) {
+		$n=$ext;
+	    }
 	    printd(75,"path $p: name $n: \n");
 	    my @np=split('_',$n);
 	    printd(45,'filename bits are '.join(':',@np)."\n");
@@ -331,6 +336,7 @@ for my $runno (@runnos) {
 
 	my @parts=split('\.',$first_imgs[0]);
 	my $start=$parts[1];
+	print("Renaming with $start indexing\n");
 	my @cmd_list;
 	foreach my $img  ( @imgs ) {
 	    my @parts=split('\.',$img);
@@ -338,10 +344,10 @@ for my $runno (@runnos) {
 	    
 	    my $newname=$runno.$o_code."imx";
 	    if ( $opts{'z'} > 0 )  {
-		if ( ($num -$opts{'z'}) < 0 ) {
-		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} + $dim_z +$start );
+		if ( ($num -$opts{'z'} + $start) < $start ) {
+		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} + $dim_z +$start);
 		} else {
-		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} +$start);
+		    $num=sprintf('%0'.length($num).'d', $num - $opts{'z'} + $start);
 		}
 		print("length:".length($num)."\n");
 	    }
