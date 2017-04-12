@@ -51,9 +51,21 @@ my $EC      =load_engine_deps();
 #my @runs = ('/Users/BiGDATADUMP/14.gaj.33/S65177.nii','/Users/BiGDATADUMP/14.gaj.33/S65180.nii','/Users/BiGDATADUMP/14.gaj.33/S65183.nii');
 my @list=();
 
-#print($EC->get_value("engine_data_directory")."\n");
 
-foreach (make_list_of_files($EC->get_value("engine_data_directory")."/atlas",$file_pat) ) { push(@list,$EC->get_value("engine_data_directory")."/atlas/$_"); }
+
+=for comment
+# check for found data directory, this should be handled inside load_engine deps.
+my $ed=$EC->get_value("engine_data_directory");
+if ( defined $ed ) {
+    print("Eng dat: $ed\n");
+} else {
+    error_out("engine data directory not found");
+}
+exit;
+=cut
+
+foreach (make_list_of_files($EC->get_value("engine_data_directory")."/atlas",$file_pat) ) {
+    push(@list,$EC->get_value("engine_data_directory")."/atlas/$_"); }
 
 my @atlas_dir_contents=make_list_of_files($EC->get_value("engine_data_directory")."/atlas","[^.]+");
 my @dirs_to_check=();
