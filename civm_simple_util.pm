@@ -4,17 +4,27 @@
 # simple utilities with some minor pod documentation
 # helpful for much and many perl projects
 #
-# file_exists  check for file existence allowing regex in name
-# printd(print only if devbugval high enough)
-# load_file_to_array(loads a file at path, to an array of lines at ref)
-# write_array_to_file inverse of load_file_to_array
-#get_engine_constants_path  these two may be better suited to pipeline_utilities
-#get_engine_hosts
-# get_script_loc
-# whoami(functname)
-# whowasi(callingfunctionname)
-# debugloc(show partofcallstack if debug_val>debug_loc)
-# sleep_with_countdown(good for warnings so people see them during consol spam)
+# printd  - print only if devbugval high enough it makes the if debug checks look 
+#         nicer when doing debug prints
+#
+# load_file_to_array  - loads a file at path, to an array of lines at ref
+# write_array_to_file  - inverse of load_file_to_array
+# file_exists  - check for file existence allowing regex in name
+# mod_time  - get last modify time
+# 
+# get_busy_char  part of a busy spinner, gets the next character in sequence 
+# is_empty  - is specified directory empty
+# sleep_with_countdown  - good for warnings so people see them during consol spam
+#
+#These two may be better suited to pipeline_utilities
+# get_engine_constants_path  - finds the constants path for requested engine 
+#                            This is mostly obsolete as load_engine_deps handles 
+#                            the main reason we need to find the engine constants path.
+# get_engine_hosts  - list engines in the engine constants folder.
+# get_script_loc  - get full path to file. 
+# whoami - gets function name a now mostly obsolete function, with cluck/confess handling it
+# whowasi  - shows calling function name a now mostly obsolete function, with cluck/confess handling it
+# debugloc  - show partofcallstack if debug_val>debug_loc
 #
 ################################################################################
 package civm_simple_util;
@@ -32,20 +42,26 @@ BEGIN {
     use Exporter;
     our @ISA = qw(Exporter); # perl cricit wants this replaced with use base; not sure why yet.
     our @EXPORT_OK = qw(
+printd 
 load_file_to_array 
 write_array_to_file
+file_exists
+mod_time
+
+
+get_busy_char
+is_empty
+sleep_with_countdown 
+
 get_engine_constants_path
 get_engine_hosts
 get_script_loc
-file_exists
-mod_time
-is_empty
-get_busy_char
-printd 
+
+
 whoami 
 whowasi 
 debugloc 
-sleep_with_countdown 
+
 $debug_val 
 $debug_locator
 ); 
