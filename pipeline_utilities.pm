@@ -265,7 +265,7 @@ sub error_out
   my $sn;
 #  $sn=$callstack[3] || $sn="UNDEFINED";#||die "caller failure in error_out for message $msg";
   $sn=$callstack[3] || die "caller failure in error_out with message: $msg";
-  warn("  Failure cause: ".$pm.'|'.$sn." ".$msg."\n".
+  warn("  Failure cause: ".$msg." at ".$pm.'|'.$sn."\n".
        "  Please note the cause.\n");
   
   if (! $verbose) {
