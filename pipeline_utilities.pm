@@ -1620,63 +1620,78 @@ sub load_engine_deps {
 sub load_deps {
 # ------------------
 # load local engine_deps, OR load an arbitrary one, return the engine constants headfile
+# Considering supporing type find, or specify multiple types.
     my ($device,$type) = @_;
     my @errors;
     my @warnings;
     use Env qw(PIPELINE_HOSTNAME PIPELINE_HOME WKS_SETTINGS WORKSTATION_HOSTNAME);
     
-    # alternate way to get the path to the device constants file
-    # if ( defined $WKS_SETTINGS) { $this_device_constants_path = get_device_constants_path($WKS_SETTINGS,$WORKSTATION_HOSTNAME); }
-    
-    ### set the host
-    if  ( ! defined($WORKSTATION_HOSTNAME)) { 
-	push(@warnings,"WARNING: obsolete variable PIPELINE_HOSTNAME used.");
-	$WORKSTATION_HOSTNAME=$PIPELINE_HOSTNAME;
+    #
+    # If device not specifed its expected to load this device(an engine).
+    #
+    if ( ! defined($device)) {
+	$type="engine";
+	if  ( ! defined($WORKSTATION_HOSTNAME) ) { 
+	    if ( ! defined $PIPELINE_HOSTNAME  ){
+		push(@errors,"Requires WORKSTATION_HOSTNAME environment variable.");
+	    } else {
+		push(@warnings,"WARNING: obsolete variable PIPELINE_HOSTNAME used.\nTHE CODE YOU'RE USING IS OLD AND PROBABLY OBSOLETE.");
+		$WORKSTATION_HOSTNAME=$PIPELINE_HOSTNAME;
+	    }
+	    $device=$WORKSTATION_HOSTNAME;
+	}
+    } elsif ( ! defined($type) ) { 
+	push(@warnings, "load_deps called without device type, using scanner.");
+	$type="scanner";
     }
-    if ( defined($device)) { $WORKSTATION_HOSTNAME=$device; };
-    if (! defined($WORKSTATION_HOSTNAME)) { push(@warnings, "Environment variable WORKSTATION_HOSTNAME not set."); }
-    
-    ### set the dir
+
+    #
+    # set the dir
+    #
+    # Should we get all possible types here?(currently just scanner, engine, nas)
     my $device_constants_dir;
-    if ( ! defined($WKS_SETTINGS) ) { 
-	if (! -d $PIPELINE_HOME) { push(@errors, "unable to find $PIPELINE_HOME"); }
-	print("WARNING: obsolete variable PIPELINE_HOME used to find dependenceis");
-	$WKS_SETTINGS=$PIPELINE_HOME;
-	$device_constants_dir="$WKS_SETTINGS/dependencies";
-    } else { 
+    if ( defined($WKS_SETTINGS) ) { 
+	# situation normal
 	$device_constants_dir="$WKS_SETTINGS/".$type."_deps";
-    }
-    if (! -d $device_constants_dir) { push(@errors, "$device_constants_dir does not exist."); }
+    } else {
+	if ( defined $PIPELINE_HOME ) {
+	    if (-d $PIPELINE_HOME ) { 
+		print("WARNING: obsolete variable PIPELINE_HOME used to find dependencies.\nTHE CODE YOU'RE USING IS OLD AND PROBABLY OBSOLETE.");
+		$WKS_SETTINGS=$PIPELINE_HOME;
+		$device_constants_dir="$WKS_SETTINGS/dependencies";
+	    } else { 
+		push(@errors,"Requires WKS_SETTINGS environment variable.");
+	    }
+	} else {
+	    push(@errors,"Requires WKS_SETTINGS environment variable.");
+	}
+    } 
+    if (defined $device_constants_dir && ! -d $device_constants_dir) { push(@errors, "$device_constants_dir does not exist."); }
     
-    ### set the file name
-    my $device_file =join("_","$type","$device","dependencies"); 
-    my $device_constants_path = "$device_constants_dir/".$device_file;
-
-    # if ( ! -f $the_device_constants_path ){
-    # 	$device_type='nas';
-    # 	$device_file_name            = join("_",$device_type,$device,"radish_dependencies");
-    # 	print("Using nas device settings\n");
-    # 	$the_device_constants_path = join("/",$WKS_SETTINGS."/".$device_type."_deps/", $device_file_name); 
-    # }
-
-    if ( ! -f $device_constants_path ) {
-	push(@warnings,"WARNING: first constants path $device_constants_path missing");
-	$device_file=join("_","$type","$device","radish_dependencies");
+    #
+    # set the file name
+    #
+    my @postfixes=qw/dependencies radish_dependencies pipeline_dependencies/;# the current postfix, and the historical variants.
+    my $device_file; my $device_constants_path;
+    my $pn=0;
+    for($pn=0;$pn<scalar(@postfixes);$pn++){
+	$device_file =join("_","$type","$device",$postfixes[$pn]); 
 	$device_constants_path = "$device_constants_dir/".$device_file;
 	if ( ! -f $device_constants_path ) {
-	    push(@warnings,"WARNING: second constants path $device_constants_path missing");
-	    $device_file=join("_","$type","$device","pipeline_dependencies");
-	    $device_constants_path = "$device_constants_dir/".$device_file;
-	    if ( -f $device_constants_path ) {
-		push(@warnings,"WARNING: OBSOLETE SETTINGS FILE USED, $device_file\n\tConsider updating system!");
-	    } 
+	    push(@warnings,"WARNING: constants path $device_constants_path is missing.");
 	} else {
-	    push(@warnings,"\t But we're ok we found the next one.\n");
+	    last;
 	}
     }
     my $device_constants ;
-    if (-f $device_constants_path ) {
-	### load device_deps
+    if ( -f $device_constants_path ){
+	 if ( $pn != 0 ) {
+	     push(@warnings,"\tBut we're ok we found the next one.\n");
+	     push(@warnings,"WARNING: OBSOLETE NAMING CONVENTION USED, $device_file.\n\tConsider updating system!");
+	 }
+    #
+    # load device_deps
+    #
 	$device_constants = new Headfile ('ro', $device_constants_path);
 	if (! $device_constants->check()) {
 	    push(@errors, "Unable to open device constants file $device_constants_path");
@@ -1689,10 +1704,12 @@ sub load_deps {
 	print(join("\n",@warnings)."\n");
     }
     if (scalar(@errors)>0) {
-	print(join(", ",@errors)."\n");
+	warn(join(", ",@errors)."\n");
     }
     return $device_constants if defined $device_constants;
-    error_out("Failure to load device file $device_constants_path\n");
+    return {};
+    return("Failure to load device file $device_constants_path\n");
+    #error_out("Failure to load device file $device_constants_path\n");
 }
 
 # ------------------
