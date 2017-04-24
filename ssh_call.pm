@@ -80,7 +80,7 @@ sub get_file {
     #  add these to ssh call before tar to remove rsource forks.
     #;
     #
-    my $mac_spec="COPYFILE_DISABLE=true; COPY_EXTENDED_ATTRIBUTES_DISABLE=true; ";
+    my $mac_spec="declare -x COPYFILE_DISABLE=true; declare -x COPY_EXTENDED_ATTRIBUTES_DISABLE=true; ";
     my ($sysname, $nodename, $release, $version, $machine) = uname();
     if ( $sysname =~ /Darwin/){
 	printd(30,"Mac OS, resource forks are ok");	
