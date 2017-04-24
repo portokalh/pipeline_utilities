@@ -80,19 +80,22 @@ sub get_file {
     #  add these to ssh call before tar to remove rsource forks.
     #;
     #
-    my $mac_spec="declare -x COPYFILE_DISABLE=true; declare -x COPY_EXTENDED_ATTRIBUTES_DISABLE=true; ";
-    my ($sysname, $nodename, $release, $version, $machine) = uname();
+    my $mac_spec="";#-o SendEnv=COPYFILE_DISABLE -o  SendEnv=COPY_EXTENDED_ATTRIBUTES_DISABLE ";
+    # Recieving of the variables is up to the remote side. 
+    # SO mac_spec fails. But we've managed to get the var settings using export and setenv.
+    my $mac_set="export COPYFILE_DISABLE=true; setenv COPYFILE_DISABLE true; export COPY_EXTENDED_ATTRIBUTES_DISABLE=true; setenv COPY_EXTENDED_ATTRIBUTES_DISABLE true; ";
+    #my ($sysname, $nodename, $release, $version, $machine) = uname();
+    my ($sysname, @junk) = uname();
     if ( $sysname =~ /Darwin/){
 	printd(30,"Mac OS, resource forks are ok");	
 	$mac_spec="";
+	$mac_set="";
     } else {
 	printd(30,"$sysname Not mac os, eliminating resource forks\n");
     }
-	# if we're not a mac
-    
-    
-    $cmd  = ("cd $local_dest_dir; ssh $system '(cd $source_dir ; $mac_spec tar -pcjf - $file )'| tar -xjf - ");# the new solution which does not duplicate links.
-    print STDERR "   Beginning ".$cmd." at $date...\n" if $verbose>0;#    print STDERR "Beginning scp of $src at $date...";
+    $cmd  = ("cd $local_dest_dir; ssh $mac_spec $system '(cd $source_dir; $mac_set tar -pcjf - $file )'| tar -xjf - ");
+    # the new solution which does not duplicate links.
+    print STDERR "\t Transfer start at $date with ".$cmd."\n" if $verbose>0;#    print STDERR "Beginning scp of $src at $date...";
     my $start = time;
 
 #         my $pid = open(PH, "$c 3>&1 1>&2 2>&3 3>&-|");
