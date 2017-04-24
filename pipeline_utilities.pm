@@ -13,7 +13,7 @@
 #               should add a standard headfile settings file for the required values in an engine_dependencie headfile 
 #               returns the three directories  in work result, outhf_path, and the engine_constants headfile.
 # 140717 added exporter line with list of functions
-# 141125 moved registration.pm to here, modified as necessary. Also added sbath capabilities for when running on cluster. BJA
+# 141125 moved registration.pm to here, modified as necessary. Also added sbatch capabilities for when running on cluster. BJA
 # be sure to change version:
 my $VERSION = "141125";
 
@@ -148,6 +148,7 @@ write_stats_for_pm
 convert_time_to_seconds
 get_git_commit
 make_R_stub
+create_explicit_inverse_of_ants_affine_transform
 ); 
 }
 
@@ -1619,63 +1620,78 @@ sub load_engine_deps {
 sub load_deps {
 # ------------------
 # load local engine_deps, OR load an arbitrary one, return the engine constants headfile
+# Considering supporing type find, or specify multiple types.
     my ($device,$type) = @_;
     my @errors;
     my @warnings;
     use Env qw(PIPELINE_HOSTNAME PIPELINE_HOME WKS_SETTINGS WORKSTATION_HOSTNAME);
     
-    # alternate way to get the path to the device constants file
-    # if ( defined $WKS_SETTINGS) { $this_device_constants_path = get_device_constants_path($WKS_SETTINGS,$WORKSTATION_HOSTNAME); }
-    
-    ### set the host
-    if  ( ! defined($WORKSTATION_HOSTNAME)) { 
-	push(@warnings,"WARNING: obsolete variable PIPELINE_HOSTNAME used.");
-	$WORKSTATION_HOSTNAME=$PIPELINE_HOSTNAME;
+    #
+    # If device not specifed its expected to load this device(an engine).
+    #
+    if ( ! defined($device)) {
+	$type="engine";
+	if  ( ! defined($WORKSTATION_HOSTNAME) ) { 
+	    if ( ! defined $PIPELINE_HOSTNAME  ){
+		push(@errors,"Requires WORKSTATION_HOSTNAME environment variable.");
+	    } else {
+		push(@warnings,"WARNING: obsolete variable PIPELINE_HOSTNAME used.\nTHE CODE YOU'RE USING IS OLD AND PROBABLY OBSOLETE.");
+		$WORKSTATION_HOSTNAME=$PIPELINE_HOSTNAME;
+	    }
+	    $device=$WORKSTATION_HOSTNAME;
+	}
+    } elsif ( ! defined($type) ) { 
+	push(@warnings, "load_deps called without device type, using scanner.");
+	$type="scanner";
     }
-    if ( defined($device)) { $WORKSTATION_HOSTNAME=$device; };
-    if (! defined($WORKSTATION_HOSTNAME)) { push(@warnings, "Environment variable WORKSTATION_HOSTNAME not set."); }
-    
-    ### set the dir
+
+    #
+    # set the dir
+    #
+    # Should we get all possible types here?(currently just scanner, engine, nas)
     my $device_constants_dir;
-    if ( ! defined($WKS_SETTINGS) ) { 
-	if (! -d $PIPELINE_HOME) { push(@errors, "unable to find $PIPELINE_HOME"); }
-	print("WARNING: obsolete variable PIPELINE_HOME used to find dependenceis");
-	$WKS_SETTINGS=$PIPELINE_HOME;
-	$device_constants_dir="$WKS_SETTINGS/dependencies";
-    } else { 
+    if ( defined($WKS_SETTINGS) ) { 
+	# situation normal
 	$device_constants_dir="$WKS_SETTINGS/".$type."_deps";
-    }
-    if (! -d $device_constants_dir) { push(@errors, "$device_constants_dir does not exist."); }
+    } else {
+	if ( defined $PIPELINE_HOME ) {
+	    if (-d $PIPELINE_HOME ) { 
+		print("WARNING: obsolete variable PIPELINE_HOME used to find dependencies.\nTHE CODE YOU'RE USING IS OLD AND PROBABLY OBSOLETE.");
+		$WKS_SETTINGS=$PIPELINE_HOME;
+		$device_constants_dir="$WKS_SETTINGS/dependencies";
+	    } else { 
+		push(@errors,"Requires WKS_SETTINGS environment variable.");
+	    }
+	} else {
+	    push(@errors,"Requires WKS_SETTINGS environment variable.");
+	}
+    } 
+    if (defined $device_constants_dir && ! -d $device_constants_dir) { push(@errors, "$device_constants_dir does not exist."); }
     
-    ### set the file name
-    my $device_file =join("_","$type","$device","dependencies"); 
-    my $device_constants_path = "$device_constants_dir/".$device_file;
-
-    # if ( ! -f $the_device_constants_path ){
-    # 	$device_type='nas';
-    # 	$device_file_name            = join("_",$device_type,$device,"radish_dependencies");
-    # 	print("Using nas device settings\n");
-    # 	$the_device_constants_path = join("/",$WKS_SETTINGS."/".$device_type."_deps/", $device_file_name); 
-    # }
-
-    if ( ! -f $device_constants_path ) {
-	push(@warnings,"WARNING: first constants path $device_constants_path missing");
-	$device_file=join("_","$type","$device","radish_dependencies");
+    #
+    # set the file name
+    #
+    my @postfixes=qw/dependencies radish_dependencies pipeline_dependencies/;# the current postfix, and the historical variants.
+    my $device_file; my $device_constants_path;
+    my $pn=0;
+    for($pn=0;$pn<scalar(@postfixes);$pn++){
+	$device_file =join("_","$type","$device",$postfixes[$pn]); 
 	$device_constants_path = "$device_constants_dir/".$device_file;
 	if ( ! -f $device_constants_path ) {
-	    push(@warnings,"WARNING: second constants path $device_constants_path missing");
-	    $device_file=join("_","$type","$device","pipeline_dependencies");
-	    $device_constants_path = "$device_constants_dir/".$device_file;
-	    if ( -f $device_constants_path ) {
-		push(@warnings,"WARNING: OBSOLETE SETTINGS FILE USED, $device_file\n\tConsider updating system!");
-	    } 
+	    push(@warnings,"WARNING: constants path $device_constants_path is missing.");
 	} else {
-	    push(@warnings,"\t But we're ok we found the next one.\n");
+	    last;
 	}
     }
     my $device_constants ;
-    if (-f $device_constants_path ) {
-	### load device_deps
+    if ( -f $device_constants_path ){
+	 if ( $pn != 0 ) {
+	     push(@warnings,"\tBut we're ok we found the next one.\n");
+	     push(@warnings,"WARNING: OBSOLETE NAMING CONVENTION USED, $device_file.\n\tConsider updating system!");
+	 }
+    #
+    # load device_deps
+    #
 	$device_constants = new Headfile ('ro', $device_constants_path);
 	if (! $device_constants->check()) {
 	    push(@errors, "Unable to open device constants file $device_constants_path");
@@ -1688,10 +1704,12 @@ sub load_deps {
 	print(join("\n",@warnings)."\n");
     }
     if (scalar(@errors)>0) {
-	print(join(", ",@errors)."\n");
+	warn(join(", ",@errors)."\n");
     }
     return $device_constants if defined $device_constants;
-    error_out("Failure to load device file $device_constants_path\n");
+    return {};
+    return("Failure to load device file $device_constants_path\n");
+    #error_out("Failure to load device file $device_constants_path\n");
 }
 
 # ------------------
@@ -2921,6 +2939,13 @@ sub apply_affine_transform {
   if ((! defined $native_reference_space) || ($native_reference_space eq '')) {
       $native_reference_space = 0; # Not sure if we want atlas space to be our default reference space.
   }
+  
+  my $float_string = '';
+
+ # if (check_nifti_for_float_datatype($to_deform_path)) {
+      $float_string = ' --float ';
+ # }
+
 
   my $reference='';
   my $i_opt1;
@@ -2957,7 +2982,7 @@ sub apply_affine_transform {
       print "interpolation: $interp\n";
       print "reference: $reference\n";
   }
-  my $cmd="${ants_app_dir}antsApplyTransforms --float -d 3 -i $to_deform_path -o $result_path -t [$transform_path, $i_opt1] -r $reference -n $interp";
+  my $cmd="${ants_app_dir}antsApplyTransforms ${float_string} -d 3 -i $to_deform_path -o $result_path -t [$transform_path, $i_opt1] -r $reference -n $interp";
 
   if ($go) {
       print " \n";
@@ -3387,8 +3412,23 @@ sub compare_headfiles {
 
     if ($key_array[0] ne '') {
 	foreach my $Key (@key_array) {
-	    my $A_val = $Hf_A->get_value($Key);
-	    my $B_val = $Hf_B->get_value($Key);
+	    # 10 April 2017, BJA: trying to add wildcard support. Wildcards are only allowed at the beginning and/or end of $Key.
+	    my $use_get_value_like = 0;
+	    if ($Key =~ s/^\*//) {
+		$use_get_value_like = 1;
+	    }
+
+	    if ($Key =~ s/\*$//) {
+		$use_get_value_like = 1;
+	    }
+	    my ($A_val,$B_val);
+	    if ( $use_get_value_like ) {
+		$A_val = $Hf_A->get_value_like($Key);
+		$B_val = $Hf_B->get_value_like($Key);
+	    } else {
+		$A_val = $Hf_A->get_value($Key);
+		$B_val = $Hf_B->get_value($Key);
+	    }
 	    my $robust_A_val = $A_val; # 15 January 2016: added functionality such that gzipped/ungzipped difference doesn't throw a flag.
 	    my $robust_B_val = $B_val;
 
@@ -3665,8 +3705,8 @@ sub format_transforms_for_command_line {
     my $command_line_string='';
     my @transforms = split(',',$comma_string);
     my $total = $#transforms + 1;
-
-    if (defined $option_letter) {
+  
+    if ((defined $option_letter) && ($option_letter ne '')) {
 	$command_line_string = "-${option_letter} ";
     }
 
@@ -4262,4 +4302,27 @@ sub make_R_stub {
 
 }
 
+#---------------------
+sub create_explicit_inverse_of_ants_affine_transform {
+#---------------------
+    my $return_msg;
+    my ($transform_to_invert,$outfile) = @_;
+    if (! defined $outfile) {
+	my ($p,$n,$e) = fileparts($transform_to_invert,3);
+	$outfile = "${p}/${n}_inverse${e}";
+    }
+
+    if ($transform_to_invert =~ /\.(txt|mat)$/ ) {
+	my $dim = 3;
+	my $invert_cmd = "ComposeMultiTransform ${dim} ${outfile} -i ${transform_to_invert};";
+	my $convert_cmd = "ConvertTransformFile ${dim} ${outfile} ${outfile} --convertToAffineType;";
+	$return_msg =`${invert_cmd} ${convert_cmd}`;     
+    } else {
+	my $error_msg = "File does not appear to be a valid ants affine matrix, and therefore cannot be properly inverted here.\nOffending file: ${transform_to_invert}\n";
+	error_out($error_msg);
+    }  
+
+    return($return_msg); 
+
+}
 1;
