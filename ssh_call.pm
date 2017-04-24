@@ -10,7 +10,10 @@ package ssh_call;
 # Sally Gewalt civm 2/15/2007
 use strict;
 use warnings;
+use Carp qw /cluck confess/;
 use File::Basename;
+use POSIX qw/uname/;
+use civm_simple_util qw/printd/;
 #my $DEBUG = 1;
 
 sub works {
@@ -73,7 +76,22 @@ sub get_file {
     # ssh crete '(cd /Volumes/workstation_data/data/atlas/rat/; tar -pcjf - rat_labels.nii.gz )' | tar -xjf -
     my @args  = ("scp","-pC", $src, $dest); #the former solution which duplicated linked files, 
     my $cmd=join(" ",@args);
-    $cmd  = ("cd $local_dest_dir; ssh $system '(cd $source_dir ; tar -pcjf - $file )'| tar -xjf - ");# the new solution which does not duplicate links.
+    
+    #  add these to ssh call before tar to remove rsource forks.
+    #;
+    #
+    my $mac_spec="COPYFILE_DISABLE=true; COPY_EXTENDED_ATTRIBUTES_DISABLE=true; ";
+    my ($sysname, $nodename, $release, $version, $machine) = uname();
+    if ( $sysname =~ /Darwin/){
+	printd(30,"Mac OS, resource forks are ok");	
+	$mac_spec="";
+    } else {
+	printd(30,"$sysname Not mac os, eliminating resource forks\n");
+    }
+	# if we're not a mac
+    
+    
+    $cmd  = ("cd $local_dest_dir; ssh $system '(cd $source_dir ; $mac_spec tar -pcjf - $file )'| tar -xjf - ");# the new solution which does not duplicate links.
     print STDERR "   Beginning ".$cmd." at $date...\n" if $verbose>0;#    print STDERR "Beginning scp of $src at $date...";
     my $start = time;
 
@@ -140,6 +158,8 @@ sub get_dir_listing {
     my $date  = `ssh -Y $system date`;
     chop ($date);
     my $src   = "$system";
+    #find: -iregex: ((.*.nii(?:.gz)?)|(.*.txt)|(.*.xml))$: repetition-operator operand invalid
+    # i bet its the ?:
     my $cmd = "\"find -E $source_dir -iregex \'$pattern\'\"";
     #my $cmd = "ls -A $source_dir | grep -E -iregex \"$pattern\"";
     my @args;
