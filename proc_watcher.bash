@@ -1,11 +1,22 @@
 #!/bin/bash
 function disp_help()  {
+    echo " proc_watcher [PID] [size] [interval] "
     echo " Simple memory graph which works under linux.";
     echo " Graphs specified pid as pct of total, ";
     echo " or pct of free before proc started ";
     echo " or as pct of some specified max";
     echo " max can be specifed using GMk for GB, MB, or kB";
     return;
+}
+
+function get_prog_usage() {
+    proc=$1;
+    res=$(ps -p "$proc" -o rss,%mem,%cpu,cmd|tail -n 1);
+    prog_used=$(echo "$res"|cut -d ' ' -f1); 
+    if [ -z "$prog_used" ]; then
+	prog_used=0;
+    fi;
+    echo $prog_used;
 }
 
 proc="$1";
@@ -23,40 +34,65 @@ fi;
 kb_limit=1;
 
 top -bn1 -p "$proc" > ~/.tout.txt &
-res=$(ps -p "$proc" -o rss,%mem,%cpu,cmd|tail -n 1);
-prog_used=$(echo "$res"|cut -d ' ' -f1); 
+read prog_used < <(get_prog_usage $proc)
+wait;
 if [ -z "$prog_used" ]; then
     echo "program not found or not specified";
     prog_used=0;
 fi;
-awk '/Mem/ {  prog_used = '"$prog_used"'
+
+
+function read_topout() {
+    prog_used=$1;
+    kb_limit=$2;
+    awk '/Swap/ { cached = $8 * 1  } END { print cached }' ~/.tout.txt > ~/.tmem_out.txt
+    NUM=1;  cached=$(sed "${NUM}q;d" ~/.tmem_out.txt );
+    	awk '/Mem/ {  prog_used = '"$prog_used"'
+                      cached = '"$cached"'
                       total = $2 * 1
                       used = $4 * 1
                       free = $6 * 1
-                      other_mem = used - prog_used
+                      other_mem = used - prog_used - cached
                       prog_pct = 100 * prog_used / total
+                      cache_pct = 100 * cached / total
                       other_pct = 100 * other_mem / total
                       free_pct = 100 * free / total
                       pf_pct = 100 * prog_used / '"$kb_limit"'
-                      if( pf_pct > 100 ) { pf_pct = 0 }  }; 
+                      if( pf_pct > 100 ) { pf_pct = 100 }  }; 
              END   { print total
                      print used
+                     print cached
                      print free
                      print other_mem
                      print prog_used
                      print prog_pct
+                     print cache_pct
                      print other_pct
                      print free_pct 
                      print pf_pct };' ~/.tout.txt  > ~/.tmem_out.txt
-NUM=1;  totalKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-NUM=2;   usedKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-NUM=3;   freeKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-NUM=4;  otherKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-NUM=5;   progKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-NUM=6; pct_prog=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-NUM=7;pct_other=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-NUM=8; pct_free=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-NUM=9;   pf_pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+	NUM=1;  totalKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
+	NUM=2;   usedKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
+	NUM=3;  cacheKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
+	NUM=4;   freeKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
+	NUM=5;  otherKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
+	NUM=6;   progKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
+	NUM=7; pct_prog=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+	NUM=8;pct_cache=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+	NUM=9;pct_other=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+	NUM=10;pct_free=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+	# get prog as pct of free
+	NUM=11;  pf_pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+#	NUM=10;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+#	NUM=11;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+#	NUM=12;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+#	NUM=13;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+#	NUM=14;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+#	NUM=15;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+
+echo "$totalKB $usedKB $cacheKB $freeKB $otherKB $progKB $pct_prog $pct_cache $pct_other $pct_free $pf_pct";
+}
+read totalKB usedKB cacheKB freeKB otherKB progKB pct_prog pct_cache pct_other pct_free pf_pct< <(read_topout $prog_used $kb_limit);
+
 if [ ! -z "$mode" ] ; then
     mul=1;
     num=$mode;
@@ -83,14 +119,10 @@ if [ ! -z "$mode" ] ; then
 	kb_limit=$mode;
     fi
 fi
-#echo $kb_limit;exit;
+
 while [ 1 ] ; do 
     top -bn1 -p "$proc" > ~/.tout.txt & 
-    res=$(ps -p "$proc" -o rss,%mem,%cpu,cmd|tail -n 1);
-    prog_used=$(echo "$res"|cut -d ' ' -f1); 
-    if [ -z "$prog_used" ]; then
-	prog_used=0;
-    fi;
+    read prog_used < <(get_prog_usage $proc)
     wait;
 #top -bn1 -p $proc > ~/.tout.txt
 #
@@ -115,41 +147,7 @@ while [ 1 ] ; do
 #                     used = $4 * 1 
 #                     free = $6 * 1 }; END { print "t=" total ":\n" "u=" used ":\n" "f=" free ":\n" "\n\n" };' ~/.tout.txt
 #	echo "awkend";
-	awk '/Mem/ {  prog_used = '"$prog_used"'
-                      total = $2 * 1
-                      used = $4 * 1
-                      free = $6 * 1
-                      other_mem = used - prog_used
-                      prog_pct = 100 * prog_used / total
-                      other_pct = 100 * other_mem / total
-                      free_pct = 100 * free / total
-                      pf_pct = 100 * prog_used / '"$kb_limit"'
-                      if( pf_pct > 100 ) { pf_pct = 100 }  }; 
-             END   { print total
-                     print used
-                     print free
-                     print other_mem
-                     print prog_used
-                     print prog_pct
-                     print other_pct
-                     print free_pct 
-                     print pf_pct };' ~/.tout.txt  > ~/.tmem_out.txt
-	NUM=1;  totalKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-	NUM=2;   usedKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-	NUM=3;   freeKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-	NUM=4;  otherKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-	NUM=5;   progKB=$(sed "${NUM}q;d" ~/.tmem_out.txt );
-	NUM=6; pct_prog=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-	NUM=7;pct_other=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-	NUM=8; pct_free=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-	# get prog as pct of free
-	NUM=9;   pf_pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-#	NUM=10;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-#	NUM=11;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-#	NUM=12;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-#	NUM=13;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-#	NUM=14;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
-#	NUM=15;pct=$(sed "${NUM}q;d" ~/.tmem_out.txt | cut -d '.' -f1);
+	read totalKB usedKB cacheKB freeKB otherKB progKB pct_prog pct_cache pct_other pct_free pf_pct< <(read_topout $prog_used $kb_limit);
 	if [ "$kb_limit" -eq 1 ]; then
 	    if [ ! -z "$mode" ]; then
 		if [ "$mode" -eq 1 -o "$mode" = "free" ]; then echo -n "";
@@ -168,15 +166,17 @@ while [ 1 ] ; do
     fi;
     #printf '=%.0s' {1..100}
     if [ -z "$mode" ]; then echo -n "";
-	pct_total=$(( $pct_prog + $pct_other + $pct_free ));
+
+	pct_total=$(( $pct_prog + $pct_cache + $pct_other + $pct_free ));
 	pct_err=$(( 100 - $pct_total ));
-	c_total=$(( $pct_prog + $pct_other + $pct_free + $pct_err ));
+	c_total=$(( $pct_prog + $pct_cache + $pct_other + $pct_free + $pct_err ));
     else echo -n "";
 	# we're in floating scale mode. 
 	pct_prog=$pf_pct;
 	pct_free=$(( 100 - $pf_pct ));
 	pct_other=0;
 	pct_err=0;
+	pct_cache=0;
 	pct_total=$(( $pct_prog + $pct_other + $pct_free ));
 	c_total=$(( $pct_prog + $pct_other + $pct_free + $pct_err ));
     fi
@@ -188,7 +188,11 @@ while [ 1 ] ; do
     otxt="";
     if [ "$pct_other" != 0 ]; then echo -n "";
 	eval "printf 'o%.0s' {1..$pct_other}";
-	otxt="+ p$pct_other";
+	otxt=" + o$pct_other";
+    fi
+    if [ "$pct_cache" != 0 ]; then echo -n "";
+	eval "printf '=%.0s' {1..$pct_cache}";
+	ctxt=" + c$pct_cache";
     fi
     if [ "$pct_free" != 0 ]; then echo -n "";
 	eval "printf '_%.0s' {1..$pct_free}";
@@ -196,8 +200,13 @@ while [ 1 ] ; do
     etxt="";
     if [ "$pct_err" != 0 ]; then echo -n "";
 	eval "printf 'x%.0s' {1..$pct_err}";
-	etxt="+ e$pct_err";
+	etxt=" + e$pct_err";
     fi
-    echo "  p$pct_prog $otxt + f$pct_free $etxt = $c_total";
+    des=f;
+    if [ ! -z "$mode" ]; then echo -n "";
+	# In total mode we arnt looking at free mem, we're looking at limit
+	des=r;
+    fi
+    echo "  p$pct_prog$otxt$ctxt + $des$pct_free$etxt = $c_total";
     sleep $interval;
 done
