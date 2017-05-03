@@ -52,6 +52,7 @@ paths={
     };
 % we put student matlab first so it can be overridden by "pipeline" functions
 genpaths={
+    [ '/home/rmd22/Documents/MATLAB/MATLAB_scripts_rmd/CS/' ]
     [ workstation_home '/../student_matlab/']
     [ workstation_home '/recon/DCE' ]
     [ workstation_home '/shared/mathworks']
@@ -63,7 +64,6 @@ genpaths={
     [ workstation_home '/recon/External/grid/mri_unbound']
     [ workstation_home '/../orchestra-sdk-1.2-115.matlab/']
     [ workstation_home '/../orchestra-sdk-1.4-722.matlab/']
-    [ '/home/rmd22/Documents/MATLAB' ]
     };
 
 for p=1:length(old_paths)
