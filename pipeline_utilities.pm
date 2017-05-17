@@ -1032,20 +1032,85 @@ sub data_integrity {
 	warn("both checksum file name conventions present, an error may have occured. $o_checksumfile, and $checksumfile present!");
     }
     my $md5 ;
-    
-    if (! -l $file ) {
-	$md5=file_checksum($file);
-    } else {
-	$md5=link_checksum($file);
+    my $ts={};
+    #my $stat_info=qx/stat -s $file/; # -s which is cool, is incompatible with -f
+    # this stat line produces the following hash content( name value )
+
+=for comment 
+
+st_birthtime 1435866460
+st_blksize 4096
+st_blocks 8
+st_atime 1477497329
+st_gid 1052
+st_uid 5052
+st_mode 0120775
+st_ino 4003
+st_flags 0
+st_mtime 1435866460
+st_ctime 1477497329
+st_dev 234881034
+st_rdev 0
+st_size 19
+st_nlink 1
+
+=cut
+
+    my $stat_info=qx/stat -f st_atime=%Sa\\ st_mtime=%Sm -t %Y%m%d%H%M.%S $file/;
+    my @field_vars=split(' ',$stat_info);
+    foreach(@field_vars){
+	my @bits=split('=',$_);
+	$ts->{$bits[0]}=$bits[1];
+    }
+
+    my $ts_c={};
+    if ( -e $checksumfile ) {
+	$stat_info=qx/stat -f st_atime=%Sa\\ st_mtime=%Sm -t %Y%m%d%H%M.%S $checksumfile/;
+	@field_vars=split(' ',$stat_info);
+	foreach(@field_vars){
+	    my @bits=split('=',$_);
+	    $ts_c->{$bits[0]}=$bits[1];
+	}
+    }
+    my $ts_skip=0;
+    if ($ver==3 && -e $checksumfile ) {
+	#mode 3 where we trust our timestamps.
+	my $cmd="date -jf %Y%m%d%H%M.%S ".$ts->{'st_mtime'}." +%s";
+	#print($cmd."\n");
+	my $input_epoc=qx/$cmd/; 
+	$cmd="date -jf %Y%m%d%H%M.%S ".$ts_c->{'st_mtime'}." +%s";
+	#print($cmd."\n");
+	my $dest_epoc=qx/$cmd/; 
+
+	if ( $dest_epoc < $input_epoc ) { 
+	    carp("timestamp on md5 is old, doing checks");
+	} elsif($dest_epoc ==$input_epoc ) {
+	    #print("Mode3: Skipping with same timestamp\n\t$file\n\t$checksumfile\n");
+	    $ts_skip=1;
+	} else {
+	    carp("timestamp on md5 is new, updating timestamp\n");
+	    $ts_skip=2;
+	}
+    }
+    if ( $ts_skip == 0) {
+	#print("Calculating md5 ... \n");
+	if (! -l $file ) {
+	    $md5 = file_checksum($file);
+	} else {
+	    $md5 = link_checksum($file);
+	}
     }
     my $stored_md5;
-    my @f_cont;#  beacuse my function reads into and array, this'll have to be an array.
-    if ( ! -e $checksumfile ) { 
+    my @f_cont; # beacuse my function reads into and array, this'll have to be an array.
+    if ( ! -e $checksumfile && $ts_skip == 0 ) { 
 	write_array_to_file($checksumfile,[$md5]);# becasue the function writes an array, we have to make our value an array here.
 	$data_check=1;
     } else {
 	load_file_to_array($checksumfile,\@f_cont);
 	$stored_md5=$f_cont[0];
+	if ($ts_skip > 0) {
+	    $md5 = $stored_md5;
+	}
 	if ( $stored_md5 eq $md5 ) { 
 	    $data_check=1;
 	    #print("GOOD! ($file:$md5)\n");
@@ -1053,6 +1118,26 @@ sub data_integrity {
 	    print ("BADCHECKSUM! $md5($file) NOT $stored_md5") ;
 	}
     }
+    # these are debug prints to prove the code is working.
+    #print(`ls -l $checksumfile`);
+    #print(`ls -l $file`);
+    #foreach (keys %$ts){
+    #print("$_ $ts->{$_}\n");
+    #}
+    if ($ts_skip != 1 ) {
+	qx/touch -h -a -t $ts->{"st_atime"} $checksumfile/;
+	qx/touch -h -m -t $ts->{"st_mtime"} $checksumfile/;
+    }
+    #-t [[CC]YY]MMDDhhmm[.SS]] # what touch wants.
+    #qx/touch -h -r $file $checksumfile/; # touch only, ONLY reads from the file linked,
+    #                                       so if using a link we get set to taht time instead of link tiem.
+    #print(`ls -l $checksumfile`);
+
+    # fix time on the checksum to be same as the file
+    # these commands didnt work!.
+    #my $atime = (stat($checksumfile))[8];
+    #print("atime is $atime");
+    #utime $atime, time(), $ARGV[0];
     
     # If we failed our data check
     if ( ! $data_check ){
@@ -1060,9 +1145,9 @@ sub data_integrity {
 	    funct_obsolete("data_integrity","data_integrity(\$file,2). this is the simple bool version with true for good.");
 	    # version 1, let us return 0
 	} else {
-	    if ( $ver !=2 ) {
+	    if ( $ver !=2 && $ver !=3 ) {
 		#version other than 2 describe failure but keep operating in new mode.
-		funct_obsolete("data_integrity","1 simple bool sucess, 2 return md5.");
+		funct_obsolete("data_integrity","1 simple bool sucess, 2 return md5, 3 skip if checksum newer and return md5.");
 	    }
 	    # reutrn our md5 as array ref.
 	    #$data_check = $md5[0];
@@ -2625,15 +2710,20 @@ sub mrml_types {
 sub xml_read2 {
 # -------------
     my ( $xml_file)=@_;
-    #use XML::Simple qw(XMLin);
+
+    # alternate to require/import. use XML::Simple qw(XMLin);
     require XML::Simple;
     XML::Simple->import(qw(XMLin));
-    #use File::Slurp qw(read_file);
+    # alternate to require/import. use File::Slurp qw(read_file);
     require File::Slurp;
     File::Slurp->import( qw(read_file));
     require Data::Dumper;
     Data::Dumper->import(qw(Dumper)); 
-    print Dumper XMLin scalar(read_file $xml_file),
+    funct_obsolete("xml_read2","This funciton exists to be an example");
+    
+    die("This code causes an error in most all begin blocks., so its been commnented, and printed out here. print Dumper XMLin scalar(read_file $xml_file),");
+    # print Dumper XMLin scalar(read_file $xml_file),
+    
     KeyAttr => undef, ForceArray => 1, StrictMode => 1;
     #Instead, learn XPath and access the elements you actually need:
 }
@@ -2642,7 +2732,9 @@ sub xml_read2 {
 sub xml_read3 {
 # -------------
     my ( $xml_file)=@_;
-    use XML::LibXML qw();
+    # alternate to require/import. use XML::LibXML qw();
+    require XML::LibXML;
+    XML::LibXML->import(qw());
     my $xml = XML::LibXML->load_xml(location => $xml_file);
     for ($xml->findnodes('//entry[@name="cpd:C00103"]')) {
 	print $_->getAttribute('link');
@@ -2658,7 +2750,11 @@ displays an entire more complex data structure "prettily" from reference structu
 ###
 sub display_complex_data_structure { # ( $hash_ref,$indentext,$indent_level,$format,$pathtowrite ) 
 ###
-    use Scalar::Util qw(looks_like_number);
+    # alternate to require/import. use Scalar::Util qw(looks_like_number);
+    require Scalar::Util;
+    Scalar::Util->import(qw(looks_like_number));
+    
+    
     my ($data_struct_ref,$itxt,$i_level,$format,$file)=@_;
     if(! defined $itxt ) { $itxt='  ';}
     if(! defined $i_level ) { $i_level=0} else { $i_level++};
