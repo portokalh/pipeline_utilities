@@ -5,7 +5,14 @@ use Env qw(PIPELINE_SCRIPT_DIR);
 # generic incldues
 use Cwd qw(abs_path);
 use File::Basename;
-use Data::Dump qw(dump);
+#use Data::Dump qw(dump); # old dump command.
+#require Data::Dumper;
+#Data::Dumper->import(qw(Dumper));
+my $can_dump = eval {
+  require Data::Dump;
+  Data::Dump->import(qw(dump));
+  1;
+};
 use lib dirname(abs_path($0));
 use Env qw(RADISH_PERL_LIB);
 use vars qw($PIPELINE_VERSION $PIPELINE_NAME $PIPELINE_DESC $HfResult $GOODEXIT $ERROR_EXIT ); #$test_mode
@@ -64,12 +71,29 @@ if ( defined $ed ) {
 exit;
 =cut
 
-foreach (make_list_of_files($EC->get_value("engine_data_directory")."/atlas",$file_pat) ) {
-    push(@list,$EC->get_value("engine_data_directory")."/atlas/$_"); }
+#foreach (make_list_of_files($EC->get_value("engine_data_directory")."/atlas",$file_pat) ) {
+#    push(@list,$EC->get_value("engine_data_directory")."/atlas/$_"); }
+my @atlas_dir_contents=();
+#@atlas_dir_contents=make_list_of_files($EC->get_value("engine_data_directory")."/atlas","[^.]+");
 
-my @atlas_dir_contents=make_list_of_files($EC->get_value("engine_data_directory")."/atlas","[^.]+");
 my @dirs_to_check=();
 push(@dirs_to_check,@ARGV);
+
+my $cmd="find ".$EC->get_value("engine_data_directory")."/atlas -type l -maxdepth 1";
+push(@list,`$cmd`);
+$cmd="find ".$EC->get_value("engine_data_directory")."/atlas -type f -maxdepth 1";
+push(@list,grep(/$file_pat/x,`$cmd`));
+
+#chomp(@atlas_dir_contents);
+$cmd="find ".$EC->get_value("engine_data_directory")."/atlas -type d -maxdepth 2";
+@dirs_to_check=`$cmd`;
+chomp(@dirs_to_check);
+chomp(@list);
+
+#dump(@atlas_dir_contents);
+#dump(@list);
+#dump(@dirs_to_check);
+
 for(my $fn=0;$fn<=$#atlas_dir_contents;$fn++){
     my $thing=$EC->get_value("engine_data_directory")."/atlas".'/'.$atlas_dir_contents[$fn];
     if ( -d $thing && !  -l $thing ) {
@@ -82,7 +106,7 @@ for(my $fn=0;$fn<=$#atlas_dir_contents;$fn++){
 	}
     } else {
 	# File, but its a link, check same as files.
-	if ( -l $thing) {
+	if ( -l $thing ) {
 	    print("Adding link $thing\n");
 	    push (@list,$thing);
 	}
@@ -94,22 +118,38 @@ print(join(" ",@dirs_to_check)."\n");
 while($#dirs_to_check>=0 ) { 
     my $t_dir=shift @dirs_to_check;
     print("Adding contents of dir $t_dir\n");
-    my @filenames=make_list_of_files($t_dir,$file_pat);
+    $cmd="find $t_dir -type l -or -type f -maxdepth 1";
+    #my @filenames=make_list_of_files($t_dir,$file_pat);
+    my @filenames=grep(/$file_pat/x,`$cmd`);
+    #$cmd="find $t_dir -type f -maxdepth 1";
+    #push(@filenames,grep(/$file_pat/x,`$cmd`));
+    chomp(@filenames);
     for(my $fn=0;$fn<=$#filenames;$fn++){
-	push(@list,$t_dir.'/'.$filenames[$fn]);
+	#push(@list,$t_dir.'/'.$filenames[$fn]);
+	push(@list,$filenames[$fn]);
     }
+}
+if ( $can_dump ) {
+#    print("Option handler output\n");
+#    Data::Dump::dump(@list);
 }
 
 
-my @canon_images=make_list_of_files($EC->get_value('engine_waxholm_canonical_images_dir'),$file_pat);
-foreach (@canon_images){push(@list,$EC->get_value('engine_waxholm_canonical_images_dir')."/$_"); }
-my @canon_labels=make_list_of_files($EC->get_value('engine_waxholm_labels_dir'),$file_pat);
-foreach (@canon_labels){push(@list,$EC->get_value('engine_waxholm_labels_dir')."/$_"); }
+#my @canon_images=make_list_of_files($EC->get_value('engine_waxholm_canonical_images_dir'),$file_pat);
+#foreach (@canon_images){push(@list,$EC->get_value('engine_waxholm_canonical_images_dir')."/$_"); }
+$cmd="find ".$EC->get_value('engine_waxholm_canonical_images_dir')." -type l -or -type f -maxdepth 1";
+my @canon_images=grep(/$file_pat/x,`$cmd`);
+
+#my @canon_labels=make_list_of_files($EC->get_value('engine_waxholm_labels_dir'),$file_pat);
+#foreach (@canon_labels){push(@list,$EC->get_value('engine_waxholm_labels_dir')."/$_"); }
+$cmd="find ".$EC->get_value('engine_waxholm_canonical_images_dir')." -type l -or -type f -maxdepth 1";
+my @canon_labels=grep(/$file_pat/x,`$cmd`);
+
 
 if ( $#list < 0  ) {
     print("Dir empty:".$EC->get_value('engine_waxholm_canonical_images_dir')." and ".$EC->get_value('engine_waxholm_canonical_images_dir').".\n");
 }
-
+#exit;
 
 if ( $#list < 0  ) {
     print("All dirs empty\n");
@@ -146,13 +186,20 @@ printline_to_aoa
 # After we've looked at all fo them, we'll dump that file to a failure file in the the directory.
 # Then we'll dump the commands to rename current md5's 
 my $fail_dirs; # this'll be a hash_ref to hash of arrays, I guess it could just be a hash proper...
-print("checking ".scalar(@list)." files\n"); 
-#exit;
+print("checking ".scalar(@list)." files.\n");
+
+my $results={};
 #for my $file (@list[0..60] ) {
 for my $file (@list ) {
     #print("Test, checksum of file $file\n");
     #my $exit_code=data_integrity($file);
-    my $integrity=data_integrity($file,2);
+    if (exists($results->{$file})){
+	print("File $file has been done already.\n");
+	next;
+    }
+
+    my $integrity=data_integrity($file,3); #moved to mode 3
+    $results->{$file}=$integrity;
     # if( ! $integrity ) { 	print(" failure ".$file."\n"); }
     if ( length($integrity)>1 || ! $integrity ) {
 	print(" failure ".$file."\n");
@@ -165,40 +212,44 @@ for my $file (@list ) {
 }
 
 #dump($fail_dirs);
-print("Waiting to proceed with auto fix of move md5 to mod date, and save new\n");
+
 #$debug_val=10;
 if ( defined $opt{u} ) { # -u update md5's
+    print("Quick pause before to proceeding with auto fix of move md5 to mod date, and save new\n");
     sleep_with_countdown(8);
 }
-for my $dir (keys %$fail_dirs){
-    #my $files=$fail_dirs->{$dir};
-    my @files=keys( %{$fail_dirs->{$dir}});
-    #dump(@files);
-    #next;
-    ##### INSERT FAILURE HANDLING HERE!
-    print("$dir had ".scalar(@files)." failures\n");
-    if ( 1 || defined $opt{u} ) { # -u update md5's
-	for my $ne (@files) {
-	    my ($p,$n,$e)=fileparts($dir.$ne,3);
-	    #my $chk_file=$p.$n.'.md5'; #previous checksum format where we dropped the file extension.
-	    my $chk_file=$p.$n.$e.".md5";
-	    #Headfile.pm:    #my ($s,$m,$h,$mday,$mon,$year,$wd,$yd,$is) = localtime(time);
-	    #my ($s,$m,$h,$mday,$mon,$year,$w,$y,$isdst) = localtime(mod_time($chk_file));
-	    print("checking file $chk_file ");
-	    my ($sec, $min, $hour, $day,$month,$year) = (localtime(mod_time($chk_file)))[0,1,2,3,4,5]; 
-	    $year+=1900;
-	    #use DateTime;
-	    #my $dt = DateTime->from_epoch( epoch => mod_time($chk_file));
-	    #my $year= $dt->year;
-	    #my $month=$dt->month;
-	    #my $day=$dt->day;
-	    #my $hour=$dt->hour;
-	    #my $min=$dt->min;
-	    #my $sec=$dt->sec;
 
-	    print("-> $p$n.$year-$month-$day.md5\n");# $year-$month-$day $hour:$min:$sec \n");
-	    
+{
+    for my $dir (keys %$fail_dirs){
+	#my $files=$fail_dirs->{$dir};
+	my @files=keys( %{$fail_dirs->{$dir}});
+	#dump(@files);
+	#next;
+	##### INSERT FAILURE HANDLING HERE!
+	print("$dir had ".scalar(@files)." failures\n");
+	if ( 1 || defined $opt{u} ) { # -u update md5's
+	    for my $ne (@files) {
+		my ($p,$n,$e)=fileparts($dir.$ne,3);
+		#my $chk_file=$p.$n.'.md5'; #previous checksum format where we dropped the file extension.
+		my $chk_file=$p.$n.$e.".md5";
+		#Headfile.pm:    #my ($s,$m,$h,$mday,$mon,$year,$wd,$yd,$is) = localtime(time);
+		#my ($s,$m,$h,$mday,$mon,$year,$w,$y,$isdst) = localtime(mod_time($chk_file));
+		print("checking file $chk_file ");
+		my ($sec, $min, $hour, $day,$month,$year) = (localtime(mod_time($chk_file)))[0,1,2,3,4,5]; 
+		$year+=1900;
+		#use DateTime;
+		#my $dt = DateTime->from_epoch( epoch => mod_time($chk_file));
+		#my $year= $dt->year;
+		#my $month=$dt->month;
+		#my $day=$dt->day;
+		#my $hour=$dt->hour;
+		#my $min=$dt->min;
+		#my $sec=$dt->sec;
+
+		print("-> $p$n.$year-$month-$day.md5\n");# $year-$month-$day $hour:$min:$sec \n");
+		
+	    }
+
 	}
-
     }
 }
