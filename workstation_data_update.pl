@@ -67,12 +67,14 @@ $data_EC->get_value('engine_waxholm_canonical_images_dir')."\n".
 my @list;
 ### get any links in the base dir, add those to top of list for checking since they're quick
 push(@list,ssh_call::get_dir_listing($data_EC->get_value('engine'),
-				     $remote_data_dir."/atlas"." -type l",
+				     $remote_data_dir."/atlas"." -type l -maxdepth 1",
 				     "[^.]*"));
+
+
 my @dirs_to_check=();
 push(@dirs_to_check,@ARGV);
 push(@dirs_to_check,ssh_call::get_dir_listing($data_EC->get_value('engine'),
-					    $remote_data_dir."/atlas"." -type d",
+					    $remote_data_dir."/atlas"." -type d -maxdepth 2",
 					    "[^.]*"));
 for(my $fn=0;$fn<=$#dirs_to_check;$fn++){
     if ( $dirs_to_check[$fn] =~ /$data_EC->get_value(engine_waxholm_canonical_images_dir)|$data_EC->get_value(engine_waxholm_labels_dir)/ ) {
